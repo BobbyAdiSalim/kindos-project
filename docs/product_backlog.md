@@ -1,5 +1,4 @@
 # Product Backlog
----
 ## Shared (Patient and Doctor) User Stories
 1.	As a user, I would like to access a single page with options to register or log in, so that I can choose how to access the system
 2.	As a user, I would like to log in securely and reset my password, so that I can access my account.
