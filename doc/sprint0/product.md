@@ -122,6 +122,63 @@ These insights informed the prioritization of **core text-based accessibility an
 
 * Admin booking analytics and trends dashboard (25)
 
-## 6. Summary
+## 6. Annual Hosting Cost Estimate (Moderate Traffic)
+
+### Selected Setup
+| Item | Choice |
+|-----|-------|
+| Database | Google Cloud SQL (PostgreSQL) |
+| Instance Size | 1–2 vCPU, 4–8 GB RAM |
+| Storage | 50–100 GB SSD |
+| Web Hosting | Google Cloud Run |
+| High Availability | No |
+| Traffic Level | Moderate |
+
+---
+
+### Database Cost (PostgreSQL – Cloud SQL)
+| Component | Annual Cost (USD) |
+|----------|------------------|
+| Cloud SQL Instance | $700 – $1,400 |
+| SSD Storage | $100 – $200 |
+| Backups & Network | $50 – $150 |
+| **Database Total** | **$850 – $1,800** |
+
+---
+
+### Web Hosting Cost (Google Cloud Run)
+| Component | Annual Cost (USD) |
+|----------|------------------|
+| Backend API Usage | $50 – $300 |
+| Frontend & Requests | $50 – $200 |
+| **Hosting Total** | **$100 – $500** |
+
+---
+
+### Other Costs
+| Item | Annual Cost (USD) |
+|------|------------------|
+| Domain Name | $10 – $20 |
+| SSL Certificate | $0 |
+| Monitoring / Logging | $0 – $100 |
+| **Other Total** | **$10 – $120** |
+
+---
+
+### Total Annual Cost Estimate
+| Category | Cost (USD / Year) |
+|--------|------------------|
+| Database | $850 – $1,800 |
+| Web Hosting | $100 – $500 |
+| Other | $10 – $120 |
+| **Grand Total** | **$1,000 – $2,300** |
+
+---
+
+### Disclaimer
+This cost estimate is based solely on the services currently planned for use in this project.  
+Any additional services, upgrades, or infrastructure changes beyond the planned setup will be evaluated and listed separately after the initial implementation phase.
+
+## 7. Summary
 
 This platform delivers an **accessible, secure, and reliable healthcare booking experience for deaf patients**, ensuring trust through verified doctors and usability through **text-based accessibility features**. Future releases will enhance communication, discovery, and analytics to increase accesibility and improve patient experience.
