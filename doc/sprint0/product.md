@@ -30,9 +30,16 @@ The platform’s designed to reduce barriers for deaf patients to access healthc
 ### Total Addressable Market (TAM)
 
 * Over 400 million people worldwide have hearing loss, with growing demand for accessible digital healthcare.
-* Options for treatment has surged in recent year, expanding opportunities for accessible platforms.
 
 ![Hearing Loss Projection Chart](images/hearingLossProjection.png)
+
+* Virtual treatment rates has surged in recent years, expanding opportunities for accessible platforms.
+
+![Virtual Treatment Rate Chart](images/virtualCare.svg)
+
+* As virtual treatment rates surged, investment and revenue rates in the sector have seen massive growth. This growth represents both the unmet demand and the profability potential of virtual care solutions.
+
+![Investment/Revenue Rate Chart](images/virtualPossibilities.png)
 
 ### Serviceable Available Market (SAM)
 
