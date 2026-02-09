@@ -1,0 +1,113 @@
+import React from 'react';
+import { Link } from 'react-router';
+import { Card, CardContent, CardFooter } from '@/app/components/ui/card';
+import { Button } from '@/app/components/ui/button';
+import { Badge } from '@/app/components/ui/badge';
+import { Avatar, AvatarFallback, AvatarImage } from '@/app/components/ui/avatar';
+import { Star, MapPin, Video, User as UserIcon } from 'lucide-react';
+import { format } from 'date-fns';
+
+interface DoctorCardProps {
+  doctor: {
+    id: string;
+    name: string;
+    specialty: string;
+    photo: string;
+    languages: string[];
+    rating: number;
+    reviewCount: number;
+    clinicLocation: string;
+    virtualAvailable: boolean;
+    inPersonAvailable: boolean;
+    nextAvailable: string;
+    verified: boolean;
+  };
+  showBookButton?: boolean;
+}
+
+export function DoctorCard({ doctor, showBookButton = true }: DoctorCardProps) {
+  const nextAvailableDate = new Date(doctor.nextAvailable);
+  
+  return (
+    <Card className="hover:shadow-lg transition-shadow">
+      <CardContent className="p-6">
+        <div className="flex gap-4">
+          <Avatar className="h-16 w-16 flex-shrink-0">
+            <AvatarImage src={doctor.photo} alt={doctor.name} />
+            <AvatarFallback>
+              <UserIcon className="h-8 w-8" />
+            </AvatarFallback>
+          </Avatar>
+          
+          <div className="flex-1 min-w-0">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <h3 className="font-semibold text-lg">{doctor.name}</h3>
+                <p className="text-sm text-muted-foreground">{doctor.specialty}</p>
+              </div>
+              {doctor.verified && (
+                <Badge variant="secondary" className="bg-green-100 text-green-800 text-xs">
+                  Verified
+                </Badge>
+              )}
+            </div>
+            
+            <div className="mt-3 space-y-2">
+              <div className="flex items-center gap-2 text-sm">
+                <Star className="h-4 w-4 fill-primary text-primary" />
+                <span className="font-medium">{doctor.rating}</span>
+                <span className="text-muted-foreground">({doctor.reviewCount} reviews)</span>
+              </div>
+              
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <MapPin className="h-4 w-4 flex-shrink-0" />
+                <span className="truncate">{doctor.clinicLocation}</span>
+              </div>
+              
+              <div className="flex flex-wrap gap-2">
+                {doctor.virtualAvailable && (
+                  <Badge variant="outline" className="text-xs">
+                    <Video className="h-3 w-3 mr-1" />
+                    Virtual
+                  </Badge>
+                )}
+                {doctor.inPersonAvailable && (
+                  <Badge variant="outline" className="text-xs">
+                    In-Person
+                  </Badge>
+                )}
+              </div>
+              
+              <div className="flex flex-wrap gap-1 text-xs text-muted-foreground">
+                <span>Languages:</span>
+                {doctor.languages.join(', ')}
+              </div>
+            </div>
+          </div>
+        </div>
+      </CardContent>
+      
+      <CardFooter className="px-6 py-4 bg-muted/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <div className="text-sm">
+          <span className="text-muted-foreground">Next available:</span>{' '}
+          <span className="font-medium">
+            {format(nextAvailableDate, 'MMM d, h:mm a')}
+          </span>
+        </div>
+        
+        {showBookButton && (
+          <div className="flex gap-2 w-full sm:w-auto">
+            <Link to={`/patient/doctor/${doctor.id}`} className="flex-1 sm:flex-none">
+              <Button variant="outline" size="sm" className="w-full sm:w-auto">
+                View Profile
+              </Button>
+            </Link>
+            <Link to={`/patient/booking/${doctor.id}`} className="flex-1 sm:flex-none">
+              <Button size="sm" className="w-full sm:w-auto">Book</Button>
+            </Link>
+          </div>
+        )}
+      </CardFooter>
+    </Card>
+  );
+}

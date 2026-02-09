@@ -1,0 +1,12 @@
+#!/bin/bash
+
+# Safety check: stop on errors
+set -e
+
+# Root directory (default: current directory)
+ROOT_DIR="${1:-.}"
+
+# Find and remove files or directories ending with "Identifier"
+find "$ROOT_DIR" -name '*Identifier' -exec rm -rf {} +
+
+echo "Done. Removed all *Identifier entries under $ROOT_DIR"
