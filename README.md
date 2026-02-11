@@ -22,22 +22,46 @@ Designed with a strong focus on **clarity and accessibility**, the booking flow 
 Project/
 │
 ├── backend/
-│   ├── server.js           # Server file that handles sign ups and logins.
+│   ├── config/
+│   │   └── database.js          # Sequelize database connection
+│   ├── models/
+│   │   ├── User.js              # User authentication model
+│   │   ├── Patient.js           # Patient profile model
+│   │   ├── Doctor.js            # Doctor profile model
+│   │   ├── Appointment.js       # Appointment model
+│   │   ├── Availability.js      # Doctor availability models
+│   │   ├── Message.js           # Messaging model
+│   │   ├── Review.js            # Review model
+│   │   ├── Questionnaire.js     # Questionnaire model
+│   │   ├── AdminLog.js          # Admin log model
+│   │   ├── index.js             # Model aggregator with associations
+│   │   └── README.md            # Models documentation
+│   ├── server.js                # Main Express server
+│   ├── db-init.js               # Database initialization script
+│   ├── .env                     # Environment variables (not in git)
+│   ├── .env.example             # Environment template
+│   ├── SETUP.md                 # Backend setup guide
 │   ├── package.json
 │   └── package-lock.json
 │
 ├── frontend/
 │   ├── public/
 │   ├── src/
-│   │   ├── main.jsx        # React entry point
-│   │   ├── App.jsx         # Main sign up / login application
+│   │   ├── main.jsx             # React entry point
+│   │   ├── App.jsx              # Main sign up / login application
 │   │   ├── App.css
 │   │   ├── index.css
 │   │   └── assets/
 │   ├── index.html
-│   ├── vite.config.js      # Vite configuration with proxy setup to connect to backend
+│   ├── vite.config.js           # Vite configuration with proxy setup
 │   ├── package.json
 │   └── package-lock.json
+│
+├── doc/
+│   └── sprint0/
+│       ├── product.md           # Product description
+│       ├── product_backlog.md   # User stories
+│       └── README.md
 │
 ├── .gitignore
 └── README.md
@@ -48,6 +72,7 @@ Project/
 ### Backend
 - **Express.js** - Web server framework
 - **PostgreSQL** - Database
+- **Sequelize** - ORM (Object-Relational Mapping)
 - **bcrypt** - Password hashing
 - **jsonwebtoken** - JWT authentication
 - **nodemon** - Development auto-reload
@@ -73,21 +98,82 @@ Login existing user
 
 ### Backend
 
-Create a `.env` file in the `backend/` directory with your PostgreSQL credentials:
-```env
-PG_HOST="localhost"
-PG_PORT=5432
-PG_USER="postgres"
-PG_PWD=your_password
-PG_DATABASE="your_database_name"
+**Step 1: Configure Environment Variables**
+
+Create a `.env` file in the `backend/` directory (or copy from `.env.example`):
+
+```bash
+cd backend
+cp .env.example .env
 ```
 
-Install dependencies and run:
+Edit the `.env` file with your configuration:
+
+```env
+# PostgreSQL Database Configuration
+PG_HOST=localhost
+PG_PORT=5432
+PG_USER=postgres
+PG_PWD=your_password_here
+PG_DATABASE=utlwa_db
+
+# JWT Authentication
+JWT_SECRET=your_super_secret_jwt_key_change_this_in_production
+
+# Server Configuration
+PORT=4000
+NODE_ENV=development
+
+# Optional: Session Configuration
+SESSION_SECRET=your_session_secret_here
+
+# Optional: Email Service (for future use)
+# EMAIL_SERVICE=gmail
+# EMAIL_USER=your_email@gmail.com
+# EMAIL_PASSWORD=your_app_password
+
+# Optional: Frontend URL (for CORS)
+FRONTEND_URL=http://localhost:5173
+```
+
+**Step 2: Create PostgreSQL Database**
+
+```bash
+# Connect to PostgreSQL
+psql -U postgres
+
+# Create database
+CREATE DATABASE utlwa_db;
+
+# Exit
+\q
+```
+
+**Step 3: Install Dependencies**
+
 ```bash
 cd backend
 npm install
-npm run dev  # Runs on http://localhost:4000
 ```
+
+**Step 4: Initialize Database Tables**
+
+Run the database initialization script to create all tables:
+
+```bash
+npm run db:init
+```
+
+This creates 10 tables: users, patients, doctors, appointments, availability_patterns, availability_slots, messages, reviews, questionnaires, and admin_logs.
+
+**Step 5: Start the Server**
+
+```bash
+npm run dev  # Development mode (runs on http://localhost:4000)
+```
+
+For more detailed setup instructions, see [backend/SETUP.md](backend/SETUP.md).
+For database models documentation, see [backend/models/README.md](backend/models/README.md).
 
 ### Frontend
 ```bash
@@ -96,10 +182,49 @@ npm install
 npm run dev  # Runs with Vite dev server
 ```
 
+## Database Models
+
+The backend uses Sequelize ORM with the following models:
+
+| Model | Table | Description |
+|-------|-------|-------------|
+| **User** | users | Base authentication (username, email, password, role) |
+| **Patient** | patients | Patient profiles and accessibility preferences |
+| **Doctor** | doctors | Doctor profiles, credentials, and verification status |
+| **Appointment** | appointments | Booking between patients and doctors |
+| **AvailabilityPattern** | availability_patterns | Recurring weekly schedules for doctors |
+| **AvailabilitySlot** | availability_slots | Specific date/time slots for appointments |
+| **Message** | messages | Patient-doctor communication |
+| **Review** | reviews | Patient ratings and reviews of doctors |
+| **Questionnaire** | questionnaires | Patient needs assessment |
+| **AdminLog** | admin_logs | Admin verification audit trail |
+
+For detailed model documentation and usage examples, see [backend/models/README.md](backend/models/README.md).
+
+## Available Scripts
+
+### Backend Scripts
+```bash
+npm start           # Start production server
+npm run dev         # Start development server with auto-reload
+npm run db:init     # Initialize database tables (safe)
+npm run db:reset    # Reset database (DANGER: deletes all data)
+```
+
+### Frontend Scripts
+```bash
+npm run dev         # Start Vite development server
+npm run build       # Build for production
+npm run preview     # Preview production build
+```
+
 ## Features
 
 - User registration with password hashing
 - User login with JWT authentication
+- Sequelize ORM with PostgreSQL
+- 10 database models with proper relationships
+- Database initialization scripts
 
 ## Contribution Guidelines
 
