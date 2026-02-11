@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 
 export function Register() {
   const [role, setRole] = useState<UserRole>('patient');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -21,13 +22,13 @@ export function Register() {
     licenseNumber: '',
     clinicAddress: '',
   });
-  
+
   const { register } = useAuth();
   const navigate = useNavigate();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!formData.name || !formData.email || !formData.password) {
       toast.error('Please fill in all required fields');
       return;
@@ -43,14 +44,25 @@ export function Register() {
       return;
     }
 
-    register(formData.email, formData.password, formData.name, role);
-    
-    if (role === 'doctor') {
-      toast.success('Registration submitted! Awaiting verification.');
-      navigate('/doctor/verification');
-    } else {
-      toast.success('Account created successfully!');
-      navigate(role === 'patient' ? '/patient/questionnaire' : '/admin/dashboard');
+    try {
+      setIsSubmitting(true);
+      await register(formData.email, formData.password, formData.name, role, {
+        specialty: formData.specialty,
+        licenseNumber: formData.licenseNumber,
+        clinicAddress: formData.clinicAddress,
+      });
+
+      if (role === 'doctor') {
+        toast.success('Registration submitted! Awaiting verification.');
+        navigate('/doctor/verification');
+      } else {
+        toast.success('Account created successfully!');
+        navigate(role === 'patient' ? '/patient/questionnaire' : '/admin/dashboard');
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to create account');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -83,6 +95,12 @@ export function Register() {
                     <RadioGroupItem value="doctor" id="register-doctor" />
                     <Label htmlFor="register-doctor" className="font-normal cursor-pointer">
                       Healthcare Provider
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-3 space-y-0">
+                    <RadioGroupItem value="admin" id="register-admin" />
+                    <Label htmlFor="register-admin" className="font-normal cursor-pointer">
+                      System Administrator
                     </Label>
                   </div>
                 </RadioGroup>
@@ -185,15 +203,15 @@ export function Register() {
             {role === 'doctor' && (
               <div className="bg-muted/50 p-4 rounded-lg text-sm text-muted-foreground">
                 <p>
-                  <strong className="text-foreground">Note:</strong> Healthcare provider accounts 
-                  require verification. You'll be able to access your account after our team reviews 
+                  <strong className="text-foreground">Note:</strong> Healthcare provider accounts
+                  require verification. You'll be able to access your account after our team reviews
                   your credentials.
                 </p>
               </div>
             )}
 
-            <Button type="submit" className="w-full h-12 text-base">
-              {role === 'doctor' ? 'Submit for Verification' : 'Create Account'}
+            <Button type="submit" className="w-full h-12 text-base" disabled={isSubmitting}>
+              {isSubmitting ? 'Submitting...' : role === 'doctor' ? 'Submit for Verification' : 'Create Account'}
             </Button>
           </form>
 

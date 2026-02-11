@@ -10,21 +10,32 @@ import { registerUser, loginUser } from "../controllers/userController.js";
 const router = express.Router();
 
 /**
- * @route   POST /api/users
+ * @route   POST /api/auth/register
  * @desc    Register a new user
  * @access  Public
  */
-router.post("/users", express.json(), (req, res) => {
-  registerUser(req, res, req.app.locals.pool);
+router.post("/auth/register", (req, res) => {
+  registerUser(req, res);
 });
 
 /**
- * @route   POST /api/users/token
+ * @route   POST /api/auth/login
  * @desc    Login user and get authentication token
  * @access  Public
  */
-router.post("/users/token", express.json(), (req, res) => {
-  loginUser(req, res, req.app.locals.pool);
+router.post("/auth/login", (req, res) => {
+  loginUser(req, res);
+});
+
+/**
+ * Backward-compatible aliases for previous endpoint names
+ */
+router.post("/users", (req, res) => {
+  registerUser(req, res);
+});
+
+router.post("/users/token", (req, res) => {
+  loginUser(req, res);
 });
 
 export default router;
