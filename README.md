@@ -127,12 +127,19 @@ NODE_ENV=development
 # Optional: Session Configuration
 SESSION_SECRET=your_session_secret_here
 
-# Optional: Email Service (for future use)
-# EMAIL_SERVICE=gmail
-# EMAIL_USER=your_email@gmail.com
-# EMAIL_PASSWORD=your_app_password
+# Optional: Email Service (for password reset)
+RESET_TOKEN_EXPIRES_MINUTES=60
+# Email provider options:
+# EMAIL_PROVIDER=console
+EMAIL_PROVIDER=smtp
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=your_email@gmail.com
+SMTP_PASS=your_email_app_password
+EMAIL_FROM=your_email@gmail.com
 
-# Optional: Frontend URL (for CORS)
+# Frontend URL (used in reset links / CORS)
 FRONTEND_URL=http://localhost:5173
 ```
 
@@ -228,7 +235,7 @@ npm run preview     # Preview production build
 
 ## Contribution Guidelines
 
-Thanks for your interest in contributing to **UTLWA**! This repository is maintained by **The Kindos**.  
+Thanks for your interest in contributing to **UTLWA**! This repository is maintained by **The Kindos**.
 To keep development organized, we use **Git Flow**, **GitHub Issues** for ticketing, and PR reviews.
 
 ---
@@ -257,15 +264,15 @@ We use **GitHub Issues** to track work.
 **Yes.** We follow **Git Flow** with long-lived branches and structured releases.
 
 ### Branch Types
-- `main`  
+- `main`
   **Production-ready** code only. Tagged releases live here.
-- `develop`  
+- `develop`
   Integration branch for completed features heading into the next release.
-- `feature/*`  
+- `feature/*`
   New features branched from `develop` and merged back into `develop`.
-- `release/*`  
+- `release/*`
   Release preparation (final testing, version bumps, small fixes). Merged into both `main` and `develop`.
-- `hotfix/*`  
+- `hotfix/*`
   Urgent production fixes branched from `main`. Merged into both `main` and `develop`.
 
 ### Naming Conventions
