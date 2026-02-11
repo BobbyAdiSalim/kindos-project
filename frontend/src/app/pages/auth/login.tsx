@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { useAuth, UserRole } from '@/app/lib/auth-context';
+import { useAuth, UserRole, getDashboardPath } from '@/app/lib/auth-context';
 import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
@@ -12,24 +12,37 @@ export function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<UserRole>('patient');
-  const { login } = useAuth();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { login, user } = useAuth();
   const navigate = useNavigate();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    if (!user) return;
+    navigate(getDashboardPath(user.role), { replace: true });
+  }, [navigate, user]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!email || !password) {
       toast.error('Please fill in all fields');
       return;
     }
 
-    login(email, password, role);
-    toast.success('Logged in successfully');
-    
-    // Navigate based on role
-    if (role === 'patient') navigate('/patient/dashboard');
-    else if (role === 'doctor') navigate('/doctor/dashboard');
-    else if (role === 'admin') navigate('/admin/dashboard');
+    try {
+      setIsSubmitting(true);
+      await login(email, password, role);
+      toast.success('Logged in successfully');
+
+      // Navigate based on role
+      if (role === 'patient') navigate('/patient/dashboard');
+      else if (role === 'doctor') navigate('/doctor/dashboard');
+      else if (role === 'admin') navigate('/admin/dashboard');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to log in');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -103,8 +116,8 @@ export function Login() {
               </div>
             </div>
 
-            <Button type="submit" className="w-full h-12 text-base">
-              Log in
+            <Button type="submit" className="w-full h-12 text-base" disabled={isSubmitting}>
+              {isSubmitting ? 'Logging in...' : 'Log in'}
             </Button>
           </form>
 
