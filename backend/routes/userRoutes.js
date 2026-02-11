@@ -1,5 +1,5 @@
 import express from "express";
-import { registerUser, loginUser } from "../controllers/userController.js";
+import { registerUser, loginUser, logoutUser } from "../controllers/userController.js";
 
 /**
  * Routes define the API endpoints and map them to controller functions
@@ -25,6 +25,15 @@ router.post("/auth/register", (req, res) => {
  */
 router.post("/auth/login", (req, res) => {
   loginUser(req, res);
+});
+
+/**
+ * @route   POST /api/auth/logout
+ * @desc    Logout user
+ * @access  Public
+ */
+router.post("/auth/logout", (req, res) => {
+  logoutUser(req, res);
 });
 
 /**

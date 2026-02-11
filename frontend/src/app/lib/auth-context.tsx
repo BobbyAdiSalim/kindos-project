@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 
 export type UserRole = 'patient' | 'doctor' | 'admin';
 
@@ -15,6 +15,7 @@ export interface User {
 interface AuthContextType {
   user: User | null;
   token: string | null;
+  isAuthenticated: boolean;
   login: (email: string, password: string, role: UserRole) => Promise<void>;
   register: (
     email: string,
@@ -27,7 +28,7 @@ interface AuthContextType {
       clinicAddress?: string;
     }
   ) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   updateUser: (updates: Partial<User>) => void;
 }
 
@@ -35,6 +36,13 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const STORAGE_KEY = 'utlwa_auth';
 const API_BASE = '/api';
+const SESSION_DURATION_MS = 60 * 60 * 1000;
+
+interface StoredAuthState {
+  user: User;
+  token: string;
+  expiresAt: number;
+}
 
 interface AuthApiResponse {
   token: string;
@@ -61,8 +69,33 @@ const mapApiUserToUser = (apiUser: AuthApiResponse['user']): User => ({
   verified: apiUser.role === 'doctor' ? apiUser.profile?.verification_status === 'approved' : undefined,
 });
 
+export const getDashboardPath = (role: UserRole) => {
+  if (role === 'patient') return '/patient/dashboard';
+  if (role === 'doctor') return '/doctor/dashboard';
+  return '/admin/dashboard';
+};
+
+const parseTokenExpiry = (token: string): number | null => {
+  try {
+    const [, payload] = token.split('.');
+    if (!payload) return null;
+
+    const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
+    const decodedPayload = JSON.parse(atob(normalized));
+    if (!decodedPayload?.exp) return null;
+
+    return decodedPayload.exp * 1000;
+  } catch {
+    return null;
+  }
+};
+
 const saveAuthState = (user: User, token: string) => {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({ user, token }));
+  const tokenExpiry = parseTokenExpiry(token);
+  const expiresAt = tokenExpiry && tokenExpiry > Date.now() ? tokenExpiry : Date.now() + SESSION_DURATION_MS;
+
+  const payload: StoredAuthState = { user, token, expiresAt };
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
 };
 
 const loadAuthState = (): { user: User | null; token: string | null } => {
@@ -70,7 +103,12 @@ const loadAuthState = (): { user: User | null; token: string | null } => {
   if (!raw) return { user: null, token: null };
 
   try {
-    const parsed = JSON.parse(raw);
+    const parsed = JSON.parse(raw) as Partial<StoredAuthState>;
+    if (!parsed?.expiresAt || parsed.expiresAt <= Date.now()) {
+      localStorage.removeItem(STORAGE_KEY);
+      return { user: null, token: null };
+    }
+
     return {
       user: parsed.user || null,
       token: parsed.token || null,
@@ -84,6 +122,35 @@ const loadAuthState = (): { user: User | null; token: string | null } => {
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [authState, setAuthState] = useState(() => loadAuthState());
   const { user, token } = authState;
+
+  useEffect(() => {
+    if (!token) return;
+
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+
+    try {
+      const parsed = JSON.parse(raw) as Partial<StoredAuthState>;
+      const expiresAt = parsed.expiresAt || 0;
+      const remainingMs = expiresAt - Date.now();
+
+      if (remainingMs <= 0) {
+        localStorage.removeItem(STORAGE_KEY);
+        setAuthState({ user: null, token: null });
+        return;
+      }
+
+      const timeout = window.setTimeout(() => {
+        localStorage.removeItem(STORAGE_KEY);
+        setAuthState({ user: null, token: null });
+      }, remainingMs);
+
+      return () => window.clearTimeout(timeout);
+    } catch {
+      localStorage.removeItem(STORAGE_KEY);
+      setAuthState({ user: null, token: null });
+    }
+  }, [token]);
 
   const login = async (email: string, password: string, role: UserRole) => {
     const response = await fetch(`${API_BASE}/auth/login`, {
@@ -139,7 +206,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setAuthState({ user: nextUser, token: nextToken });
   };
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      if (token) {
+        await fetch(`${API_BASE}/auth/logout`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+        });
+      }
+    } catch {
+      // Intentionally ignored: local logout should still always proceed.
+    }
+
     localStorage.removeItem(STORAGE_KEY);
     setAuthState({ user: null, token: null });
   };
@@ -155,7 +236,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, login, register, logout, updateUser }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        token,
+        isAuthenticated: Boolean(user && token),
+        login,
+        register,
+        logout,
+        updateUser,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

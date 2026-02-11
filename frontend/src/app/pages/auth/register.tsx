@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { useAuth, UserRole } from '@/app/lib/auth-context';
+import { useAuth, UserRole, getDashboardPath } from '@/app/lib/auth-context';
 import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
@@ -23,8 +23,13 @@ export function Register() {
     clinicAddress: '',
   });
 
-  const { register } = useAuth();
+  const { register, user } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!user) return;
+    navigate(getDashboardPath(user.role), { replace: true });
+  }, [navigate, user]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
