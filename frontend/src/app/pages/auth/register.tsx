@@ -7,11 +7,14 @@ import { Label } from '@/app/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { RadioGroup, RadioGroupItem } from '@/app/components/ui/radio-group';
 import { Textarea } from '@/app/components/ui/textarea';
+import { Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 
 export function Register() {
   const [role, setRole] = useState<UserRole>('patient');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -89,7 +92,7 @@ export function Register() {
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="role">I am a:</Label>
-                <RadioGroup value={role} onValueChange={(value) => setRole(value as UserRole)}>
+                <RadioGroup value={role} onValueChange={(value: string) => setRole(value as UserRole)}>
                   <div className="flex items-center space-x-3 space-y-0">
                     <RadioGroupItem value="patient" id="register-patient" />
                     <Label htmlFor="register-patient" className="font-normal cursor-pointer">
@@ -118,7 +121,7 @@ export function Register() {
                   type="text"
                   placeholder="Enter your full name"
                   value={formData.name}
-                  onChange={(e) => updateField('name', e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateField('name', e.target.value)}
                   required
                   className="h-12"
                 />
@@ -131,7 +134,7 @@ export function Register() {
                   type="email"
                   placeholder="your.email@example.com"
                   value={formData.email}
-                  onChange={(e) => updateField('email', e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateField('email', e.target.value)}
                   required
                   className="h-12"
                 />
@@ -146,7 +149,7 @@ export function Register() {
                       type="text"
                       placeholder="e.g., Family Medicine, Pediatrics"
                       value={formData.specialty}
-                      onChange={(e) => updateField('specialty', e.target.value)}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateField('specialty', e.target.value)}
                       required
                       className="h-12"
                     />
@@ -159,7 +162,7 @@ export function Register() {
                       type="text"
                       placeholder="Enter your license number"
                       value={formData.licenseNumber}
-                      onChange={(e) => updateField('licenseNumber', e.target.value)}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateField('licenseNumber', e.target.value)}
                       required
                       className="h-12"
                     />
@@ -171,7 +174,7 @@ export function Register() {
                       id="clinicAddress"
                       placeholder="Enter clinic address"
                       value={formData.clinicAddress}
-                      onChange={(e) => updateField('clinicAddress', e.target.value)}
+                      onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => updateField('clinicAddress', e.target.value)}
                       rows={3}
                     />
                   </div>
@@ -180,28 +183,48 @@ export function Register() {
 
               <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="Create a password"
-                  value={formData.password}
-                  onChange={(e) => updateField('password', e.target.value)}
-                  required
-                  className="h-12"
-                />
+                <div className="relative">
+                  <Input
+                    id="password"
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder="Create a password"
+                    value={formData.password}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateField('password', e.target.value)}
+                    required
+                    className="h-12 pr-12"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((prev) => !prev)}
+                    className="absolute inset-y-0 right-0 flex items-center justify-center px-3 text-muted-foreground hover:text-foreground"
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                  </button>
+                </div>
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="confirmPassword">Confirm Password</Label>
-                <Input
-                  id="confirmPassword"
-                  type="password"
-                  placeholder="Re-enter your password"
-                  value={formData.confirmPassword}
-                  onChange={(e) => updateField('confirmPassword', e.target.value)}
-                  required
-                  className="h-12"
-                />
+                <div className="relative">
+                  <Input
+                    id="confirmPassword"
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    placeholder="Re-enter your password"
+                    value={formData.confirmPassword}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateField('confirmPassword', e.target.value)}
+                    required
+                    className="h-12 pr-12"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword((prev) => !prev)}
+                    className="absolute inset-y-0 right-0 flex items-center justify-center px-3 text-muted-foreground hover:text-foreground"
+                    aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showConfirmPassword ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                  </button>
+                </div>
               </div>
             </div>
 

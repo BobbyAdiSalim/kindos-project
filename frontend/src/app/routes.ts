@@ -4,6 +4,7 @@ import { Landing } from '@/app/pages/landing';
 import { Login } from '@/app/pages/auth/login';
 import { Register } from '@/app/pages/auth/register';
 import { ForgotPassword } from '@/app/pages/auth/forgot-password';
+import { ResetPassword } from '@/app/pages/auth/reset-password';
 
 // Patient pages
 import { PatientDashboard } from '@/app/pages/patient/dashboard';
@@ -49,8 +50,9 @@ export const router = createBrowserRouter([
       { path: 'login', Component: Login },
       { path: 'register', Component: Register },
       { path: 'forgot-password', Component: ForgotPassword },
+      { path: 'reset-password/:token', Component: ResetPassword },
       { path: 'components', Component: ComponentLibrary },
-      
+
       // Patient routes
       {
         path: 'patient',
@@ -69,7 +71,7 @@ export const router = createBrowserRouter([
           { path: 'waitlist/:doctorId', Component: JoinWaitlist },
         ],
       },
-      
+
       // Doctor routes
       {
         path: 'doctor',
@@ -84,7 +86,7 @@ export const router = createBrowserRouter([
           { path: 'verification', Component: VerificationStatus },
         ],
       },
-      
+
       // Admin routes
       {
         path: 'admin',
@@ -94,7 +96,7 @@ export const router = createBrowserRouter([
           { path: 'analytics', Component: Analytics },
         ],
       },
-      
+
       { path: '*', Component: NotFound },
     ],
   },

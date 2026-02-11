@@ -1,5 +1,12 @@
 import express from "express";
-import { registerUser, loginUser, logoutUser } from "../controllers/userController.js";
+import {
+  registerUser,
+  loginUser,
+  logoutUser,
+  forgotPassword,
+  validateResetToken,
+  resetPassword,
+} from "../controllers/userController.js";
 
 /**
  * Routes define the API endpoints and map them to controller functions
@@ -34,6 +41,33 @@ router.post("/auth/login", (req, res) => {
  */
 router.post("/auth/logout", (req, res) => {
   logoutUser(req, res);
+});
+
+/**
+ * @route   POST /api/auth/forgot-password
+ * @desc    Request password reset email
+ * @access  Public
+ */
+router.post("/auth/forgot-password", (req, res) => {
+  forgotPassword(req, res);
+});
+
+/**
+ * @route   GET /api/auth/reset-password/:token/validate
+ * @desc    Validate reset token
+ * @access  Public
+ */
+router.get("/auth/reset-password/:token/validate", (req, res) => {
+  validateResetToken(req, res);
+});
+
+/**
+ * @route   POST /api/auth/reset-password
+ * @desc    Reset password using one-time token
+ * @access  Public
+ */
+router.post("/auth/reset-password", (req, res) => {
+  resetPassword(req, res);
 });
 
 /**
