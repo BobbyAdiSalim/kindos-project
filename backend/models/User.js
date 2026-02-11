@@ -35,6 +35,18 @@ const User = sequelize.define(
       type: DataTypes.ENUM('patient', 'doctor', 'admin'),
       allowNull: false,
     },
+    reset_password_token_hash: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+    },
+    reset_password_expires_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    reset_password_used_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
   },
   {
     tableName: 'users',
