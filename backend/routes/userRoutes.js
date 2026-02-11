@@ -1,5 +1,12 @@
 import express from "express";
-import { registerUser, loginUser } from "../controllers/userController.js";
+import {
+  registerUser,
+  loginUser,
+  logoutUser,
+  forgotPassword,
+  validateResetToken,
+  resetPassword,
+} from "../controllers/userController.js";
 
 /**
  * Routes define the API endpoints and map them to controller functions
@@ -10,21 +17,68 @@ import { registerUser, loginUser } from "../controllers/userController.js";
 const router = express.Router();
 
 /**
- * @route   POST /api/users
+ * @route   POST /api/auth/register
  * @desc    Register a new user
  * @access  Public
  */
-router.post("/users", express.json(), (req, res) => {
-  registerUser(req, res, req.app.locals.pool);
+router.post("/auth/register", (req, res) => {
+  registerUser(req, res);
 });
 
 /**
- * @route   POST /api/users/token
+ * @route   POST /api/auth/login
  * @desc    Login user and get authentication token
  * @access  Public
  */
-router.post("/users/token", express.json(), (req, res) => {
-  loginUser(req, res, req.app.locals.pool);
+router.post("/auth/login", (req, res) => {
+  loginUser(req, res);
+});
+
+/**
+ * @route   POST /api/auth/logout
+ * @desc    Logout user
+ * @access  Public
+ */
+router.post("/auth/logout", (req, res) => {
+  logoutUser(req, res);
+});
+
+/**
+ * @route   POST /api/auth/forgot-password
+ * @desc    Request password reset email
+ * @access  Public
+ */
+router.post("/auth/forgot-password", (req, res) => {
+  forgotPassword(req, res);
+});
+
+/**
+ * @route   GET /api/auth/reset-password/:token/validate
+ * @desc    Validate reset token
+ * @access  Public
+ */
+router.get("/auth/reset-password/:token/validate", (req, res) => {
+  validateResetToken(req, res);
+});
+
+/**
+ * @route   POST /api/auth/reset-password
+ * @desc    Reset password using one-time token
+ * @access  Public
+ */
+router.post("/auth/reset-password", (req, res) => {
+  resetPassword(req, res);
+});
+
+/**
+ * Backward-compatible aliases for previous endpoint names
+ */
+router.post("/users", (req, res) => {
+  registerUser(req, res);
+});
+
+router.post("/users/token", (req, res) => {
+  loginUser(req, res);
 });
 
 export default router;

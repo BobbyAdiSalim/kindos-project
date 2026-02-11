@@ -1,35 +1,50 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { useAuth, UserRole } from '@/app/lib/auth-context';
+import { useAuth, UserRole, getDashboardPath } from '@/app/lib/auth-context';
 import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { RadioGroup, RadioGroupItem } from '@/app/components/ui/radio-group';
+import { Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 
 export function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [role, setRole] = useState<UserRole>('patient');
-  const { login } = useAuth();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { login, user } = useAuth();
   const navigate = useNavigate();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    if (!user) return;
+    navigate(getDashboardPath(user.role), { replace: true });
+  }, [navigate, user]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!email || !password) {
       toast.error('Please fill in all fields');
       return;
     }
 
-    login(email, password, role);
-    toast.success('Logged in successfully');
-    
-    // Navigate based on role
-    if (role === 'patient') navigate('/patient/dashboard');
-    else if (role === 'doctor') navigate('/doctor/dashboard');
-    else if (role === 'admin') navigate('/admin/dashboard');
+    try {
+      setIsSubmitting(true);
+      await login(email, password, role);
+      toast.success('Logged in successfully');
+
+      // Navigate based on role
+      if (role === 'patient') navigate('/patient/dashboard');
+      else if (role === 'doctor') navigate('/doctor/dashboard');
+      else if (role === 'admin') navigate('/admin/dashboard');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to log in');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -46,7 +61,7 @@ export function Login() {
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="role">I am a:</Label>
-                <RadioGroup value={role} onValueChange={(value) => setRole(value as UserRole)}>
+                <RadioGroup value={role} onValueChange={(value: string) => setRole(value as UserRole)}>
                   <div className="flex items-center space-x-3 space-y-0">
                     <RadioGroupItem value="patient" id="patient" />
                     <Label htmlFor="patient" className="font-normal cursor-pointer">
@@ -75,7 +90,7 @@ export function Login() {
                   type="email"
                   placeholder="your.email@example.com"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
                   required
                   className="h-12"
                 />
@@ -91,20 +106,30 @@ export function Login() {
                     Forgot password?
                   </Link>
                 </div>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="Enter your password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  className="h-12"
-                />
+                <div className="relative">
+                  <Input
+                    id="password"
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder="Enter your password"
+                    value={password}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
+                    required
+                    className="h-12 pr-12"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((prev) => !prev)}
+                    className="absolute inset-y-0 right-0 flex items-center justify-center px-3 text-muted-foreground hover:text-foreground"
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                  </button>
+                </div>
               </div>
             </div>
 
-            <Button type="submit" className="w-full h-12 text-base">
-              Log in
+            <Button type="submit" className="w-full h-12 text-base" disabled={isSubmitting}>
+              {isSubmitting ? 'Logging in...' : 'Log in'}
             </Button>
           </form>
 

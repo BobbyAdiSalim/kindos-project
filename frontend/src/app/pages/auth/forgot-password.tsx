@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
@@ -7,21 +7,72 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app
 import { toast } from 'sonner';
 import { Mail } from 'lucide-react';
 
+const API_BASE = '/api';
+
 export function ForgotPassword() {
   const [email, setEmail] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+
+    const interval = window.setInterval(() => {
+      setResendCooldown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+
+    return () => window.clearInterval(interval);
+  }, [resendCooldown]);
+
+  const requestResetEmail = async () => {
+    const response = await fetch(`${API_BASE}/auth/forgot-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+
+    if (!response.ok) {
+      throw new Error('Unable to process request');
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!email) {
       toast.error('Please enter your email address');
       return;
     }
 
-    // Mock password reset
-    setSubmitted(true);
-    toast.success('Password reset link sent to your email');
+    try {
+      setIsSubmitting(true);
+
+      await requestResetEmail();
+
+      setSubmitted(true);
+      setResendCooldown(60);
+      toast.success('If an account exists, a reset link has been sent.');
+    } catch {
+      toast.error('Unable to process request right now. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleResend = async () => {
+    if (resendCooldown > 0 || isSubmitting) return;
+
+    try {
+      setIsSubmitting(true);
+      await requestResetEmail();
+      setResendCooldown(60);
+      toast.success('If an account exists, a new reset link has been sent.');
+    } catch {
+      toast.error('Unable to resend right now. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (submitted) {
@@ -41,14 +92,22 @@ export function ForgotPassword() {
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-muted-foreground text-center">
-              Click the link in the email to reset your password. 
-              The link will expire in 24 hours.
+              If an account exists for that email, a reset link has been sent.
+              The link expires in 1 hour and can only be used once.
             </p>
             <Link to="/login" className="block">
               <Button variant="outline" className="w-full">
                 Return to Log in
               </Button>
             </Link>
+            <Button
+              variant="ghost"
+              className="w-full"
+              disabled={isSubmitting || resendCooldown > 0}
+              onClick={handleResend}
+            >
+              {resendCooldown > 0 ? `Resend available in ${resendCooldown}s` : 'Resend email'}
+            </Button>
           </CardContent>
         </Card>
       </div>
@@ -73,14 +132,14 @@ export function ForgotPassword() {
                 type="email"
                 placeholder="your.email@example.com"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
                 required
                 className="h-12"
               />
             </div>
 
-            <Button type="submit" className="w-full h-12 text-base">
-              Send Reset Link
+            <Button type="submit" className="w-full h-12 text-base" disabled={isSubmitting}>
+              {isSubmitting ? 'Sending...' : 'Send Reset Link'}
             </Button>
           </form>
 

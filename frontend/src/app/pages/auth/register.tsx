@@ -1,16 +1,20 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { useAuth, UserRole } from '@/app/lib/auth-context';
+import { useAuth, UserRole, getDashboardPath } from '@/app/lib/auth-context';
 import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { RadioGroup, RadioGroupItem } from '@/app/components/ui/radio-group';
 import { Textarea } from '@/app/components/ui/textarea';
+import { Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 
 export function Register() {
   const [role, setRole] = useState<UserRole>('patient');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -21,13 +25,18 @@ export function Register() {
     licenseNumber: '',
     clinicAddress: '',
   });
-  
-  const { register } = useAuth();
+
+  const { register, user } = useAuth();
   const navigate = useNavigate();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    if (!user) return;
+    navigate(getDashboardPath(user.role), { replace: true });
+  }, [navigate, user]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!formData.name || !formData.email || !formData.password) {
       toast.error('Please fill in all required fields');
       return;
@@ -43,14 +52,25 @@ export function Register() {
       return;
     }
 
-    register(formData.email, formData.password, formData.name, role);
-    
-    if (role === 'doctor') {
-      toast.success('Registration submitted! Awaiting verification.');
-      navigate('/doctor/verification');
-    } else {
-      toast.success('Account created successfully!');
-      navigate(role === 'patient' ? '/patient/questionnaire' : '/admin/dashboard');
+    try {
+      setIsSubmitting(true);
+      await register(formData.email, formData.password, formData.name, role, {
+        specialty: formData.specialty,
+        licenseNumber: formData.licenseNumber,
+        clinicAddress: formData.clinicAddress,
+      });
+
+      if (role === 'doctor') {
+        toast.success('Registration submitted! Awaiting verification.');
+        navigate('/doctor/verification');
+      } else {
+        toast.success('Account created successfully!');
+        navigate(role === 'patient' ? '/patient/questionnaire' : '/admin/dashboard');
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to create account');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -72,7 +92,7 @@ export function Register() {
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="role">I am a:</Label>
-                <RadioGroup value={role} onValueChange={(value) => setRole(value as UserRole)}>
+                <RadioGroup value={role} onValueChange={(value: string) => setRole(value as UserRole)}>
                   <div className="flex items-center space-x-3 space-y-0">
                     <RadioGroupItem value="patient" id="register-patient" />
                     <Label htmlFor="register-patient" className="font-normal cursor-pointer">
@@ -85,6 +105,12 @@ export function Register() {
                       Healthcare Provider
                     </Label>
                   </div>
+                  <div className="flex items-center space-x-3 space-y-0">
+                    <RadioGroupItem value="admin" id="register-admin" />
+                    <Label htmlFor="register-admin" className="font-normal cursor-pointer">
+                      System Administrator
+                    </Label>
+                  </div>
                 </RadioGroup>
               </div>
 
@@ -95,7 +121,7 @@ export function Register() {
                   type="text"
                   placeholder="Enter your full name"
                   value={formData.name}
-                  onChange={(e) => updateField('name', e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateField('name', e.target.value)}
                   required
                   className="h-12"
                 />
@@ -108,7 +134,7 @@ export function Register() {
                   type="email"
                   placeholder="your.email@example.com"
                   value={formData.email}
-                  onChange={(e) => updateField('email', e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateField('email', e.target.value)}
                   required
                   className="h-12"
                 />
@@ -123,7 +149,7 @@ export function Register() {
                       type="text"
                       placeholder="e.g., Family Medicine, Pediatrics"
                       value={formData.specialty}
-                      onChange={(e) => updateField('specialty', e.target.value)}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateField('specialty', e.target.value)}
                       required
                       className="h-12"
                     />
@@ -136,7 +162,7 @@ export function Register() {
                       type="text"
                       placeholder="Enter your license number"
                       value={formData.licenseNumber}
-                      onChange={(e) => updateField('licenseNumber', e.target.value)}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateField('licenseNumber', e.target.value)}
                       required
                       className="h-12"
                     />
@@ -148,7 +174,7 @@ export function Register() {
                       id="clinicAddress"
                       placeholder="Enter clinic address"
                       value={formData.clinicAddress}
-                      onChange={(e) => updateField('clinicAddress', e.target.value)}
+                      onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => updateField('clinicAddress', e.target.value)}
                       rows={3}
                     />
                   </div>
@@ -157,43 +183,63 @@ export function Register() {
 
               <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="Create a password"
-                  value={formData.password}
-                  onChange={(e) => updateField('password', e.target.value)}
-                  required
-                  className="h-12"
-                />
+                <div className="relative">
+                  <Input
+                    id="password"
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder="Create a password"
+                    value={formData.password}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateField('password', e.target.value)}
+                    required
+                    className="h-12 pr-12"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((prev) => !prev)}
+                    className="absolute inset-y-0 right-0 flex items-center justify-center px-3 text-muted-foreground hover:text-foreground"
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                  </button>
+                </div>
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="confirmPassword">Confirm Password</Label>
-                <Input
-                  id="confirmPassword"
-                  type="password"
-                  placeholder="Re-enter your password"
-                  value={formData.confirmPassword}
-                  onChange={(e) => updateField('confirmPassword', e.target.value)}
-                  required
-                  className="h-12"
-                />
+                <div className="relative">
+                  <Input
+                    id="confirmPassword"
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    placeholder="Re-enter your password"
+                    value={formData.confirmPassword}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateField('confirmPassword', e.target.value)}
+                    required
+                    className="h-12 pr-12"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword((prev) => !prev)}
+                    className="absolute inset-y-0 right-0 flex items-center justify-center px-3 text-muted-foreground hover:text-foreground"
+                    aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showConfirmPassword ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                  </button>
+                </div>
               </div>
             </div>
 
             {role === 'doctor' && (
               <div className="bg-muted/50 p-4 rounded-lg text-sm text-muted-foreground">
                 <p>
-                  <strong className="text-foreground">Note:</strong> Healthcare provider accounts 
-                  require verification. You'll be able to access your account after our team reviews 
+                  <strong className="text-foreground">Note:</strong> Healthcare provider accounts
+                  require verification. You'll be able to access your account after our team reviews
                   your credentials.
                 </p>
               </div>
             )}
 
-            <Button type="submit" className="w-full h-12 text-base">
-              {role === 'doctor' ? 'Submit for Verification' : 'Create Account'}
+            <Button type="submit" className="w-full h-12 text-base" disabled={isSubmitting}>
+              {isSubmitting ? 'Submitting...' : role === 'doctor' ? 'Submit for Verification' : 'Create Account'}
             </Button>
           </form>
 
