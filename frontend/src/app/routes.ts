@@ -1,5 +1,6 @@
 import { createBrowserRouter } from 'react-router';
 import { RootLayout } from '@/app/components/layout/root-layout';
+import { RequireAdminRoute, RequireDoctorRoute, RequirePatientRoute } from '@/app/components/auth/protected-route';
 import { Landing } from '@/app/pages/landing';
 import { Login } from '@/app/pages/auth/login';
 import { Register } from '@/app/pages/auth/register';
@@ -56,6 +57,7 @@ export const router = createBrowserRouter([
       // Patient routes
       {
         path: 'patient',
+        Component: RequirePatientRoute,
         children: [
           { path: 'dashboard', Component: PatientDashboard },
           { path: 'profile', Component: PatientProfile },
@@ -75,6 +77,7 @@ export const router = createBrowserRouter([
       // Doctor routes
       {
         path: 'doctor',
+        Component: RequireDoctorRoute,
         children: [
           { path: 'dashboard', Component: DoctorDashboard },
           { path: 'profile', Component: DoctorProfileEdit },
@@ -90,6 +93,7 @@ export const router = createBrowserRouter([
       // Admin routes
       {
         path: 'admin',
+        Component: RequireAdminRoute,
         children: [
           { path: 'dashboard', Component: AdminDashboard },
           { path: 'verification', Component: VerificationQueue },

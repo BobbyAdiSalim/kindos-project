@@ -37,6 +37,13 @@ export function Header({ showAuth = true }: HeaderProps) {
     return '/';
   };
 
+  const getProfileLink = () => {
+    if (!user) return '/';
+    if (user.role === 'patient') return '/patient/profile';
+    if (user.role === 'doctor') return '/doctor/profile';
+    return '/';
+  };
+
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container mx-auto flex h-16 items-center justify-between px-4 md:px-6">
@@ -53,7 +60,8 @@ export function Header({ showAuth = true }: HeaderProps) {
           {user ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" aria-label="Open profile menu">
+                <Button variant="ghost" aria-label="Open profile menu" className="gap-2 px-3">
+                  <span className="max-w-32 truncate text-sm">{user.name}</span>
                   <User className="h-5 w-5" />
                 </Button>
               </DropdownMenuTrigger>
@@ -67,6 +75,9 @@ export function Header({ showAuth = true }: HeaderProps) {
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
                   <Link to={getDashboardLink()}>Dashboard</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to={getProfileLink()}>Profile</Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={handleLogout}>
                   <LogOut className="mr-2 h-4 w-4" />
@@ -91,7 +102,8 @@ export function Header({ showAuth = true }: HeaderProps) {
           {user ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" aria-label="Open profile menu">
+                <Button variant="ghost" aria-label="Open profile menu" className="gap-2 px-3">
+                  <span className="max-w-24 truncate text-sm">{user.name}</span>
                   <User className="h-5 w-5" />
                 </Button>
               </DropdownMenuTrigger>
@@ -105,6 +117,9 @@ export function Header({ showAuth = true }: HeaderProps) {
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
                   <Link to={getDashboardLink()}>Dashboard</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to={getProfileLink()}>Profile</Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={handleLogout}>
                   <LogOut className="mr-2 h-4 w-4" />

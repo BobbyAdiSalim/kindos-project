@@ -10,6 +10,7 @@ export interface User {
   role: UserRole;
   profileComplete?: boolean;
   verified?: boolean;
+  verificationStatus?: 'pending' | 'approved' | 'denied';
 }
 
 interface AuthContextType {
@@ -26,6 +27,7 @@ interface AuthContextType {
       specialty?: string;
       licenseNumber?: string;
       clinicAddress?: string;
+      verificationDocuments?: string[];
     }
   ) => Promise<void>;
   logout: () => Promise<void>;
@@ -67,6 +69,7 @@ const mapApiUserToUser = (apiUser: AuthApiResponse['user']): User => ({
   role: apiUser.role,
   profileComplete: apiUser.profile?.profile_complete,
   verified: apiUser.role === 'doctor' ? apiUser.profile?.verification_status === 'approved' : undefined,
+  verificationStatus: apiUser.role === 'doctor' ? apiUser.profile?.verification_status : undefined,
 });
 
 export const getDashboardPath = (role: UserRole) => {
@@ -119,6 +122,16 @@ const loadAuthState = (): { user: User | null; token: string | null } => {
   }
 };
 
+const parseApiResponse = async (response: Response): Promise<any> => {
+  const contentType = response.headers.get('content-type') || '';
+  if (contentType.includes('application/json')) {
+    return response.json();
+  }
+
+  const text = await response.text();
+  throw new Error(text.startsWith('<!DOCTYPE') ? 'Server returned an unexpected response.' : text);
+};
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [authState, setAuthState] = useState(() => loadAuthState());
   const { user, token } = authState;
@@ -159,7 +172,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       body: JSON.stringify({ email, password, role }),
     });
 
-    const data = await response.json();
+    const data = await parseApiResponse(response);
     if (!response.ok) {
       throw new Error(data?.error || 'Login failed');
     }
@@ -180,6 +193,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       specialty?: string;
       licenseNumber?: string;
       clinicAddress?: string;
+      verificationDocuments?: string[];
     }
   ) => {
     const response = await fetch(`${API_BASE}/auth/register`, {
@@ -194,7 +208,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }),
     });
 
-    const data = await response.json();
+    const data = await parseApiResponse(response);
     if (!response.ok) {
       throw new Error(data?.error || 'Registration failed');
     }

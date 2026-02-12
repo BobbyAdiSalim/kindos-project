@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router';
 import { Button } from '@/app/components/ui/button';
 import { Card, CardContent } from '@/app/components/ui/card';
@@ -7,12 +7,65 @@ import { Badge } from '@/app/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/app/components/ui/tabs';
 import { Star, MapPin, Video, User as UserIcon, Calendar, MessageSquare } from 'lucide-react';
 import { mockDoctors, mockReviews } from '@/app/lib/mock-data';
+import { DoctorProfile as DoctorProfileApi, getPublicProfile } from '@/app/lib/profile-api';
 import { format } from 'date-fns';
 
 export function DoctorProfile() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const doctor = mockDoctors.find(d => d.id === id);
+  const [loading, setLoading] = useState(true);
+  const [doctorFromApi, setDoctorFromApi] = useState<DoctorProfileApi | null>(null);
+  const [doctorUsername, setDoctorUsername] = useState('');
+  const mockDoctor = mockDoctors.find((d) => d.id === id);
+
+  useEffect(() => {
+    const loadDoctor = async () => {
+      if (!id) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const data = await getPublicProfile(id);
+        if (data.user.role === 'doctor') {
+          setDoctorFromApi((data.profile as DoctorProfileApi | null) || null);
+          setDoctorUsername(data.user.username || '');
+        }
+      } catch {
+        // Keep UI functional with mock fallback.
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadDoctor();
+  }, [id]);
+
+  if (loading) {
+    return (
+      <div className="container mx-auto px-4 py-12 text-center">
+        <p>Loading doctor profile...</p>
+      </div>
+    );
+  }
+
+  const doctor = doctorFromApi
+    ? {
+        id: id || '',
+        name: doctorFromApi.full_name || doctorUsername,
+        specialty: doctorFromApi.specialty || 'General Practice',
+        photo: '',
+        languages: doctorFromApi.languages || [],
+        rating: mockDoctor?.rating || 0,
+        reviewCount: mockDoctor?.reviewCount || 0,
+        bio: doctorFromApi.bio || 'No bio provided.',
+        clinicLocation: doctorFromApi.clinic_location || 'Location not provided.',
+        virtualAvailable: doctorFromApi.virtual_available ?? true,
+        inPersonAvailable: doctorFromApi.in_person_available ?? true,
+        nextAvailable: mockDoctor?.nextAvailable || new Date().toISOString(),
+        verified: doctorFromApi.verification_status === 'approved',
+      }
+    : mockDoctor;
 
   if (!doctor) {
     return (
@@ -25,7 +78,7 @@ export function DoctorProfile() {
     );
   }
 
-  const doctorReviews = mockReviews.filter(r => r.doctorId === doctor.id);
+  const doctorReviews = mockReviews.filter((r) => r.doctorId === doctor.id);
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-4xl">

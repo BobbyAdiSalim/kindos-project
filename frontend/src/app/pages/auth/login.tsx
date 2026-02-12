@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { Link, useLocation, useNavigate } from 'react-router';
 import { useAuth, UserRole, getDashboardPath } from '@/app/lib/auth-context';
 import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
@@ -17,6 +17,7 @@ export function Login() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { login, user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     if (!user) return;
@@ -36,10 +37,9 @@ export function Login() {
       await login(email, password, role);
       toast.success('Logged in successfully');
 
-      // Navigate based on role
-      if (role === 'patient') navigate('/patient/dashboard');
-      else if (role === 'doctor') navigate('/doctor/dashboard');
-      else if (role === 'admin') navigate('/admin/dashboard');
+      const redirectParam = new URLSearchParams(location.search).get('redirect');
+      const redirectTarget = redirectParam && redirectParam.startsWith('/') ? redirectParam : null;
+      navigate(redirectTarget || getDashboardPath(role));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Unable to log in');
     } finally {
