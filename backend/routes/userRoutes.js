@@ -6,7 +6,17 @@ import {
   forgotPassword,
   validateResetToken,
   resetPassword,
+  getMyProfile,
+  updateMyProfile,
+  getPublicProfile,
+  resubmitDoctorVerification,
 } from "../controllers/userController.js";
+import {
+  getUnverifiedDoctors,
+  updateDoctorVerificationStatus,
+  getDoctorVerificationHistory,
+} from "../controllers/adminController.js";
+import { requireAuth, requireRole } from "../middleware/auth.js";
 
 /**
  * Routes define the API endpoints and map them to controller functions
@@ -68,6 +78,34 @@ router.get("/auth/reset-password/:token/validate", (req, res) => {
  */
 router.post("/auth/reset-password", (req, res) => {
   resetPassword(req, res);
+});
+
+router.get("/profile/me", requireAuth, (req, res) => {
+  getMyProfile(req, res);
+});
+
+router.put("/profile/me", requireAuth, (req, res) => {
+  updateMyProfile(req, res);
+});
+
+router.get("/profile/:userId", (req, res) => {
+  getPublicProfile(req, res);
+});
+
+router.get("/admin/doctors/unverified", requireAuth, requireRole("admin"), (req, res) => {
+  getUnverifiedDoctors(req, res);
+});
+
+router.patch("/admin/doctors/:doctorId/verification", requireAuth, requireRole("admin"), (req, res) => {
+  updateDoctorVerificationStatus(req, res);
+});
+
+router.get("/admin/doctors/verification-history", requireAuth, requireRole("admin"), (req, res) => {
+  getDoctorVerificationHistory(req, res);
+});
+
+router.post("/doctor/verification/resubmit", requireAuth, requireRole("doctor"), (req, res) => {
+  resubmitDoctorVerification(req, res);
 });
 
 /**

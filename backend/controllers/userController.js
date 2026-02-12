@@ -1,13 +1,20 @@
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
-import { sequelize, User, Patient, Doctor } from '../models/index.js';
+import fs from 'fs/promises';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { sequelize, User, Patient, Doctor, AdminLog } from '../models/index.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-key';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '1h';
 const RESET_TOKEN_EXPIRES_MINUTES = Number(process.env.RESET_TOKEN_EXPIRES_MINUTES || 60);
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 const VALID_ROLES = new Set(['patient', 'doctor', 'admin']);
+const MAX_VERIFICATION_DOCUMENT_BYTES = 5 * 1024 * 1024;
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const UPLOADS_DIR = path.join(__dirname, '..', 'uploads', 'verification-docs');
 
 const hashResetToken = (token) => crypto.createHash('sha256').update(token).digest('hex');
 
@@ -91,6 +98,7 @@ const createRoleProfile = async (transaction, user, body) => {
         specialty: body.specialty,
         license_number: body.licenseNumber,
         clinic_location: body.clinicAddress || null,
+        verification_documents: body.verificationDocuments || [],
       },
       { transaction }
     );
@@ -106,11 +114,171 @@ const createRoleProfile = async (transaction, user, body) => {
   return null;
 };
 
+const estimateDataUrlBytes = (value) => {
+  if (typeof value !== 'string') return 0;
+  const parts = value.split(',');
+  if (parts.length < 2) return 0;
+  const base64 = parts[1];
+  const padding = (base64.match(/=+$/) || [''])[0].length;
+  return Math.floor((base64.length * 3) / 4) - padding;
+};
+
+const normalizeVerificationDocuments = (value) => {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item) => typeof item === 'string' && item.trim())
+    .map((item) => item.trim());
+};
+
+const parseDataUrl = (value) => {
+  if (typeof value !== 'string' || !value.startsWith('data:') || !value.includes(',')) {
+    return null;
+  }
+
+  const [header, base64] = value.split(',', 2);
+  const mimeMatch = header.match(/^data:([^;]+);base64$/);
+  if (!mimeMatch || !base64) {
+    return null;
+  }
+
+  return {
+    mimeType: mimeMatch[1],
+    base64,
+  };
+};
+
+const mimeToExtension = (mimeType) => {
+  const map = {
+    'application/pdf': '.pdf',
+    'image/png': '.png',
+    'image/jpeg': '.jpg',
+    'image/webp': '.webp',
+  };
+  return map[mimeType] || null;
+};
+
+const persistVerificationDocuments = async (documents, userId) => {
+  if (!documents.length) return [];
+
+  await fs.mkdir(UPLOADS_DIR, { recursive: true });
+  const persistedUrls = [];
+
+  for (let i = 0; i < documents.length; i += 1) {
+    const parsed = parseDataUrl(documents[i]);
+    if (!parsed) {
+      throw new Error('Invalid verification document format.');
+    }
+
+    const extension = mimeToExtension(parsed.mimeType);
+    if (!extension) {
+      throw new Error('Unsupported verification document type.');
+    }
+
+    const fileName = `doctor-${userId}-${Date.now()}-${i}-${crypto.randomUUID()}${extension}`;
+    const absolutePath = path.join(UPLOADS_DIR, fileName);
+    const fileBuffer = Buffer.from(parsed.base64, 'base64');
+
+    await fs.writeFile(absolutePath, fileBuffer);
+    persistedUrls.push(`/api/uploads/verification-docs/${fileName}`);
+  }
+
+  return persistedUrls;
+};
+
+const parseStringArray = (value) => {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => String(item).trim())
+      .filter(Boolean);
+  }
+
+  if (typeof value === 'string') {
+    return value
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  return undefined;
+};
+
+const normalizeBoolean = (value) => {
+  if (typeof value === 'boolean') return value;
+  if (value === 'true') return true;
+  if (value === 'false') return false;
+  return undefined;
+};
+
+const buildPatientProfileResponse = (profile, includePrivateFields = false) => {
+  if (!profile) return null;
+
+  const base = {
+    id: profile.id,
+    full_name: profile.full_name,
+    profile_complete: profile.profile_complete,
+  };
+
+  if (!includePrivateFields) {
+    return base;
+  }
+
+  return {
+    ...base,
+    date_of_birth: profile.date_of_birth,
+    phone: profile.phone,
+    address: profile.address,
+    emergency_contact_name: profile.emergency_contact_name,
+    emergency_contact_phone: profile.emergency_contact_phone,
+    accessibility_preferences: profile.accessibility_preferences || [],
+  };
+};
+
+const buildDoctorProfileResponse = (profile, includePrivateFields = false) => {
+  if (!profile) return null;
+
+  const base = {
+    id: profile.id,
+    full_name: profile.full_name,
+    specialty: profile.specialty,
+    verification_status: profile.verification_status,
+    profile_complete: profile.profile_complete,
+  };
+
+  if (!includePrivateFields) {
+    return {
+      ...base,
+      bio: profile.bio,
+      languages: profile.languages || [],
+      clinic_location: profile.clinic_location,
+      virtual_available: profile.virtual_available,
+      in_person_available: profile.in_person_available,
+    };
+  }
+
+  return {
+    ...base,
+    phone: profile.phone,
+    license_number: profile.license_number,
+    bio: profile.bio,
+    languages: profile.languages || [],
+    clinic_location: profile.clinic_location,
+    latitude: profile.latitude,
+    longitude: profile.longitude,
+    virtual_available: profile.virtual_available,
+    in_person_available: profile.in_person_available,
+    verification_documents: profile.verification_documents || [],
+    verified_at: profile.verified_at,
+    verified_by: profile.verified_by,
+  };
+};
+
 export const registerUser = async (req, res) => {
   const transaction = await sequelize.transaction();
+  let persistedVerificationDocuments = [];
 
   try {
     const { email, password, role, name, username, specialty, licenseNumber } = req.body;
+    const verificationDocuments = normalizeVerificationDocuments(req.body.verificationDocuments);
 
     if (!email || !password || !role || !name) {
       await transaction.rollback();
@@ -129,6 +297,26 @@ export const registerUser = async (req, res) => {
       return res.status(400).json({
         error: 'Doctors must provide specialty and license number.',
       });
+    }
+
+    if (role === 'doctor' && verificationDocuments.length === 0) {
+      await transaction.rollback();
+      return res.status(400).json({
+        error: 'Doctors must upload at least one verification document.',
+      });
+    }
+
+    if (role === 'doctor') {
+      const tooLargeDocument = verificationDocuments.find(
+        (document) => estimateDataUrlBytes(document) > MAX_VERIFICATION_DOCUMENT_BYTES
+      );
+
+      if (tooLargeDocument) {
+        await transaction.rollback();
+        return res.status(400).json({
+          error: 'Each verification document must be 5MB or smaller.',
+        });
+      }
     }
 
     const existingEmail = await User.findOne({ where: { email } });
@@ -150,7 +338,13 @@ export const registerUser = async (req, res) => {
       { transaction }
     );
 
-    const profile = await createRoleProfile(transaction, user, req.body);
+    persistedVerificationDocuments =
+      role === 'doctor' ? await persistVerificationDocuments(verificationDocuments, user.id) : [];
+
+    const profile = await createRoleProfile(transaction, user, {
+      ...req.body,
+      verificationDocuments: persistedVerificationDocuments,
+    });
 
     await transaction.commit();
 
@@ -165,6 +359,24 @@ export const registerUser = async (req, res) => {
     });
   } catch (error) {
     await transaction.rollback();
+
+    if (persistedVerificationDocuments.length > 0) {
+      await Promise.allSettled(
+        persistedVerificationDocuments.map(async (documentUrl) => {
+          const fileName = documentUrl.split('/').pop();
+          if (!fileName) return;
+          await fs.unlink(path.join(UPLOADS_DIR, fileName));
+        })
+      );
+    }
+
+    if (
+      error?.message === 'Invalid verification document format.' ||
+      error?.message === 'Unsupported verification document type.'
+    ) {
+      return res.status(400).json({ error: error.message });
+    }
+
     return res.status(500).json({ error: error.message });
   }
 };
@@ -335,6 +547,341 @@ export const resetPassword = async (req, res) => {
 
     return res.status(200).json({ message: 'Password reset successful.' });
   } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+export const getMyProfile = async (req, res) => {
+  try {
+    const user = await User.findByPk(req.auth.userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    let profile = null;
+
+    if (user.role === 'patient') {
+      const patient = await Patient.findOne({ where: { user_id: user.id } });
+      profile = buildPatientProfileResponse(patient, true);
+    } else if (user.role === 'doctor') {
+      const doctor = await Doctor.findOne({ where: { user_id: user.id } });
+      profile = buildDoctorProfileResponse(doctor, true);
+
+      if (doctor && doctor.verification_status === 'denied') {
+        const latestDenial = await AdminLog.findOne({
+          where: {
+            action_type: 'doctor_denied',
+            target_doctor_id: doctor.id,
+          },
+          order: [['created_at', 'DESC']],
+        });
+
+        profile = {
+          ...(profile || {}),
+          rejection_reason: latestDenial?.details?.reason || null,
+        };
+      }
+    }
+
+    return res.status(200).json({
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        role: user.role,
+      },
+      profile,
+    });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+export const updateMyProfile = async (req, res) => {
+  const transaction = await sequelize.transaction();
+
+  try {
+    const user = await User.findByPk(req.auth.userId, { transaction });
+    if (!user) {
+      await transaction.rollback();
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    const userUpdates = {};
+    if (typeof req.body.username === 'string' && req.body.username.trim()) {
+      userUpdates.username = req.body.username.trim();
+    }
+    if (typeof req.body.email === 'string' && req.body.email.trim()) {
+      userUpdates.email = req.body.email.trim().toLowerCase();
+    }
+
+    if (Object.keys(userUpdates).length > 0) {
+      await user.update(userUpdates, { transaction });
+    }
+
+    if (user.role === 'patient') {
+      const patient = await Patient.findOne({ where: { user_id: user.id }, transaction });
+
+      if (!patient) {
+        await transaction.rollback();
+        return res.status(404).json({ error: 'Patient profile not found.' });
+      }
+
+      const patientUpdates = {};
+      if (typeof req.body.fullName === 'string') patientUpdates.full_name = req.body.fullName.trim();
+      if (typeof req.body.dateOfBirth === 'string') patientUpdates.date_of_birth = req.body.dateOfBirth || null;
+      if (typeof req.body.phone === 'string') patientUpdates.phone = req.body.phone.trim() || null;
+      if (typeof req.body.address === 'string') patientUpdates.address = req.body.address.trim() || null;
+      if (typeof req.body.emergencyContactName === 'string') {
+        patientUpdates.emergency_contact_name = req.body.emergencyContactName.trim() || null;
+      }
+      if (typeof req.body.emergencyContactPhone === 'string') {
+        patientUpdates.emergency_contact_phone = req.body.emergencyContactPhone.trim() || null;
+      }
+
+      const parsedAccessibility = parseStringArray(req.body.accessibilityPreferences);
+      if (parsedAccessibility !== undefined) {
+        patientUpdates.accessibility_preferences = parsedAccessibility;
+      }
+
+      if (Object.prototype.hasOwnProperty.call(req.body, 'profileComplete')) {
+        const normalizedProfileComplete = normalizeBoolean(req.body.profileComplete);
+        if (normalizedProfileComplete !== undefined) {
+          patientUpdates.profile_complete = normalizedProfileComplete;
+        }
+      }
+
+      if (Object.keys(patientUpdates).length > 0) {
+        await patient.update(patientUpdates, { transaction });
+      }
+    } else if (user.role === 'doctor') {
+      const doctor = await Doctor.findOne({ where: { user_id: user.id }, transaction });
+
+      if (!doctor) {
+        await transaction.rollback();
+        return res.status(404).json({ error: 'Doctor profile not found.' });
+      }
+
+      const doctorUpdates = {};
+      if (typeof req.body.fullName === 'string') doctorUpdates.full_name = req.body.fullName.trim();
+      if (typeof req.body.phone === 'string') doctorUpdates.phone = req.body.phone.trim() || null;
+      if (typeof req.body.specialty === 'string') doctorUpdates.specialty = req.body.specialty.trim();
+      if (typeof req.body.licenseNumber === 'string') {
+        doctorUpdates.license_number = req.body.licenseNumber.trim();
+      }
+      if (typeof req.body.bio === 'string') doctorUpdates.bio = req.body.bio.trim() || null;
+      if (typeof req.body.clinicLocation === 'string') {
+        doctorUpdates.clinic_location = req.body.clinicLocation.trim() || null;
+      }
+
+      const parsedLanguages = parseStringArray(req.body.languages);
+      if (parsedLanguages !== undefined) {
+        doctorUpdates.languages = parsedLanguages;
+      }
+
+      if (Object.prototype.hasOwnProperty.call(req.body, 'virtualAvailable')) {
+        const normalizedVirtualAvailable = normalizeBoolean(req.body.virtualAvailable);
+        if (normalizedVirtualAvailable !== undefined) {
+          doctorUpdates.virtual_available = normalizedVirtualAvailable;
+        }
+      }
+
+      if (Object.prototype.hasOwnProperty.call(req.body, 'inPersonAvailable')) {
+        const normalizedInPersonAvailable = normalizeBoolean(req.body.inPersonAvailable);
+        if (normalizedInPersonAvailable !== undefined) {
+          doctorUpdates.in_person_available = normalizedInPersonAvailable;
+        }
+      }
+
+      if (Object.prototype.hasOwnProperty.call(req.body, 'profileComplete')) {
+        const normalizedProfileComplete = normalizeBoolean(req.body.profileComplete);
+        if (normalizedProfileComplete !== undefined) {
+          doctorUpdates.profile_complete = normalizedProfileComplete;
+        }
+      }
+
+      if (Object.keys(doctorUpdates).length > 0) {
+        await doctor.update(doctorUpdates, { transaction });
+      }
+    }
+
+    await transaction.commit();
+
+    const refreshedUser = await User.findByPk(user.id);
+    let refreshedProfile = null;
+
+    if (refreshedUser.role === 'patient') {
+      const patient = await Patient.findOne({ where: { user_id: refreshedUser.id } });
+      refreshedProfile = buildPatientProfileResponse(patient, true);
+    } else if (refreshedUser.role === 'doctor') {
+      const doctor = await Doctor.findOne({ where: { user_id: refreshedUser.id } });
+      refreshedProfile = buildDoctorProfileResponse(doctor, true);
+    }
+
+    return res.status(200).json({
+      message: 'Profile updated successfully.',
+      user: {
+        id: refreshedUser.id,
+        username: refreshedUser.username,
+        email: refreshedUser.email,
+        role: refreshedUser.role,
+      },
+      profile: refreshedProfile,
+    });
+  } catch (error) {
+    if (!transaction.finished) {
+      await transaction.rollback();
+    }
+
+    if (error?.name === 'SequelizeUniqueConstraintError') {
+      return res.status(409).json({ error: 'Username, email, or license number is already in use.' });
+    }
+
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+export const getPublicProfile = async (req, res) => {
+  try {
+    const userId = Number(req.params.userId);
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return res.status(400).json({ error: 'Invalid user id.' });
+    }
+
+    const user = await User.findByPk(userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    let profile = null;
+    if (user.role === 'patient') {
+      const patient = await Patient.findOne({ where: { user_id: user.id } });
+      profile = buildPatientProfileResponse(patient, false);
+    } else if (user.role === 'doctor') {
+      const doctor = await Doctor.findOne({ where: { user_id: user.id } });
+      profile = buildDoctorProfileResponse(doctor, false);
+    }
+
+    return res.status(200).json({
+      user: {
+        id: user.id,
+        username: user.username,
+        role: user.role,
+      },
+      profile,
+    });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+export const resubmitDoctorVerification = async (req, res) => {
+  const transaction = await sequelize.transaction();
+  let persistedVerificationDocuments = [];
+
+  try {
+    const user = await User.findByPk(req.auth.userId, { transaction });
+    if (!user || user.role !== 'doctor') {
+      await transaction.rollback();
+      return res.status(403).json({ error: 'Only doctors can resubmit verification.' });
+    }
+
+    const doctor = await Doctor.findOne({ where: { user_id: user.id }, transaction });
+    if (!doctor) {
+      await transaction.rollback();
+      return res.status(404).json({ error: 'Doctor profile not found.' });
+    }
+
+    if (doctor.verification_status !== 'denied') {
+      await transaction.rollback();
+      return res.status(400).json({ error: 'Only rejected applications can be resubmitted.' });
+    }
+
+    const fullName = String(req.body.fullName || '').trim();
+    const specialty = String(req.body.specialty || '').trim();
+    const licenseNumber = String(req.body.licenseNumber || '').trim();
+    const clinicLocation = String(req.body.clinicAddress || '').trim();
+    const verificationDocuments = normalizeVerificationDocuments(req.body.verificationDocuments);
+
+    if (!fullName || !specialty || !licenseNumber || verificationDocuments.length === 0) {
+      await transaction.rollback();
+      return res.status(400).json({
+        error: 'fullName, specialty, licenseNumber, and verificationDocuments are required.',
+      });
+    }
+
+    const tooLargeDocument = verificationDocuments.find(
+      (document) => estimateDataUrlBytes(document) > MAX_VERIFICATION_DOCUMENT_BYTES
+    );
+    if (tooLargeDocument) {
+      await transaction.rollback();
+      return res.status(400).json({ error: 'Each verification document must be 5MB or smaller.' });
+    }
+
+    persistedVerificationDocuments = await persistVerificationDocuments(verificationDocuments, user.id);
+
+    await doctor.update(
+      {
+        full_name: fullName,
+        specialty,
+        license_number: licenseNumber,
+        clinic_location: clinicLocation || null,
+        verification_documents: persistedVerificationDocuments,
+        verification_status: 'pending',
+        verified_by: null,
+        verified_at: null,
+      },
+      { transaction }
+    );
+
+    await AdminLog.create(
+      {
+        admin_id: req.auth.userId,
+        action_type: 'doctor_resubmitted',
+        target_doctor_id: doctor.id,
+        details: {
+          status: 'pending',
+          reason: 'Doctor resubmitted verification documents.',
+        },
+      },
+      { transaction }
+    );
+
+    await transaction.commit();
+    return res.status(200).json({
+      message: 'Verification application resubmitted successfully.',
+      doctor: {
+        id: doctor.id,
+        verification_status: 'pending',
+        verification_documents: persistedVerificationDocuments,
+      },
+    });
+  } catch (error) {
+    if (!transaction.finished) {
+      await transaction.rollback();
+    }
+
+    if (persistedVerificationDocuments.length > 0) {
+      await Promise.allSettled(
+        persistedVerificationDocuments.map(async (documentUrl) => {
+          const fileName = documentUrl.split('/').pop();
+          if (!fileName) return;
+          await fs.unlink(path.join(UPLOADS_DIR, fileName));
+        })
+      );
+    }
+
+    if (
+      error?.message === 'Invalid verification document format.' ||
+      error?.message === 'Unsupported verification document type.'
+    ) {
+      return res.status(400).json({ error: error.message });
+    }
+
+    if (error?.name === 'SequelizeUniqueConstraintError') {
+      return res.status(409).json({ error: 'License number is already in use.' });
+    }
+
     return res.status(500).json({ error: error.message });
   }
 };

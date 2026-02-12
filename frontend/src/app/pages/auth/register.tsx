@@ -11,10 +11,13 @@ import { Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 
 export function Register() {
+  const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
   const [role, setRole] = useState<UserRole>('patient');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [verificationDocumentName, setVerificationDocumentName] = useState('');
+  const [verificationDocumentDataUrl, setVerificationDocumentDataUrl] = useState('');
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -28,6 +31,14 @@ export function Register() {
 
   const { register, user } = useAuth();
   const navigate = useNavigate();
+
+  const fileToDataUrl = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = () => reject(new Error('Failed to read file.'));
+      reader.readAsDataURL(file);
+    });
 
   useEffect(() => {
     if (!user) return;
@@ -52,17 +63,23 @@ export function Register() {
       return;
     }
 
+    if (role === 'doctor' && !verificationDocumentDataUrl) {
+      toast.error('Please upload a verification document (max 5MB).');
+      return;
+    }
+
     try {
       setIsSubmitting(true);
       await register(formData.email, formData.password, formData.name, role, {
         specialty: formData.specialty,
         licenseNumber: formData.licenseNumber,
         clinicAddress: formData.clinicAddress,
+        verificationDocuments: verificationDocumentDataUrl ? [verificationDocumentDataUrl] : [],
       });
 
       if (role === 'doctor') {
         toast.success('Registration submitted! Awaiting verification.');
-        navigate('/doctor/verification');
+        navigate('/doctor/dashboard');
       } else {
         toast.success('Account created successfully!');
         navigate(role === 'patient' ? '/patient/questionnaire' : '/admin/dashboard');
@@ -76,6 +93,33 @@ export function Register() {
 
   const updateField = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleVerificationDocumentChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      setVerificationDocumentDataUrl('');
+      setVerificationDocumentName('');
+      return;
+    }
+
+    if (file.size > MAX_UPLOAD_BYTES) {
+      toast.error('File must be 5MB or smaller.');
+      event.target.value = '';
+      setVerificationDocumentDataUrl('');
+      setVerificationDocumentName('');
+      return;
+    }
+
+    try {
+      const dataUrl = await fileToDataUrl(file);
+      setVerificationDocumentDataUrl(dataUrl);
+      setVerificationDocumentName(file.name);
+    } catch {
+      toast.error('Failed to read selected document.');
+      setVerificationDocumentDataUrl('');
+      setVerificationDocumentName('');
+    }
   };
 
   return (
@@ -177,6 +221,21 @@ export function Register() {
                       onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => updateField('clinicAddress', e.target.value)}
                       rows={3}
                     />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="verificationDocument">Verification Document (Required, max 5MB)</Label>
+                    <Input
+                      id="verificationDocument"
+                      type="file"
+                      accept=".pdf,.png,.jpg,.jpeg,.webp"
+                      onChange={handleVerificationDocumentChange}
+                      required
+                      className="h-12"
+                    />
+                    {verificationDocumentName ? (
+                      <p className="text-xs text-muted-foreground">Selected: {verificationDocumentName}</p>
+                    ) : null}
                   </div>
                 </>
               )}

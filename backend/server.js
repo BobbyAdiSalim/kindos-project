@@ -1,5 +1,7 @@
 import express from "express";
 import pg from "pg";
+import path from "path";
+import { fileURLToPath } from "url";
 const { Pool } = pg;
 
 // Import routes
@@ -7,6 +9,8 @@ import userRoutes from "./routes/userRoutes.js";
 
 const app = express();
 const PORT = Number(process.env.PORT) || 4000;
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Connect to PostgreSQL
 let pool;
@@ -33,7 +37,8 @@ async function connectToPG() {
 connectToPG();
 
 // Middleware
-app.use(express.json());
+app.use(express.json({ limit: "8mb" }));
+app.use("/api/uploads", express.static(path.join(__dirname, "uploads")));
 
 // API Routes
 // All routes defined in userRoutes will be prefixed with /api
