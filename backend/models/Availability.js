@@ -48,6 +48,12 @@ export const AvailabilityPattern = sequelize.define(
       defaultValue: 30,
       comment: 'Duration in minutes',
     },
+    appointment_type: {
+      type: DataTypes.ARRAY(DataTypes.STRING),
+      allowNull: true,
+      defaultValue: ['virtual', 'in-person'],
+      comment: 'Types allowed for this pattern',
+    },
     is_active: {
       type: DataTypes.BOOLEAN,
       defaultValue: true,

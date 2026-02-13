@@ -16,6 +16,16 @@ import {
   updateDoctorVerificationStatus,
   getDoctorVerificationHistory,
 } from "../controllers/adminController.js";
+import {
+  getAvailabilityPatterns,
+  setAvailabilityPatterns,
+  deleteAvailabilityPattern,
+  getAvailabilitySlots,
+  createAvailabilitySlots,
+  updateAvailabilitySlot,
+  deleteAvailabilitySlot,
+  getDoctorAvailability,
+} from "../controllers/availabilityController.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 
 /**
@@ -106,6 +116,50 @@ router.get("/admin/doctors/verification-history", requireAuth, requireRole("admi
 
 router.post("/doctor/verification/resubmit", requireAuth, requireRole("doctor"), (req, res) => {
   resubmitDoctorVerification(req, res);
+});
+
+/**
+ * Availability Routes - Doctor availability management
+ */
+
+// Get doctor's own availability patterns (recurring weekly schedule)
+router.get("/availability/patterns", requireAuth, requireRole("doctor"), (req, res) => {
+  getAvailabilityPatterns(req, res);
+});
+
+// Set/update doctor's availability patterns
+router.post("/availability/patterns", requireAuth, requireRole("doctor"), (req, res) => {
+  setAvailabilityPatterns(req, res);
+});
+
+// Delete a specific availability pattern
+router.delete("/availability/patterns/:patternId", requireAuth, requireRole("doctor"), (req, res) => {
+  deleteAvailabilityPattern(req, res);
+});
+
+// Get doctor's specific availability slots
+router.get("/availability/slots", requireAuth, requireRole("doctor"), (req, res) => {
+  getAvailabilitySlots(req, res);
+});
+
+// Create specific availability slots
+router.post("/availability/slots", requireAuth, requireRole("doctor"), (req, res) => {
+  createAvailabilitySlots(req, res);
+});
+
+// Update a specific availability slot
+router.put("/availability/slots/:slotId", requireAuth, requireRole("doctor"), (req, res) => {
+  updateAvailabilitySlot(req, res);
+});
+
+// Delete a specific availability slot
+router.delete("/availability/slots/:slotId", requireAuth, requireRole("doctor"), (req, res) => {
+  deleteAvailabilitySlot(req, res);
+});
+
+// Public route - Get availability for a specific doctor (for patients)
+router.get("/availability/doctor/:doctorId", (req, res) => {
+  getDoctorAvailability(req, res);
 });
 
 /**
