@@ -141,6 +141,14 @@ EMAIL_FROM=your_email@gmail.com
 
 # Frontend URL (used in reset links / CORS)
 FRONTEND_URL=http://localhost:5173
+
+# Cloudflare R2 (doctor verification document storage)
+# Required for doctor verification document uploads
+R2_BUCKET_NAME=kindos-verification-docs
+R2_ENDPOINT=https://<ACCOUNT_ID>.r2.cloudflarestorage.com
+R2_ACCESS_KEY_ID=your_r2_access_key_id
+R2_SECRET_ACCESS_KEY=your_r2_secret_access_key
+R2_PUBLIC_BASE_URL=
 ```
 
 **Step 2: Create PostgreSQL Database**
