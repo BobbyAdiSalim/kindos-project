@@ -33,6 +33,19 @@ const generateTimeSlots = () => {
 
 const timeSlots = generateTimeSlots();
 const durationOptions = [15, 30, 45, 60, 90, 120];
+const defaultAppointmentTypes = ['virtual', 'in-person'];
+
+const createWeeklySchedule = (enabledByDefault: (dayIndex: number) => boolean): WeeklySchedule =>
+  days.reduce((acc, day, index) => ({
+    ...acc,
+    [day]: {
+      enabled: enabledByDefault(index),
+      start: '09:00',
+      end: '17:00',
+      duration: 30,
+      appointmentTypes: [...defaultAppointmentTypes],
+    },
+  }), {});
 
 interface WeeklySchedule {
   [key: string]: {
@@ -55,16 +68,7 @@ interface SpecificSlot {
 
 export function AvailabilitySetup() {
   const [schedule, setSchedule] = useState<WeeklySchedule>(
-    days.reduce((acc, day, index) => ({
-      ...acc,
-      [day]: {
-        enabled: index !== 0 && index !== 6, // Disable Sunday and Saturday by default
-        start: '09:00',
-        end: '17:00',
-        duration: 30,
-        appointmentTypes: ['virtual', 'in-person'],
-      }
-    }), {})
+    createWeeklySchedule((index) => index !== 0 && index !== 6) // Disable Sunday and Saturday by default
   );
 
   const [specificSlots, setSpecificSlots] = useState<SpecificSlot[]>([]);
@@ -102,19 +106,25 @@ export function AvailabilitySetup() {
       
       if (response.ok) {
         const data = await response.json();
-        if (data.patterns && data.patterns.length > 0) {
-          const loadedSchedule = { ...schedule };
-          data.patterns.forEach((pattern: any) => {
-            const dayName = days[pattern.day_of_week];
+        const patterns = Array.isArray(data.patterns) ? data.patterns : [];
+
+        if (patterns.length > 0) {
+          // Start from all-disabled days so missing days stay off after refresh.
+          const loadedSchedule = createWeeklySchedule(() => false);
+          patterns.forEach((pattern: any) => {
+            const dayName = days[Number(pattern.day_of_week)];
+            if (!dayName) return;
             loadedSchedule[dayName] = {
-              enabled: pattern.is_active,
+              enabled: pattern.is_active !== false,
               start: pattern.start_time.substring(0, 5),
               end: pattern.end_time.substring(0, 5),
               duration: pattern.appointment_duration,
-              appointmentTypes: pattern.appointment_type || ['virtual', 'in-person'],
+              appointmentTypes: pattern.appointment_type || [...defaultAppointmentTypes],
             };
           });
           setSchedule(loadedSchedule);
+        } else {
+          setSchedule(createWeeklySchedule((index) => index !== 0 && index !== 6));
         }
       }
     } catch (error) {
@@ -152,14 +162,13 @@ export function AvailabilitySetup() {
     setLoading(true);
     try {
       const patterns = Object.entries(schedule)
-        .filter(([_, config]) => config.enabled)
         .map(([day, config]) => ({
           day_of_week: days.indexOf(day),
           start_time: config.start,
           end_time: config.end,
           appointment_duration: config.duration,
           appointment_type: config.appointmentTypes,
-          is_active: true,
+          is_active: config.enabled,
         }));
 
       console.log("Here are the patterns being sent to the backend:", patterns);
@@ -229,11 +238,11 @@ export function AvailabilitySetup() {
   };
 
   const handleDeleteSlot = async (slotId: number) => {
-    setLheaders: getAuthHeader()
+    setLoading(true);
     try {
       const response = await fetch(`${API_BASE_URL}/availability/slots/${slotId}`, {
         method: 'DELETE',
-        credentials: 'include',
+        headers: getAuthHeader(),
       });
 
       if (response.ok) {
