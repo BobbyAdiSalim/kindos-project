@@ -9,6 +9,7 @@ import {
   getMyProfile,
   updateMyProfile,
   getPublicProfile,
+  getDoctorVerificationDocument,
   resubmitDoctorVerification,
 } from "../controllers/userController.js";
 import {
@@ -117,6 +118,15 @@ router.get("/admin/doctors/verification-history", requireAuth, requireRole("admi
 router.post("/doctor/verification/resubmit", requireAuth, requireRole("doctor"), (req, res) => {
   resubmitDoctorVerification(req, res);
 });
+
+router.get(
+  "/doctor/verification/:doctorId/documents/:documentIndex",
+  requireAuth,
+  requireRole("doctor", "admin"),
+  (req, res) => {
+    getDoctorVerificationDocument(req, res);
+  }
+);
 
 /**
  * Availability Routes - Doctor availability management
