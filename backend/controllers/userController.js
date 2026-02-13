@@ -18,13 +18,79 @@ const UPLOADS_DIR = path.join(__dirname, '..', 'uploads', 'verification-docs');
 
 const hashResetToken = (token) => crypto.createHash('sha256').update(token).digest('hex');
 
+const escapeHtml = (value) =>
+  String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+const buildResetPasswordEmailHtml = ({ resetLink }) => {
+  const safeResetLink = escapeHtml(resetLink);
+
+  return `
+  <div style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,Helvetica,sans-serif;color:#111827;">
+    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="padding:24px 0;">
+      <tr>
+        <td align="center">
+          <table role="presentation" cellpadding="0" cellspacing="0" width="600" style="max-width:600px;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">
+            <tr>
+              <td style="padding:24px 28px;background:#111827;color:#ffffff;">
+                <h1 style="margin:0;font-size:22px;line-height:1.3;">Reset Your Password</h1>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:28px;">
+                <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#374151;">
+                  We received a request to reset your password.
+                </p>
+                <p style="margin:0 0 20px;font-size:15px;line-height:1.6;color:#374151;">
+                  Click the button below to choose a new password. This link will expire in <strong>${RESET_TOKEN_EXPIRES_MINUTES} minutes</strong>.
+                </p>
+                <p style="margin:0 0 24px;">
+                  <a
+                    href="${safeResetLink}"
+                    style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;font-weight:600;font-size:14px;padding:12px 18px;border-radius:8px;"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Reset Password
+                  </a>
+                </p>
+                <p style="margin:0 0 8px;font-size:13px;line-height:1.5;color:#6b7280;">
+                  If the button does not work, copy and paste this URL into your browser:
+                </p>
+                <p style="margin:0;font-size:13px;line-height:1.5;word-break:break-all;color:#1d4ed8;">
+                  ${safeResetLink}
+                </p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:18px 28px;background:#f9fafb;border-top:1px solid #e5e7eb;">
+                <p style="margin:0;font-size:12px;line-height:1.5;color:#6b7280;">
+                  If you did not request a password reset, you can safely ignore this email.
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </div>
+  `;
+};
+
 const sendPasswordResetEmail = async ({ to, resetLink }) => {
   const mailProvider = process.env.EMAIL_PROVIDER || 'console';
+  const text = `You requested a password reset. Use this link to reset your password: ${resetLink}. This link expires in ${RESET_TOKEN_EXPIRES_MINUTES} minutes.`;
+  const html = buildResetPasswordEmailHtml({ resetLink });
 
   if (mailProvider === 'console') {
     console.log('[Password Reset Email]');
     console.log(`To: ${to}`);
     console.log(`Reset link: ${resetLink}`);
+    console.log('HTML preview available for SMTP provider mode.');
     return;
   }
 
@@ -43,7 +109,8 @@ const sendPasswordResetEmail = async ({ to, resetLink }) => {
     from: process.env.EMAIL_FROM || process.env.SMTP_USER,
     to,
     subject: 'Reset your password',
-    text: `You requested a password reset. Use this link to reset your password: ${resetLink}. This link expires in ${RESET_TOKEN_EXPIRES_MINUTES} minutes.`,
+    text,
+    html,
   });
 };
 
