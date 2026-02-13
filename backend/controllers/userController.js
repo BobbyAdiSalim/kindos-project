@@ -8,6 +8,7 @@ import { sequelize, User, Patient, Doctor, AdminLog } from '../models/index.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-key';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '1h';
+const MIN_PASSWORD_LENGTH = 8;
 const RESET_TOKEN_EXPIRES_MINUTES = Number(process.env.RESET_TOKEN_EXPIRES_MINUTES || 60);
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 const VALID_ROLES = new Set(['patient', 'doctor', 'admin']);
@@ -354,6 +355,13 @@ export const registerUser = async (req, res) => {
       });
     }
 
+    if (typeof password !== 'string' || password.length < MIN_PASSWORD_LENGTH) {
+      await transaction.rollback();
+      return res.status(400).json({
+        error: `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`,
+      });
+    }
+
     if (!VALID_ROLES.has(role)) {
       await transaction.rollback();
       return res.status(400).json({ error: 'Invalid role provided.' });
@@ -583,8 +591,8 @@ export const resetPassword = async (req, res) => {
     return res.status(400).json({ error: 'Token and newPassword are required.' });
   }
 
-  if (newPassword.length < 8) {
-    return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+  if (typeof newPassword !== 'string' || newPassword.length < MIN_PASSWORD_LENGTH) {
+    return res.status(400).json({ error: `Password must be at least ${MIN_PASSWORD_LENGTH} characters.` });
   }
 
   try {
