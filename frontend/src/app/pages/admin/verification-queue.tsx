@@ -187,13 +187,49 @@ export function VerificationQueue() {
     }
   };
 
-  const handleViewDocuments = (doctor: VerificationDoctor) => {
+  const handleViewDocuments = async (doctor: VerificationDoctor) => {
     if (!doctor.verification_documents.length) {
       toast.info('No verification documents uploaded yet.');
       return;
     }
 
-    window.open(doctor.verification_documents[0], '_blank', 'noopener,noreferrer');
+    if (!token) {
+      toast.error('Authentication required.');
+      return;
+    }
+
+    let newTab: Window | null = null;
+    try {
+      newTab = window.open('', '_blank');
+      const response = await fetch(`/api/doctor/verification/${doctor.id}/documents/0`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data?.error || 'Failed to open verification document.');
+      }
+
+      const blob = await response.blob();
+      const blobUrl = URL.createObjectURL(blob);
+
+      if (newTab) {
+        newTab.location.href = blobUrl;
+      } else {
+        window.open(blobUrl, '_blank', 'noopener,noreferrer');
+      }
+
+      setTimeout(() => {
+        URL.revokeObjectURL(blobUrl);
+      }, 60_000);
+    } catch (error) {
+      if (newTab && !newTab.closed) {
+        newTab.close();
+      }
+      toast.error(error instanceof Error ? error.message : 'Failed to open verification document.');
+    }
   };
 
   return (

@@ -4,6 +4,8 @@ import crypto from 'crypto';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { Readable } from 'stream';
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { sequelize, User, Patient, Doctor, AdminLog } from '../models/index.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-key';
@@ -13,9 +15,42 @@ const RESET_TOKEN_EXPIRES_MINUTES = Number(process.env.RESET_TOKEN_EXPIRES_MINUT
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 const VALID_ROLES = new Set(['patient', 'doctor', 'admin']);
 const MAX_VERIFICATION_DOCUMENT_BYTES = 5 * 1024 * 1024;
+const R2_BUCKET_NAME = process.env.R2_BUCKET_NAME || '';
+const R2_ENDPOINT = process.env.R2_ENDPOINT || '';
+const R2_REGION = process.env.R2_REGION || 'auto';
+const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID || '';
+const R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY || '';
+const R2_VERIFICATION_PREFIX = process.env.R2_VERIFICATION_PREFIX || 'verification-docs';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const UPLOADS_DIR = path.join(__dirname, '..', 'uploads', 'verification-docs');
+const LEGACY_UPLOADS_PREFIX = '/api/uploads/verification-docs/';
+const R2_DOCUMENT_PREFIX = 'r2:';
+
+const isR2Configured = Boolean(
+  R2_BUCKET_NAME && R2_ENDPOINT && R2_ACCESS_KEY_ID && R2_SECRET_ACCESS_KEY
+);
+
+let r2Client = null;
+
+const getR2Client = () => {
+  if (!isR2Configured) {
+    throw new Error('R2 storage is not configured.');
+  }
+
+  if (!r2Client) {
+    r2Client = new S3Client({
+      region: R2_REGION,
+      endpoint: R2_ENDPOINT,
+      credentials: {
+        accessKeyId: R2_ACCESS_KEY_ID,
+        secretAccessKey: R2_SECRET_ACCESS_KEY,
+      },
+    });
+  }
+
+  return r2Client;
+};
 
 const hashResetToken = (token) => crypto.createHash('sha256').update(token).digest('hex');
 
@@ -225,11 +260,55 @@ const mimeToExtension = (mimeType) => {
   return map[mimeType] || null;
 };
 
+const isR2DocumentReference = (value) =>
+  typeof value === 'string' && value.startsWith(R2_DOCUMENT_PREFIX);
+
+const toR2DocumentReference = (objectKey) => `${R2_DOCUMENT_PREFIX}${objectKey}`;
+
+const getR2KeyFromReference = (reference) =>
+  isR2DocumentReference(reference) ? reference.slice(R2_DOCUMENT_PREFIX.length) : null;
+
+const isLegacyLocalDocumentReference = (value) =>
+  typeof value === 'string' && value.startsWith(LEGACY_UPLOADS_PREFIX);
+
+const removePersistedVerificationDocuments = async (documentReferences) => {
+  if (!Array.isArray(documentReferences) || documentReferences.length === 0) return;
+
+  await Promise.allSettled(
+    documentReferences.map(async (reference) => {
+      if (isR2DocumentReference(reference)) {
+        if (!isR2Configured) return;
+
+        const objectKey = getR2KeyFromReference(reference);
+        if (!objectKey) return;
+
+        await getR2Client().send(
+          new DeleteObjectCommand({
+            Bucket: R2_BUCKET_NAME,
+            Key: objectKey,
+          })
+        );
+        return;
+      }
+
+      if (isLegacyLocalDocumentReference(reference)) {
+        const fileName = path.basename(reference);
+        if (!fileName) return;
+        await fs.unlink(path.join(UPLOADS_DIR, fileName));
+      }
+    })
+  );
+};
+
 const persistVerificationDocuments = async (documents, userId) => {
   if (!documents.length) return [];
 
-  await fs.mkdir(UPLOADS_DIR, { recursive: true });
-  const persistedUrls = [];
+  if (!isR2Configured) {
+    throw new Error('R2 storage is not configured.');
+  }
+
+  const persistedReferences = [];
+  const client = getR2Client();
 
   for (let i = 0; i < documents.length; i += 1) {
     const parsed = parseDataUrl(documents[i]);
@@ -243,14 +322,61 @@ const persistVerificationDocuments = async (documents, userId) => {
     }
 
     const fileName = `doctor-${userId}-${Date.now()}-${i}-${crypto.randomUUID()}${extension}`;
-    const absolutePath = path.join(UPLOADS_DIR, fileName);
+    const objectKey = `${R2_VERIFICATION_PREFIX}/doctor-${userId}/${fileName}`;
     const fileBuffer = Buffer.from(parsed.base64, 'base64');
 
-    await fs.writeFile(absolutePath, fileBuffer);
-    persistedUrls.push(`/api/uploads/verification-docs/${fileName}`);
+    await client.send(
+      new PutObjectCommand({
+        Bucket: R2_BUCKET_NAME,
+        Key: objectKey,
+        Body: fileBuffer,
+        ContentType: parsed.mimeType,
+      })
+    );
+    persistedReferences.push(toR2DocumentReference(objectKey));
   }
 
-  return persistedUrls;
+  return persistedReferences;
+};
+
+const streamR2Object = async (res, objectKey) => {
+  const command = new GetObjectCommand({
+    Bucket: R2_BUCKET_NAME,
+    Key: objectKey,
+  });
+  const result = await getR2Client().send(command);
+  const fileName = path.basename(objectKey);
+
+  res.setHeader('Content-Disposition', `inline; filename="${fileName}"`);
+  if (result.ContentType) {
+    res.setHeader('Content-Type', result.ContentType);
+  }
+  if (result.ContentLength) {
+    res.setHeader('Content-Length', String(result.ContentLength));
+  }
+
+  const body = result.Body;
+  if (!body) {
+    throw new Error('Document body is empty.');
+  }
+
+  if (typeof body.pipe === 'function') {
+    body.pipe(res);
+    return;
+  }
+
+  if (typeof body.transformToWebStream === 'function') {
+    Readable.fromWeb(body.transformToWebStream()).pipe(res);
+    return;
+  }
+
+  if (typeof body.transformToByteArray === 'function') {
+    const bytes = await body.transformToByteArray();
+    res.end(Buffer.from(bytes));
+    return;
+  }
+
+  throw new Error('Unsupported document stream type.');
 };
 
 const parseStringArray = (value) => {
@@ -436,18 +562,13 @@ export const registerUser = async (req, res) => {
     await transaction.rollback();
 
     if (persistedVerificationDocuments.length > 0) {
-      await Promise.allSettled(
-        persistedVerificationDocuments.map(async (documentUrl) => {
-          const fileName = documentUrl.split('/').pop();
-          if (!fileName) return;
-          await fs.unlink(path.join(UPLOADS_DIR, fileName));
-        })
-      );
+      await removePersistedVerificationDocuments(persistedVerificationDocuments);
     }
 
     if (
       error?.message === 'Invalid verification document format.' ||
-      error?.message === 'Unsupported verification document type.'
+      error?.message === 'Unsupported verification document type.' ||
+      error?.message === 'R2 storage is not configured.'
     ) {
       return res.status(400).json({ error: error.message });
     }
@@ -850,6 +971,79 @@ export const getPublicProfile = async (req, res) => {
   }
 };
 
+export const getDoctorVerificationDocument = async (req, res) => {
+  try {
+    const doctorId = Number(req.params.doctorId);
+    const documentIndex = Number(req.params.documentIndex);
+
+    if (!Number.isInteger(doctorId) || doctorId <= 0) {
+      return res.status(400).json({ error: 'Invalid doctor id.' });
+    }
+
+    if (!Number.isInteger(documentIndex) || documentIndex < 0) {
+      return res.status(400).json({ error: 'Invalid document index.' });
+    }
+
+    const doctor = await Doctor.findByPk(doctorId, {
+      attributes: ['id', 'user_id', 'verification_documents'],
+    });
+
+    if (!doctor) {
+      return res.status(404).json({ error: 'Doctor not found.' });
+    }
+
+    const requesterIsAdmin = req.auth.role === 'admin';
+    const requesterIsUploader = req.auth.userId === doctor.user_id;
+    if (!requesterIsAdmin && !requesterIsUploader) {
+      return res.status(403).json({ error: 'Forbidden.' });
+    }
+
+    const verificationDocuments = doctor.verification_documents || [];
+    const documentReference = verificationDocuments[documentIndex];
+
+    if (!documentReference) {
+      return res.status(404).json({ error: 'Document not found.' });
+    }
+
+    if (isR2DocumentReference(documentReference)) {
+      if (!isR2Configured) {
+        return res.status(500).json({ error: 'R2 storage is not configured.' });
+      }
+
+      const objectKey = getR2KeyFromReference(documentReference);
+      if (!objectKey) {
+        return res.status(404).json({ error: 'Document not found.' });
+      }
+
+      await streamR2Object(res, objectKey);
+      return;
+    }
+
+    if (isLegacyLocalDocumentReference(documentReference)) {
+      const fileName = path.basename(documentReference);
+      if (!fileName) {
+        return res.status(404).json({ error: 'Document not found.' });
+      }
+
+      const absolutePath = path.join(UPLOADS_DIR, fileName);
+      await fs.access(absolutePath);
+      return res.sendFile(absolutePath);
+    }
+
+    return res.status(404).json({ error: 'Document reference is invalid.' });
+  } catch (error) {
+    if (error?.name === 'NoSuchKey') {
+      return res.status(404).json({ error: 'Document not found.' });
+    }
+
+    if (error?.code === 'ENOENT') {
+      return res.status(404).json({ error: 'Document not found.' });
+    }
+
+    return res.status(500).json({ error: error.message || 'Failed to fetch verification document.' });
+  }
+};
+
 export const resubmitDoctorVerification = async (req, res) => {
   const transaction = await sequelize.transaction();
   let persistedVerificationDocuments = [];
@@ -937,18 +1131,13 @@ export const resubmitDoctorVerification = async (req, res) => {
     }
 
     if (persistedVerificationDocuments.length > 0) {
-      await Promise.allSettled(
-        persistedVerificationDocuments.map(async (documentUrl) => {
-          const fileName = documentUrl.split('/').pop();
-          if (!fileName) return;
-          await fs.unlink(path.join(UPLOADS_DIR, fileName));
-        })
-      );
+      await removePersistedVerificationDocuments(persistedVerificationDocuments);
     }
 
     if (
       error?.message === 'Invalid verification document format.' ||
-      error?.message === 'Unsupported verification document type.'
+      error?.message === 'Unsupported verification document type.' ||
+      error?.message === 'R2 storage is not configured.'
     ) {
       return res.status(400).json({ error: error.message });
     }
