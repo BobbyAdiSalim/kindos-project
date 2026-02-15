@@ -5,7 +5,92 @@
 
 import { AvailabilityPattern, AvailabilitySlot } from '../models/Availability.js';
 import Doctor from '../models/Doctor.js';
+import Appointment from '../models/Appointment.js';
 import { Op } from 'sequelize';
+
+/**
+ * Convert a time string ("HH:MM:SS" or "HH:MM") to minutes since midnight.
+ */
+function timeToMinutes(timeStr) {
+  const parts = timeStr.split(':');
+  return parseInt(parts[0]) * 60 + parseInt(parts[1]);
+}
+
+/**
+ * Convert minutes since midnight to "HH:MM" string.
+ */
+function minutesToTime(minutes) {
+  const h = Math.floor(minutes / 60).toString().padStart(2, '0');
+  const m = (minutes % 60).toString().padStart(2, '0');
+  return `${h}:${m}`;
+}
+
+/**
+ * Generate individual time slot objects from a pattern's time range and duration.
+ * e.g., 09:00-17:00 with 30min duration → [{startTime:"09:00", endTime:"09:30"}, ...]
+ */
+function generateTimeSlotsFromPattern(startTime, endTime, durationMinutes, appointmentTypes) {
+  const slots = [];
+  const startMinutes = timeToMinutes(startTime);
+  const endMinutes = timeToMinutes(endTime);
+
+  let current = startMinutes;
+  while (current + durationMinutes <= endMinutes) {
+    slots.push({
+      startTime: minutesToTime(current),
+      endTime: minutesToTime(current + durationMinutes),
+      appointmentTypes: appointmentTypes || ['virtual', 'in-person'],
+    });
+    current += durationMinutes;
+  }
+  return slots;
+}
+
+/**
+ * Apply AvailabilitySlot overrides to generated slots.
+ * - is_available=false: remove generated slots that overlap with the override range
+ * - is_available=true: add as extra bookable slots
+ */
+function applySlotOverrides(generatedSlots, specificSlots) {
+  const unavailableRanges = specificSlots
+    .filter((s) => !s.is_available)
+    .map((s) => ({
+      start: timeToMinutes(s.start_time),
+      end: timeToMinutes(s.end_time),
+    }));
+
+  let filtered = generatedSlots.filter((slot) => {
+    const slotStart = timeToMinutes(slot.startTime);
+    const slotEnd = timeToMinutes(slot.endTime);
+    return !unavailableRanges.some(
+      (range) => slotStart < range.end && slotEnd > range.start
+    );
+  });
+
+  const extraSlots = specificSlots
+    .filter((s) => s.is_available)
+    .map((s) => ({
+      startTime: s.start_time.substring(0, 5),
+      endTime: s.end_time.substring(0, 5),
+      appointmentTypes: s.appointment_type || ['virtual', 'in-person'],
+    }));
+
+  return [...filtered, ...extraSlots];
+}
+
+/**
+ * Check if a slot overlaps with any existing appointment.
+ */
+function isSlotBooked(slot, appointments) {
+  const slotStart = timeToMinutes(slot.startTime);
+  const slotEnd = timeToMinutes(slot.endTime);
+
+  return appointments.some((appt) => {
+    const apptStart = timeToMinutes(appt.start_time);
+    const apptEnd = timeToMinutes(appt.end_time);
+    return slotStart < apptEnd && slotEnd > apptStart;
+  });
+}
 
 /**
  * Get doctor's availability patterns (recurring weekly schedule)
@@ -290,11 +375,11 @@ export const getDoctorAvailability = async (req, res) => {
     // Get specific slots if date range provided
     let slots = [];
     if (startDate) {
-      const whereClause = { 
+      const whereClause = {
         doctor_id: doctorId,
         is_available: true,
       };
-      
+
       if (startDate && endDate) {
         whereClause.slot_date = {
           [Op.between]: [startDate, endDate],
@@ -315,6 +400,101 @@ export const getDoctorAvailability = async (req, res) => {
   } catch (error) {
     console.error('Error fetching doctor availability:', error);
     res.status(500).json({ message: 'Failed to fetch doctor availability' });
+  }
+};
+
+/**
+ * Get computed bookable time slots for a doctor on a specific date (for patients)
+ * @route   GET /api/availability/doctor/:userId/slots
+ * @access  Public
+ * @query   date (required, YYYY-MM-DD)
+ * @query   appointmentType (optional, 'virtual' | 'in-person')
+ */
+export const getBookableSlots = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { date, appointmentType } = req.query;
+
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return res.status(400).json({ message: 'Valid date parameter required (YYYY-MM-DD)' });
+    }
+
+    const doctor = await Doctor.findOne({ where: { user_id: userId } });
+    if (!doctor) {
+      return res.status(404).json({ message: 'Doctor not found' });
+    }
+
+    const requestedDate = new Date(date + 'T00:00:00');
+    const dayOfWeek = requestedDate.getDay();
+
+    // 1. Get active patterns for this day of week
+    const patterns = await AvailabilityPattern.findAll({
+      where: {
+        doctor_id: doctor.id,
+        day_of_week: dayOfWeek,
+        is_active: true,
+      },
+    });
+
+    // 2. Generate individual slots from patterns
+    let generatedSlots = [];
+    for (const pattern of patterns) {
+      const slots = generateTimeSlotsFromPattern(
+        pattern.start_time,
+        pattern.end_time,
+        pattern.appointment_duration,
+        pattern.appointment_type
+      );
+      generatedSlots.push(...slots);
+    }
+
+    // 3. Get specific slot overrides for this date
+    const specificSlots = await AvailabilitySlot.findAll({
+      where: {
+        doctor_id: doctor.id,
+        slot_date: date,
+      },
+    });
+
+    // 4. Apply overrides
+    generatedSlots = applySlotOverrides(generatedSlots, specificSlots);
+
+    // 5. Get existing appointments on this date (non-cancelled)
+    const appointments = await Appointment.findAll({
+      where: {
+        doctor_id: doctor.id,
+        appointment_date: date,
+        status: { [Op.notIn]: ['cancelled'] },
+      },
+    });
+
+    // 6. Filter out booked slots
+    let availableSlots = generatedSlots.filter(
+      (slot) => !isSlotBooked(slot, appointments)
+    );
+
+    // 7. Optionally filter by appointment type
+    if (appointmentType) {
+      availableSlots = availableSlots.filter(
+        (slot) => slot.appointmentTypes.includes(appointmentType)
+      );
+    }
+
+    // 8. Sort by start time
+    availableSlots.sort((a, b) => a.startTime.localeCompare(b.startTime));
+
+    res.json({
+      date,
+      doctor_id: doctor.id,
+      slots: availableSlots.map((slot) => ({
+        start_time: slot.startTime,
+        end_time: slot.endTime,
+        appointment_types: slot.appointmentTypes,
+      })),
+    });
+  } catch (error) {
+    console.error('Error fetching bookable slots:', error);
+    res.status(500).json({ message: 'Failed to fetch available time slots' });
   }
 };
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { Button } from '@/app/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card';
@@ -7,16 +7,21 @@ import { Label } from '@/app/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/app/components/ui/radio-group';
 import { Textarea } from '@/app/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
+import { Badge } from '@/app/components/ui/badge';
 import { mockDoctors } from '@/app/lib/mock-data';
+import { getPublicProfile, type DoctorProfile } from '@/app/lib/profile-api';
+import { getBookableSlots, formatTime24to12, type TimeSlot } from '@/app/lib/availability-api';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
-import { Clock, Video } from 'lucide-react';
+import { Clock, Video, MapPin, Loader2, CalendarIcon, ArrowLeft } from 'lucide-react';
 
 export function Booking() {
   const { doctorId } = useParams();
   const navigate = useNavigate();
-  const doctor = mockDoctors.find(d => d.id === doctorId);
-  
+
+  const [doctor, setDoctor] = useState<any>(null);
+  const [doctorLoading, setDoctorLoading] = useState(true);
+
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [selectedTime, setSelectedTime] = useState('');
   const [appointmentType, setAppointmentType] = useState<'virtual' | 'in-person'>('virtual');
@@ -25,12 +30,86 @@ export function Booking() {
   const [notes, setNotes] = useState('');
   const [accessibility, setAccessibility] = useState<string[]>([]);
 
-  if (!doctor) return <div>Doctor not found</div>;
+  const [availableSlots, setAvailableSlots] = useState<TimeSlot[]>([]);
+  const [slotsLoading, setSlotsLoading] = useState(false);
+  const [slotsError, setSlotsError] = useState('');
 
-  const availableSlots = [
-    '9:00 AM', '9:30 AM', '10:00 AM', '10:30 AM', '11:00 AM', '11:30 AM',
-    '1:00 PM', '1:30 PM', '2:00 PM', '2:30 PM', '3:00 PM', '3:30 PM',
-  ];
+  // Fetch doctor profile from API with mock fallback
+  useEffect(() => {
+    const loadDoctor = async () => {
+      if (!doctorId) { setDoctorLoading(false); return; }
+
+      try {
+        const data = await getPublicProfile(doctorId);
+        if (data.user.role === 'doctor' && data.profile) {
+          const p = data.profile as DoctorProfile;
+          setDoctor({
+            id: doctorId,
+            name: p.full_name || data.user.username,
+            specialty: p.specialty || '',
+            virtualAvailable: p.virtual_available ?? true,
+            inPersonAvailable: p.in_person_available ?? true,
+            clinicLocation: p.clinic_location || '',
+          });
+          setDoctorLoading(false);
+          return;
+        }
+      } catch { /* fall through to mock */ }
+
+      const mock = mockDoctors.find(d => d.id === doctorId);
+      if (mock) setDoctor(mock);
+      setDoctorLoading(false);
+    };
+    loadDoctor();
+  }, [doctorId]);
+
+  // Fetch available time slots when date changes
+  useEffect(() => {
+    if (!selectedDate || !doctorId) {
+      setAvailableSlots([]);
+      return;
+    }
+
+    const fetchSlots = async () => {
+      setSlotsLoading(true);
+      setSlotsError('');
+      setSelectedTime('');
+
+      try {
+        const dateStr = format(selectedDate, 'yyyy-MM-dd');
+        const data = await getBookableSlots(doctorId, dateStr);
+        setAvailableSlots(data.slots);
+      } catch (err: any) {
+        console.error('Failed to load time slots:', err);
+        setSlotsError(err.message || 'Could not load available times');
+        setAvailableSlots([]);
+      } finally {
+        setSlotsLoading(false);
+      }
+    };
+
+    fetchSlots();
+  }, [selectedDate, doctorId]);
+
+  if (doctorLoading) {
+    return (
+      <div className="container mx-auto px-4 py-12 text-center">
+        <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+        <p className="mt-3 text-muted-foreground">Loading doctor information...</p>
+      </div>
+    );
+  }
+
+  if (!doctor) {
+    return (
+      <div className="container mx-auto px-4 py-12 text-center">
+        <CalendarIcon className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+        <h3 className="font-semibold mb-2">Doctor not found</h3>
+        <p className="text-muted-foreground mb-6">We couldn't find the doctor you're looking for.</p>
+        <Button onClick={() => navigate('/patient/providers')}>Browse Providers</Button>
+      </div>
+    );
+  }
 
   const handleBooking = () => {
     if (!selectedDate || !selectedTime || !reason) {
@@ -45,19 +124,47 @@ export function Booking() {
   return (
     <div className="container mx-auto px-4 py-8 max-w-4xl">
       <Button variant="ghost" onClick={() => navigate(-1)} className="mb-6">
-        ← Back
+        <ArrowLeft className="h-4 w-4 mr-2" />
+        Back
       </Button>
 
-      <div className="mb-6">
-        <h1 className="text-2xl md:text-3xl font-semibold mb-2">Book Appointment</h1>
-        <p className="text-muted-foreground">with {doctor.name}</p>
-      </div>
+      {/* Doctor Summary Header */}
+      <Card className="mb-6">
+        <CardContent className="p-6">
+          <div className="flex items-start justify-between">
+            <div>
+              <h1 className="text-2xl md:text-3xl font-semibold">Book Appointment</h1>
+              <p className="text-muted-foreground mt-1">with <span className="font-medium text-foreground">{doctor.name}</span></p>
+              {doctor.specialty && (
+                <p className="text-sm text-muted-foreground mt-1">{doctor.specialty}</p>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {doctor.virtualAvailable && (
+                <Badge variant="outline" className="border-blue-500 text-blue-700">
+                  <Video className="h-3 w-3 mr-1" />
+                  Virtual
+                </Badge>
+              )}
+              {doctor.inPersonAvailable && (
+                <Badge variant="outline" className="border-green-600 text-green-700">
+                  <MapPin className="h-3 w-3 mr-1" />
+                  In-Person
+                </Badge>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid md:grid-cols-2 gap-6">
         {/* Calendar */}
         <Card>
           <CardHeader>
-            <CardTitle>Select Date</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <CalendarIcon className="h-5 w-5" />
+              Select Date
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <Calendar
@@ -67,28 +174,63 @@ export function Booking() {
               disabled={(date) => date < new Date()}
               className="rounded-md border"
             />
+            {selectedDate && (
+              <p className="text-sm text-muted-foreground mt-3 text-center">
+                Selected: <span className="font-medium text-foreground">{format(selectedDate, 'EEEE, MMMM d, yyyy')}</span>
+              </p>
+            )}
           </CardContent>
         </Card>
 
         {/* Time Slots */}
         <Card>
           <CardHeader>
-            <CardTitle>Select Time</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <Clock className="h-5 w-5" />
+                Select Time
+              </CardTitle>
+              {!slotsLoading && !slotsError && availableSlots.length > 0 && (
+                <Badge variant="secondary">
+                  {availableSlots.length} slot{availableSlots.length !== 1 ? 's' : ''} available
+                </Badge>
+              )}
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 gap-2 max-h-96 overflow-y-auto">
-              {availableSlots.map(slot => (
-                <Button
-                  key={slot}
-                  variant={selectedTime === slot ? 'default' : 'outline'}
-                  className="justify-start"
-                  onClick={() => setSelectedTime(slot)}
-                >
-                  <Clock className="h-4 w-4 mr-2" />
-                  {slot}
-                </Button>
-              ))}
-            </div>
+            {slotsLoading ? (
+              <div className="flex flex-col items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <p className="mt-3 text-sm text-muted-foreground">Loading available times...</p>
+              </div>
+            ) : slotsError ? (
+              <div className="flex flex-col items-center justify-center py-12">
+                <CalendarIcon className="h-12 w-12 mb-4 text-muted-foreground" />
+                <p className="font-semibold mb-1">Unable to load times</p>
+                <p className="text-sm text-muted-foreground">{slotsError}</p>
+              </div>
+            ) : availableSlots.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12">
+                <Clock className="h-12 w-12 mb-4 text-muted-foreground" />
+                <p className="font-semibold mb-1">No available times</p>
+                <p className="text-sm text-muted-foreground">No slots available for this date.</p>
+                <p className="text-sm text-muted-foreground">Try selecting a different date.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2 max-h-96 overflow-y-auto">
+                {availableSlots.map((slot) => (
+                  <Button
+                    key={slot.start_time}
+                    variant={selectedTime === slot.start_time ? 'default' : 'outline'}
+                    className="justify-start"
+                    onClick={() => setSelectedTime(slot.start_time)}
+                  >
+                    <Clock className="h-4 w-4 mr-2" />
+                    {formatTime24to12(slot.start_time)}
+                  </Button>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -107,10 +249,11 @@ export function Booking() {
                   <RadioGroupItem value="virtual" id="book-virtual" />
                   <Label htmlFor="book-virtual" className="cursor-pointer flex-1">
                     <div className="flex items-center gap-2">
-                      <Video className="h-4 w-4" />
+                      <Video className="h-4 w-4 text-blue-600" />
                       <span className="font-medium">Virtual (Video Call)</span>
+                      <Badge variant="outline" className="border-blue-500 text-blue-700 ml-auto">Virtual</Badge>
                     </div>
-                    <p className="text-sm text-muted-foreground">Meet from anywhere</p>
+                    <p className="text-sm text-muted-foreground mt-1">Meet from anywhere via video call</p>
                   </Label>
                 </div>
               )}
@@ -118,8 +261,14 @@ export function Booking() {
                 <div className="flex items-center space-x-3 border rounded-lg p-4 hover:bg-muted/50 cursor-pointer">
                   <RadioGroupItem value="in-person" id="book-in-person" />
                   <Label htmlFor="book-in-person" className="cursor-pointer flex-1">
-                    <span className="font-medium">In-Person</span>
-                    <p className="text-sm text-muted-foreground">{doctor.clinicLocation}</p>
+                    <div className="flex items-center gap-2">
+                      <MapPin className="h-4 w-4 text-green-600" />
+                      <span className="font-medium">In-Person</span>
+                      <Badge variant="outline" className="border-green-600 text-green-700 ml-auto">In-Person</Badge>
+                    </div>
+                    {doctor.clinicLocation && (
+                      <p className="text-sm text-muted-foreground mt-1">{doctor.clinicLocation}</p>
+                    )}
                   </Label>
                 </div>
               )}
@@ -195,14 +344,40 @@ export function Booking() {
         </CardContent>
       </Card>
 
-      <div className="flex justify-end gap-3 mt-6">
-        <Button variant="outline" onClick={() => navigate(-1)}>
-          Cancel
-        </Button>
-        <Button onClick={handleBooking} size="lg">
-          Confirm Booking
-        </Button>
-      </div>
+      {/* Booking Summary & Actions */}
+      <Card className="mt-6">
+        <CardContent className="p-6 bg-muted/30 rounded-xl">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="text-sm space-y-1">
+              {selectedDate && selectedTime ? (
+                <>
+                  <p className="font-medium">Booking Summary</p>
+                  <div className="flex flex-wrap gap-4 text-muted-foreground">
+                    <span className="flex items-center gap-1">
+                      <CalendarIcon className="h-4 w-4" />
+                      {format(selectedDate, 'MMM d, yyyy')}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Clock className="h-4 w-4" />
+                      {formatTime24to12(selectedTime)}
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <p className="text-muted-foreground">Select a date and time to continue</p>
+              )}
+            </div>
+            <div className="flex gap-3 w-full sm:w-auto">
+              <Button variant="outline" onClick={() => navigate(-1)} className="flex-1 sm:flex-none">
+                Cancel
+              </Button>
+              <Button onClick={handleBooking} size="lg" className="flex-1 sm:flex-none">
+                Confirm Booking
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

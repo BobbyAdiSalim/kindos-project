@@ -82,7 +82,7 @@ export function Register() {
         navigate('/doctor/dashboard');
       } else {
         toast.success('Account created successfully!');
-        navigate(role === 'patient' ? '/patient/questionnaire' : '/admin/dashboard');
+        navigate('/patient/questionnaire');
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Unable to create account');
@@ -147,12 +147,6 @@ export function Register() {
                     <RadioGroupItem value="doctor" id="register-doctor" />
                     <Label htmlFor="register-doctor" className="font-normal cursor-pointer">
                       Healthcare Provider
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-3 space-y-0">
-                    <RadioGroupItem value="admin" id="register-admin" />
-                    <Label htmlFor="register-admin" className="font-normal cursor-pointer">
-                      System Administrator
                     </Label>
                   </div>
                 </RadioGroup>
