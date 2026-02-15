@@ -26,6 +26,7 @@ import {
   updateAvailabilitySlot,
   deleteAvailabilitySlot,
   getDoctorAvailability,
+  getBookableSlots,
 } from "../controllers/availabilityController.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 
@@ -167,7 +168,12 @@ router.delete("/availability/slots/:slotId", requireAuth, requireRole("doctor"),
   deleteAvailabilitySlot(req, res);
 });
 
-// Public route - Get availability for a specific doctor (for patients)
+// Public route - Get computed bookable time slots for a doctor on a specific date
+router.get("/availability/doctor/:userId/slots", (req, res) => {
+  getBookableSlots(req, res);
+});
+
+// Public route - Get raw availability for a specific doctor (for patients)
 router.get("/availability/doctor/:doctorId", (req, res) => {
   getDoctorAvailability(req, res);
 });
