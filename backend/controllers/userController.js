@@ -1149,3 +1149,169 @@ export const resubmitDoctorVerification = async (req, res) => {
     return res.status(500).json({ error: error.message });
   }
 };
+
+/**
+ * Get all verified doctors with optional filtering
+ * @route GET /api/doctors
+ * @access Public
+ */
+export const getDoctors = async (req, res) => {
+  try {
+    const { 
+      search, 
+      appointmentType, 
+      language, 
+      specialty,
+      limit = 50, 
+      offset = 0 
+    } = req.query;
+
+    // Build where clause - only show verified doctors
+    const whereClause = {
+      verification_status: "approved",
+    };
+
+    // Search by name or specialty
+    if (search) {
+      whereClause[Op.or] = [
+        { full_name: { [Op.iLike]: `%${search}%` } },
+        { specialty: { [Op.iLike]: `%${search}%` } },
+        { bio: { [Op.iLike]: `%${search}%` } },
+      ];
+    }
+
+    // Filter by specialty/care type
+    if (specialty && specialty !== "all") {
+      whereClause.specialty = { [Op.iLike]: `%${specialty}%` };
+    }
+
+    // Filter by appointment type
+    if (appointmentType === "virtual") {
+      whereClause.virtual_available = true;
+    } else if (appointmentType === "in-person") {
+      whereClause.in_person_available = true;
+    }
+
+    // Filter by language
+    if (language && language !== "all") {
+      whereClause.languages = { [Op.contains]: [language] };
+    }
+
+    // Fetch doctors
+    const doctors = await Doctor.findAndCountAll({
+      where: whereClause,
+      include: [
+        {
+          model: User,
+          as: "user",
+          attributes: ["id", "email", "role", "created_at"],
+        },
+      ],
+      order: [["full_name", "ASC"]],
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+    });
+
+    // Transform for frontend
+    const transformedDoctors = doctors.rows.map((doctor) => ({
+      id: doctor.id,
+      user_id: doctor.user_id,
+      full_name: doctor.full_name,
+      specialty: doctor.specialty,
+      phone: doctor.phone,
+      bio: doctor.bio,
+      languages: doctor.languages || [],
+      clinic_location: doctor.clinic_location,
+      latitude: doctor.latitude,
+      longitude: doctor.longitude,
+      virtual_available: doctor.virtual_available,
+      in_person_available: doctor.in_person_available,
+      verification_status: doctor.verification_status,
+      verified_at: doctor.verified_at,
+      profile_complete: doctor.profile_complete,
+      created_at: doctor.created_at,
+      updated_at: doctor.updated_at,
+      user: doctor.user,
+    }));
+
+    res.status(200).json({
+      success: true,
+      count: transformedDoctors.length,
+      total: doctors.count,
+      doctors: transformedDoctors,
+    });
+  } catch (error) {
+    console.error("Error fetching doctors:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch doctors",
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Get a specific doctor by ID
+ * @route GET /api/doctors/:doctorId
+ * @access Public
+ */
+export const getDoctorById = async (req, res) => {
+  try {
+    const { doctorId } = req.params;
+
+    const doctor = await Doctor.findOne({
+      where: {
+        id: doctorId,
+        verification_status: "approved",
+      },
+      include: [
+        {
+          model: User,
+          as: "user",
+          attributes: ["id", "email", "role", "created_at"],
+        },
+      ],
+    });
+
+    if (!doctor) {
+      return res.status(404).json({
+        success: false,
+        message: "Doctor not found",
+      });
+    }
+
+    // Transform for frontend
+    const transformedDoctor = {
+      id: doctor.id,
+      user_id: doctor.user_id,
+      full_name: doctor.full_name,
+      specialty: doctor.specialty,
+      phone: doctor.phone,
+      bio: doctor.bio,
+      languages: doctor.languages || [],
+      clinic_location: doctor.clinic_location,
+      latitude: doctor.latitude,
+      longitude: doctor.longitude,
+      virtual_available: doctor.virtual_available,
+      in_person_available: doctor.in_person_available,
+      verification_status: doctor.verification_status,
+      verified_at: doctor.verified_at,
+      profile_complete: doctor.profile_complete,
+      created_at: doctor.created_at,
+      updated_at: doctor.updated_at,
+      user: doctor.user,
+    };
+
+    res.status(200).json({
+      success: true,
+      doctor: transformedDoctor,
+    });
+  } catch (error) {
+    console.error("Error fetching doctor:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch doctor",
+      error: error.message,
+    });
+  }
+};

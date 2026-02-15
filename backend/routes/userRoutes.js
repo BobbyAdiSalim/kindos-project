@@ -11,6 +11,8 @@ import {
   getPublicProfile,
   getDoctorVerificationDocument,
   resubmitDoctorVerification,
+  getDoctors,
+  getDoctorById,
 } from "../controllers/userController.js";
 import {
   getUnverifiedDoctors,
@@ -26,6 +28,7 @@ import {
   updateAvailabilitySlot,
   deleteAvailabilitySlot,
   getDoctorAvailability,
+  getDoctorsWithAvailability,
   getBookableSlots,
 } from "../controllers/availabilityController.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
@@ -81,6 +84,33 @@ router.post("/auth/forgot-password", (req, res) => {
  */
 router.get("/auth/reset-password/:token/validate", (req, res) => {
   validateResetToken(req, res);
+});
+
+/**
+ * @route   GET /api/doctors
+ * @desc    Get all verified doctors with optional filtering
+ * @access  Public
+ */
+router.get("/doctors", (req, res) => {
+  getDoctors(req, res);
+});
+
+/**
+ * @route   GET /api/doctors/with-availability
+ * @desc    Get doctors with availability slots matching criteria
+ * @access  Public
+ */
+router.get("/doctors/with-availability", (req, res) => {
+  getDoctorsWithAvailability(req, res);
+});
+
+/**
+ * @route   GET /api/doctors/:doctorId
+ * @desc    Get a specific doctor by ID
+ * @access  Public
+ */
+router.get("/doctors/:doctorId", (req, res) => {
+  getDoctorById(req, res);
 });
 
 /**

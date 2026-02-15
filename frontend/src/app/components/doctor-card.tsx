@@ -4,7 +4,7 @@ import { Card, CardContent, CardFooter } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
 import { Badge } from '@/app/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/app/components/ui/avatar';
-import { Star, MapPin, Video, User as UserIcon } from 'lucide-react';
+import { Star, MapPin, Video, User as UserIcon, Award } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface DoctorCardProps {
@@ -23,13 +23,52 @@ interface DoctorCardProps {
     verified: boolean;
   };
   showBookButton?: boolean;
+  matchScore?: number;
 }
 
-export function DoctorCard({ doctor, showBookButton = true }: DoctorCardProps) {
+export function DoctorCard({ doctor, showBookButton = true, matchScore }: DoctorCardProps) {
   const nextAvailableDate = new Date(doctor.nextAvailable);
   
+  // Determine badge color based on match score
+  const getMatchBadgeVariant = (score: number) => {
+    if (score === 100) return 'default';
+    if (score >= 75) return 'secondary';
+    return 'outline';
+  };
+  
   return (
-    <Card className="hover:shadow-lg transition-shadow">
+    <Card className="hover:shadow-lg transition-shadow relative">
+      {/* Top badges container - flex to handle multiple badges */}
+      <div className="absolute top-4 right-4 z-10 flex gap-2">
+        {/* Match Score Badge */}
+        {matchScore !== undefined && matchScore < 100 && (
+          <Badge 
+            variant={getMatchBadgeVariant(matchScore)}
+            className="text-xs shadow-sm"
+          >
+            <Award className="h-3 w-3 mr-1" />
+            {Math.round(matchScore)}% Match
+          </Badge>
+        )}
+        
+        {/* Perfect Match Badge */}
+        {matchScore === 100 && (
+          <Badge 
+            className="bg-green-500 hover:bg-green-600 text-white text-xs shadow-sm"
+          >
+            <Star className="h-3 w-3 mr-1 fill-white" />
+            Perfect Match
+          </Badge>
+        )}
+        
+        {/* Verified Badge - Moved to top right with others */}
+        {doctor.verified && (
+          <Badge variant="secondary" className="bg-green-100 text-green-800 text-xs shadow-sm">
+            Verified
+          </Badge>
+        )}
+      </div>
+
       <CardContent className="p-6">
         <div className="flex gap-4">
           <Avatar className="h-16 w-16 flex-shrink-0">
@@ -45,11 +84,7 @@ export function DoctorCard({ doctor, showBookButton = true }: DoctorCardProps) {
                 <h3 className="font-semibold text-lg">{doctor.name}</h3>
                 <p className="text-sm text-muted-foreground">{doctor.specialty}</p>
               </div>
-              {doctor.verified && (
-                <Badge variant="secondary" className="bg-green-100 text-green-800 text-xs">
-                  Verified
-                </Badge>
-              )}
+              {/* Removed verified badge from here - it's now in the top right */}
             </div>
             
             <div className="mt-3 space-y-2">
@@ -79,9 +114,17 @@ export function DoctorCard({ doctor, showBookButton = true }: DoctorCardProps) {
               </div>
               
               <div className="flex flex-wrap gap-1 text-xs text-muted-foreground">
-                <span>Languages:</span>
+                <span className="font-medium">Languages:</span>{' '}
                 {doctor.languages.join(', ')}
               </div>
+
+              {/* Show which criteria were matched (optional) */}
+              {matchScore !== undefined && matchScore < 100 && (
+                <div className="mt-2 text-xs text-muted-foreground border-t pt-2">
+                  <span className="font-medium">Matches:</span>{' '}
+                  {matchScore >= 75 ? 'Most criteria ✓' : 'Some criteria ✓'}
+                </div>
+              )}
             </div>
           </div>
         </div>
