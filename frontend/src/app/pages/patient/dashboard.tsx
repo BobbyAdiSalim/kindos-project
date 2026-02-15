@@ -18,7 +18,7 @@ export function PatientDashboard() {
           <h1 className="text-2xl md:text-3xl font-semibold mb-2">My Appointments</h1>
           <p className="text-muted-foreground">Manage your healthcare appointments</p>
         </div>
-        <Link to="/patient/questionnaire">
+        <Link to="/patient/providers">
           <Button size="lg">
             <Plus className="h-5 w-5 mr-2" />
             Book Appointment
@@ -46,7 +46,7 @@ export function PatientDashboard() {
                 <p className="text-muted-foreground mb-6">
                   Ready to book your next appointment?
                 </p>
-                <Link to="/patient/questionnaire">
+                <Link to="/patient/providers">
                   <Button>Book Appointment</Button>
                 </Link>
               </CardContent>
