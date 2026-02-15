@@ -13,7 +13,7 @@ const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '1h';
 const MIN_PASSWORD_LENGTH = 8;
 const RESET_TOKEN_EXPIRES_MINUTES = Number(process.env.RESET_TOKEN_EXPIRES_MINUTES || 60);
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
-const VALID_ROLES = new Set(['patient', 'doctor', 'admin']);
+const REGISTRABLE_ROLES = new Set(['patient', 'doctor']);
 const MAX_VERIFICATION_DOCUMENT_BYTES = 5 * 1024 * 1024;
 const R2_BUCKET_NAME = process.env.R2_BUCKET_NAME || '';
 const R2_ENDPOINT = process.env.R2_ENDPOINT || '';
@@ -488,9 +488,9 @@ export const registerUser = async (req, res) => {
       });
     }
 
-    if (!VALID_ROLES.has(role)) {
+    if (!REGISTRABLE_ROLES.has(role)) {
       await transaction.rollback();
-      return res.status(400).json({ error: 'Invalid role provided.' });
+      return res.status(400).json({ error: "Role must be either 'patient' or 'doctor'." });
     }
 
     if (role === 'doctor' && (!specialty || !licenseNumber)) {
