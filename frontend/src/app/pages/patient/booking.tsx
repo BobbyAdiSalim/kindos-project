@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { Button } from '@/app/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card';
@@ -8,15 +8,19 @@ import { RadioGroup, RadioGroupItem } from '@/app/components/ui/radio-group';
 import { Textarea } from '@/app/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
 import { mockDoctors } from '@/app/lib/mock-data';
+import { getPublicProfile, type DoctorProfile } from '@/app/lib/profile-api';
+import { getBookableSlots, formatTime24to12, type TimeSlot } from '@/app/lib/availability-api';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
-import { Clock, Video } from 'lucide-react';
+import { Clock, Video, Loader2 } from 'lucide-react';
 
 export function Booking() {
   const { doctorId } = useParams();
   const navigate = useNavigate();
-  const doctor = mockDoctors.find(d => d.id === doctorId);
-  
+
+  const [doctor, setDoctor] = useState<any>(null);
+  const [doctorLoading, setDoctorLoading] = useState(true);
+
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [selectedTime, setSelectedTime] = useState('');
   const [appointmentType, setAppointmentType] = useState<'virtual' | 'in-person'>('virtual');
@@ -25,12 +29,76 @@ export function Booking() {
   const [notes, setNotes] = useState('');
   const [accessibility, setAccessibility] = useState<string[]>([]);
 
-  if (!doctor) return <div>Doctor not found</div>;
+  const [availableSlots, setAvailableSlots] = useState<TimeSlot[]>([]);
+  const [slotsLoading, setSlotsLoading] = useState(false);
+  const [slotsError, setSlotsError] = useState('');
 
-  const availableSlots = [
-    '9:00 AM', '9:30 AM', '10:00 AM', '10:30 AM', '11:00 AM', '11:30 AM',
-    '1:00 PM', '1:30 PM', '2:00 PM', '2:30 PM', '3:00 PM', '3:30 PM',
-  ];
+  // Fetch doctor profile from API with mock fallback
+  useEffect(() => {
+    const loadDoctor = async () => {
+      if (!doctorId) { setDoctorLoading(false); return; }
+
+      try {
+        const data = await getPublicProfile(doctorId);
+        if (data.user.role === 'doctor' && data.profile) {
+          const p = data.profile as DoctorProfile;
+          setDoctor({
+            id: doctorId,
+            name: p.full_name || data.user.username,
+            virtualAvailable: p.virtual_available ?? true,
+            inPersonAvailable: p.in_person_available ?? true,
+            clinicLocation: p.clinic_location || '',
+          });
+          setDoctorLoading(false);
+          return;
+        }
+      } catch { /* fall through to mock */ }
+
+      const mock = mockDoctors.find(d => d.id === doctorId);
+      if (mock) setDoctor(mock);
+      setDoctorLoading(false);
+    };
+    loadDoctor();
+  }, [doctorId]);
+
+  // Fetch available time slots when date changes
+  useEffect(() => {
+    if (!selectedDate || !doctorId) {
+      setAvailableSlots([]);
+      return;
+    }
+
+    const fetchSlots = async () => {
+      setSlotsLoading(true);
+      setSlotsError('');
+      setSelectedTime('');
+
+      try {
+        const dateStr = format(selectedDate, 'yyyy-MM-dd');
+        const data = await getBookableSlots(doctorId, dateStr);
+        setAvailableSlots(data.slots);
+      } catch (err: any) {
+        console.error('Failed to load time slots:', err);
+        setSlotsError(err.message || 'Could not load available times');
+        setAvailableSlots([]);
+      } finally {
+        setSlotsLoading(false);
+      }
+    };
+
+    fetchSlots();
+  }, [selectedDate, doctorId]);
+
+  if (doctorLoading) {
+    return (
+      <div className="container mx-auto px-4 py-12 text-center">
+        <Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" />
+        <p className="mt-2 text-muted-foreground">Loading...</p>
+      </div>
+    );
+  }
+
+  if (!doctor) return <div>Doctor not found</div>;
 
   const handleBooking = () => {
     if (!selectedDate || !selectedTime || !reason) {
@@ -76,19 +144,35 @@ export function Booking() {
             <CardTitle>Select Time</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 gap-2 max-h-96 overflow-y-auto">
-              {availableSlots.map(slot => (
-                <Button
-                  key={slot}
-                  variant={selectedTime === slot ? 'default' : 'outline'}
-                  className="justify-start"
-                  onClick={() => setSelectedTime(slot)}
-                >
-                  <Clock className="h-4 w-4 mr-2" />
-                  {slot}
-                </Button>
-              ))}
-            </div>
+            {slotsLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                <span className="ml-2 text-muted-foreground">Loading available times...</span>
+              </div>
+            ) : slotsError ? (
+              <div className="text-center py-12 text-destructive">
+                <p>{slotsError}</p>
+              </div>
+            ) : availableSlots.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground">
+                <p>No available time slots for this date.</p>
+                <p className="text-sm mt-1">Try selecting a different date.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2 max-h-96 overflow-y-auto">
+                {availableSlots.map((slot) => (
+                  <Button
+                    key={slot.start_time}
+                    variant={selectedTime === slot.start_time ? 'default' : 'outline'}
+                    className="justify-start"
+                    onClick={() => setSelectedTime(slot.start_time)}
+                  >
+                    <Clock className="h-4 w-4 mr-2" />
+                    {formatTime24to12(slot.start_time)}
+                  </Button>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
