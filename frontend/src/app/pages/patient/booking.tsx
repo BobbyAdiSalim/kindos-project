@@ -105,6 +105,38 @@ export function Booking() {
     fetchSlots();
   }, [selectedDate, doctorId]);
 
+  const virtualUnavailable = !doctor?.virtualAvailable;
+  const inPersonUnavailable = !doctor?.inPersonAvailable;
+  const appointmentTypeLocked = !selectedTime;
+  const selectedSlot = availableSlots.find((slot) => slot.start_time === selectedTime);
+  const slotSupportsType = (slot: TimeSlot, type: 'virtual' | 'in-person') =>
+    Array.isArray(slot.appointment_types) && slot.appointment_types.includes(type);
+  const virtualAvailableForSelection =
+    Boolean(doctor) && !virtualUnavailable && (!selectedSlot || slotSupportsType(selectedSlot, 'virtual'));
+  const inPersonAvailableForSelection =
+    Boolean(doctor) && !inPersonUnavailable && (!selectedSlot || slotSupportsType(selectedSlot, 'in-person'));
+  const virtualDisabled = appointmentTypeLocked;
+  const inPersonDisabled = appointmentTypeLocked;
+
+  useEffect(() => {
+    if (!doctor || !selectedSlot) return;
+
+    if (appointmentType === 'virtual' && !virtualAvailableForSelection && inPersonAvailableForSelection) {
+      setAppointmentType('in-person');
+      return;
+    }
+
+    if (appointmentType === 'in-person' && !inPersonAvailableForSelection && virtualAvailableForSelection) {
+      setAppointmentType('virtual');
+    }
+  }, [
+    doctor,
+    selectedSlot,
+    appointmentType,
+    virtualAvailableForSelection,
+    inPersonAvailableForSelection,
+  ]);
+
   if (doctorLoading) {
     return (
       <div className="container mx-auto px-4 py-12 text-center">
@@ -125,15 +157,17 @@ export function Booking() {
     );
   }
 
-  const virtualUnavailable = !doctor.virtualAvailable;
-  const inPersonUnavailable = !doctor.inPersonAvailable;
-  const appointmentTypeLocked = !selectedTime;
-  const virtualDisabled = appointmentTypeLocked || virtualUnavailable;
-  const inPersonDisabled = appointmentTypeLocked || inPersonUnavailable;
-
   const handleBooking = () => {
     if (!selectedDate || !selectedTime || !reason) {
       toast.error('Please fill in all required fields');
+      return;
+    }
+
+    if (
+      (appointmentType === 'virtual' && !virtualAvailableForSelection) ||
+      (appointmentType === 'in-person' && !inPersonAvailableForSelection)
+    ) {
+      toast.error('Selected time slot does not support this appointment type');
       return;
     }
 
@@ -245,8 +279,33 @@ export function Booking() {
                     className="justify-start"
                     onClick={() => setSelectedTime(slot.start_time)}
                   >
-                    <Clock className="h-4 w-4 mr-2" />
-                    {formatTime24to12(slot.start_time)}
+                    <div className="flex items-center justify-between w-full gap-2">
+                      <span className="inline-flex items-center min-w-0">
+                        <Clock className="h-4 w-4 mr-2 shrink-0" />
+                        {formatTime24to12(slot.start_time)}
+                      </span>
+
+                      <span className="inline-flex items-center gap-1 shrink-0">
+                        {slotSupportsType(slot, 'virtual') && (
+                          <span
+                            className="inline-flex h-5 w-5 items-center justify-center rounded border border-blue-500 bg-blue-100 text-[10px] font-semibold text-blue-700"
+                            title="Virtual available"
+                            aria-label="Virtual available"
+                          >
+                            V
+                          </span>
+                        )}
+                        {slotSupportsType(slot, 'in-person') && (
+                          <span
+                            className="inline-flex h-5 w-5 items-center justify-center rounded border border-green-600 bg-green-100 text-[10px] font-semibold text-green-700"
+                            title="In-person available"
+                            aria-label="In-person available"
+                          >
+                            I
+                          </span>
+                        )}
+                      </span>
+                    </div>
                   </Button>
                 ))}
               </div>
@@ -266,80 +325,80 @@ export function Booking() {
             {appointmentTypeLocked && (
               <p className="text-sm text-muted-foreground">Select a time slot first to choose appointment type.</p>
             )}
+            {!appointmentTypeLocked && !virtualAvailableForSelection && !inPersonAvailableForSelection && (
+              <p className="text-sm text-muted-foreground">Selected slot has no supported appointment types.</p>
+            )}
             <RadioGroup value={appointmentType} onValueChange={(v) => setAppointmentType(v as any)}>
-              <div
-                className={cn(
-                  'flex items-center space-x-3 border rounded-lg p-4 transition-colors',
-                  virtualDisabled
-                    ? 'bg-muted/70 border-muted opacity-70 cursor-not-allowed'
-                    : 'hover:bg-muted/50 cursor-pointer'
-                )}
-              >
-                <RadioGroupItem value="virtual" id="book-virtual" disabled={virtualDisabled} />
-                <Label
-                  htmlFor="book-virtual"
-                  className={cn('flex-1', virtualDisabled ? 'cursor-not-allowed text-muted-foreground' : 'cursor-pointer')}
+              {virtualAvailableForSelection && (
+                <div
+                  className={cn(
+                    'flex items-center space-x-3 border rounded-lg p-4 transition-colors',
+                    virtualDisabled
+                      ? 'bg-muted/70 border-muted opacity-70 cursor-not-allowed'
+                      : 'hover:bg-muted/50 cursor-pointer'
+                  )}
                 >
-                  <div className="flex items-center gap-2">
-                    <Video className={cn('h-4 w-4', virtualDisabled ? 'text-muted-foreground' : 'text-blue-600')} />
-                    <span className="font-medium">Virtual (Video Call)</span>
-                    <Badge
-                      variant="outline"
-                      className={cn(
-                        'ml-auto',
-                        virtualDisabled ? 'border-muted text-muted-foreground' : 'border-blue-500 text-blue-700'
-                      )}
-                    >
-                      Virtual
-                    </Badge>
-                  </div>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    {virtualUnavailable
-                      ? 'Not available for this provider'
-                      : appointmentTypeLocked
-                        ? 'Select a time slot first'
-                        : 'Meet from anywhere via video call'}
-                  </p>
-                </Label>
-              </div>
+                  <RadioGroupItem value="virtual" id="book-virtual" disabled={virtualDisabled} />
+                  <Label
+                    htmlFor="book-virtual"
+                    className={cn('flex-1', virtualDisabled ? 'cursor-not-allowed text-muted-foreground' : 'cursor-pointer')}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Video className={cn('h-4 w-4', virtualDisabled ? 'text-muted-foreground' : 'text-blue-600')} />
+                      <span className="font-medium">Virtual (Video Call)</span>
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          'ml-auto',
+                          virtualDisabled ? 'border-muted text-muted-foreground' : 'border-blue-500 text-blue-700'
+                        )}
+                      >
+                        Virtual
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {appointmentTypeLocked ? 'Select a time slot first' : 'Meet from anywhere via video call'}
+                    </p>
+                  </Label>
+                </div>
+              )}
 
-              <div
-                className={cn(
-                  'flex items-center space-x-3 border rounded-lg p-4 transition-colors',
-                  inPersonDisabled
-                    ? 'bg-muted/70 border-muted opacity-70 cursor-not-allowed'
-                    : 'hover:bg-muted/50 cursor-pointer'
-                )}
-              >
-                <RadioGroupItem value="in-person" id="book-in-person" disabled={inPersonDisabled} />
-                <Label
-                  htmlFor="book-in-person"
-                  className={cn('flex-1', inPersonDisabled ? 'cursor-not-allowed text-muted-foreground' : 'cursor-pointer')}
+              {inPersonAvailableForSelection && (
+                <div
+                  className={cn(
+                    'flex items-center space-x-3 border rounded-lg p-4 transition-colors',
+                    inPersonDisabled
+                      ? 'bg-muted/70 border-muted opacity-70 cursor-not-allowed'
+                      : 'hover:bg-muted/50 cursor-pointer'
+                  )}
                 >
-                  <div className="flex items-center gap-2">
-                    <MapPin className={cn('h-4 w-4', inPersonDisabled ? 'text-muted-foreground' : 'text-green-600')} />
-                    <span className="font-medium">In-Person</span>
-                    <Badge
-                      variant="outline"
-                      className={cn(
-                        'ml-auto',
-                        inPersonDisabled ? 'border-muted text-muted-foreground' : 'border-green-600 text-green-700'
-                      )}
-                    >
-                      In-Person
-                    </Badge>
-                  </div>
-                  {doctor.clinicLocation && !inPersonDisabled && (
-                    <p className="text-sm text-muted-foreground mt-1">{doctor.clinicLocation}</p>
-                  )}
-                  {inPersonUnavailable && (
-                    <p className="text-sm text-muted-foreground mt-1">Not available for this provider</p>
-                  )}
-                  {!inPersonUnavailable && appointmentTypeLocked && (
-                    <p className="text-sm text-muted-foreground mt-1">Select a time slot first</p>
-                  )}
-                </Label>
-              </div>
+                  <RadioGroupItem value="in-person" id="book-in-person" disabled={inPersonDisabled} />
+                  <Label
+                    htmlFor="book-in-person"
+                    className={cn('flex-1', inPersonDisabled ? 'cursor-not-allowed text-muted-foreground' : 'cursor-pointer')}
+                  >
+                    <div className="flex items-center gap-2">
+                      <MapPin className={cn('h-4 w-4', inPersonDisabled ? 'text-muted-foreground' : 'text-green-600')} />
+                      <span className="font-medium">In-Person</span>
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          'ml-auto',
+                          inPersonDisabled ? 'border-muted text-muted-foreground' : 'border-green-600 text-green-700'
+                        )}
+                      >
+                        In-Person
+                      </Badge>
+                    </div>
+                    {doctor.clinicLocation && !inPersonDisabled && (
+                      <p className="text-sm text-muted-foreground mt-1">{doctor.clinicLocation}</p>
+                    )}
+                    {appointmentTypeLocked && (
+                      <p className="text-sm text-muted-foreground mt-1">Select a time slot first</p>
+                    )}
+                  </Label>
+                </div>
+              )}
             </RadioGroup>
           </div>
 
