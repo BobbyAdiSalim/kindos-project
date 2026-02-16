@@ -11,6 +11,7 @@ import { Badge } from '@/app/components/ui/badge';
 import { mockDoctors } from '@/app/lib/mock-data';
 import { getPublicProfile, type DoctorProfile } from '@/app/lib/profile-api';
 import { getBookableSlots, formatTime24to12, type TimeSlot } from '@/app/lib/availability-api';
+import { cn } from '@/app/components/ui/utils';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { Clock, Video, MapPin, Loader2, CalendarIcon, ArrowLeft } from 'lucide-react';
@@ -63,6 +64,19 @@ export function Booking() {
     loadDoctor();
   }, [doctorId]);
 
+  useEffect(() => {
+    if (!doctor) return;
+
+    if (!doctor.virtualAvailable && doctor.inPersonAvailable) {
+      setAppointmentType('in-person');
+      return;
+    }
+
+    if (doctor.virtualAvailable && !doctor.inPersonAvailable) {
+      setAppointmentType('virtual');
+    }
+  }, [doctor]);
+
   // Fetch available time slots when date changes
   useEffect(() => {
     if (!selectedDate || !doctorId) {
@@ -110,6 +124,12 @@ export function Booking() {
       </div>
     );
   }
+
+  const virtualUnavailable = !doctor.virtualAvailable;
+  const inPersonUnavailable = !doctor.inPersonAvailable;
+  const appointmentTypeLocked = !selectedTime;
+  const virtualDisabled = appointmentTypeLocked || virtualUnavailable;
+  const inPersonDisabled = appointmentTypeLocked || inPersonUnavailable;
 
   const handleBooking = () => {
     if (!selectedDate || !selectedTime || !reason) {
@@ -243,35 +263,83 @@ export function Booking() {
         <CardContent className="space-y-6">
           <div className="space-y-2">
             <Label>Appointment Type</Label>
+            {appointmentTypeLocked && (
+              <p className="text-sm text-muted-foreground">Select a time slot first to choose appointment type.</p>
+            )}
             <RadioGroup value={appointmentType} onValueChange={(v) => setAppointmentType(v as any)}>
-              {doctor.virtualAvailable && (
-                <div className="flex items-center space-x-3 border rounded-lg p-4 hover:bg-muted/50 cursor-pointer">
-                  <RadioGroupItem value="virtual" id="book-virtual" />
-                  <Label htmlFor="book-virtual" className="cursor-pointer flex-1">
-                    <div className="flex items-center gap-2">
-                      <Video className="h-4 w-4 text-blue-600" />
-                      <span className="font-medium">Virtual (Video Call)</span>
-                      <Badge variant="outline" className="border-blue-500 text-blue-700 ml-auto">Virtual</Badge>
-                    </div>
-                    <p className="text-sm text-muted-foreground mt-1">Meet from anywhere via video call</p>
-                  </Label>
-                </div>
-              )}
-              {doctor.inPersonAvailable && (
-                <div className="flex items-center space-x-3 border rounded-lg p-4 hover:bg-muted/50 cursor-pointer">
-                  <RadioGroupItem value="in-person" id="book-in-person" />
-                  <Label htmlFor="book-in-person" className="cursor-pointer flex-1">
-                    <div className="flex items-center gap-2">
-                      <MapPin className="h-4 w-4 text-green-600" />
-                      <span className="font-medium">In-Person</span>
-                      <Badge variant="outline" className="border-green-600 text-green-700 ml-auto">In-Person</Badge>
-                    </div>
-                    {doctor.clinicLocation && (
-                      <p className="text-sm text-muted-foreground mt-1">{doctor.clinicLocation}</p>
-                    )}
-                  </Label>
-                </div>
-              )}
+              <div
+                className={cn(
+                  'flex items-center space-x-3 border rounded-lg p-4 transition-colors',
+                  virtualDisabled
+                    ? 'bg-muted/70 border-muted opacity-70 cursor-not-allowed'
+                    : 'hover:bg-muted/50 cursor-pointer'
+                )}
+              >
+                <RadioGroupItem value="virtual" id="book-virtual" disabled={virtualDisabled} />
+                <Label
+                  htmlFor="book-virtual"
+                  className={cn('flex-1', virtualDisabled ? 'cursor-not-allowed text-muted-foreground' : 'cursor-pointer')}
+                >
+                  <div className="flex items-center gap-2">
+                    <Video className={cn('h-4 w-4', virtualDisabled ? 'text-muted-foreground' : 'text-blue-600')} />
+                    <span className="font-medium">Virtual (Video Call)</span>
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        'ml-auto',
+                        virtualDisabled ? 'border-muted text-muted-foreground' : 'border-blue-500 text-blue-700'
+                      )}
+                    >
+                      Virtual
+                    </Badge>
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {virtualUnavailable
+                      ? 'Not available for this provider'
+                      : appointmentTypeLocked
+                        ? 'Select a time slot first'
+                        : 'Meet from anywhere via video call'}
+                  </p>
+                </Label>
+              </div>
+
+              <div
+                className={cn(
+                  'flex items-center space-x-3 border rounded-lg p-4 transition-colors',
+                  inPersonDisabled
+                    ? 'bg-muted/70 border-muted opacity-70 cursor-not-allowed'
+                    : 'hover:bg-muted/50 cursor-pointer'
+                )}
+              >
+                <RadioGroupItem value="in-person" id="book-in-person" disabled={inPersonDisabled} />
+                <Label
+                  htmlFor="book-in-person"
+                  className={cn('flex-1', inPersonDisabled ? 'cursor-not-allowed text-muted-foreground' : 'cursor-pointer')}
+                >
+                  <div className="flex items-center gap-2">
+                    <MapPin className={cn('h-4 w-4', inPersonDisabled ? 'text-muted-foreground' : 'text-green-600')} />
+                    <span className="font-medium">In-Person</span>
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        'ml-auto',
+                        inPersonDisabled ? 'border-muted text-muted-foreground' : 'border-green-600 text-green-700'
+                      )}
+                    >
+                      In-Person
+                    </Badge>
+                  </div>
+                  {doctor.clinicLocation && !inPersonDisabled && (
+                    <p className="text-sm text-muted-foreground mt-1">{doctor.clinicLocation}</p>
+                  )}
+                  {inPersonUnavailable && (
+                    <p className="text-sm text-muted-foreground mt-1">Not available for this provider</p>
+                  )}
+                  {!inPersonUnavailable && appointmentTypeLocked && (
+                    <p className="text-sm text-muted-foreground mt-1">Select a time slot first</p>
+                  )}
+                </Label>
+              </div>
             </RadioGroup>
           </div>
 

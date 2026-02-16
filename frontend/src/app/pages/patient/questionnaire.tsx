@@ -26,8 +26,19 @@ export function NeedsQuestionnaire() {
   const handleNext = () => {
     if (step < totalSteps) setStep(step + 1);
     else {
-      // Navigate to provider discovery with filters
-      navigate('/patient/providers');
+      // Navigate to provider discovery with prefilled filters and auto-search.
+      const preferredAppointmentType =
+        formData.preferredType === 'either' ? 'no-preference' : formData.preferredType;
+
+      const params = new URLSearchParams({
+        appointmentType: preferredAppointmentType || 'no-preference',
+        careType: formData.careType || 'any',
+        preferredDate: 'any',
+        preferredTimeOfDay: 'any',
+        autoSearch: '1',
+      });
+
+      navigate(`/patient/providers?${params.toString()}`);
     }
   };
 

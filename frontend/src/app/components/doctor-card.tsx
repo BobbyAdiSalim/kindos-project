@@ -19,7 +19,7 @@ interface DoctorCardProps {
     clinicLocation: string;
     virtualAvailable: boolean;
     inPersonAvailable: boolean;
-    nextAvailable: string;
+    nextAvailable?: string | null;
     verified: boolean;
   };
   showBookButton?: boolean;
@@ -27,7 +27,10 @@ interface DoctorCardProps {
 }
 
 export function DoctorCard({ doctor, showBookButton = true, matchScore }: DoctorCardProps) {
-  const nextAvailableDate = new Date(doctor.nextAvailable);
+  const nextAvailableDate = doctor.nextAvailable ? new Date(doctor.nextAvailable) : null;
+  const hasNextAvailableDate = Boolean(
+    nextAvailableDate && !Number.isNaN(nextAvailableDate.getTime())
+  );
   
   // Determine badge color based on match score
   const getMatchBadgeVariant = (score: number) => {
@@ -134,7 +137,7 @@ export function DoctorCard({ doctor, showBookButton = true, matchScore }: Doctor
         <div className="text-sm">
           <span className="text-muted-foreground">Next available:</span>{' '}
           <span className="font-medium">
-            {format(nextAvailableDate, 'MMM d, h:mm a')}
+            {hasNextAvailableDate ? format(nextAvailableDate as Date, 'MMM d, h:mm a') : 'No available dates'}
           </span>
         </div>
         

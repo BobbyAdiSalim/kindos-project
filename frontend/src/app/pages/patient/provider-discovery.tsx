@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Link } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DoctorCard } from '@/app/components/doctor-card';
 import { Badge } from '@/app/components/ui/badge';
 import { careTypes } from '@/app/lib/mock-data';
-import { Search, Calendar, MapPin, Video, User, ArrowRight, ArrowLeft, Loader2, Globe } from 'lucide-react';
+import { Calendar, MapPin, Video, User, ArrowRight, ArrowLeft, Loader2, Globe } from 'lucide-react';
 import { RadioGroup, RadioGroupItem } from '@/app/components/ui/radio-group';
 import { Card, CardContent } from '@/app/components/ui/card';
 import { format, addDays, parseISO } from 'date-fns';
@@ -72,6 +72,7 @@ const DATE_OPTIONS = [
 ];
 
 export function ProviderDiscovery() {
+  const [searchParams] = useSearchParams();
   // Form state for the 4 questions
   const [formData, setFormData] = useState({
     appointmentType: '',
@@ -84,7 +85,6 @@ export function ProviderDiscovery() {
   const [doctors, setDoctors] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [hasSearched, setHasSearched] = useState(false);
 
   // Handle form input changes
   const handleInputChange = (field, value) => {
@@ -109,9 +109,9 @@ export function ProviderDiscovery() {
   // Navigate to next step
   const handleNext = () => {
     if (currentStep === 2) {
-      // Moving from schedule to results
+      // Moving from schedule to results: immediately fetch providers.
       setCurrentStep(3);
-      setHasSearched(false); // Reset search state so button shows "Find Providers"
+      void handleSearch();
     } else if (currentStep < STEPS.length - 1) {
       setCurrentStep(currentStep + 1);
     }
@@ -124,21 +124,19 @@ export function ProviderDiscovery() {
     }
   };
 
-  // Search for providers
-  const handleSearch = async () => {
-    console.log('🔵 handleSearch called with formData:', formData);
+  const runSearch = async (searchFormData = formData) => {
+    console.log('🔵 runSearch called with formData:', searchFormData);
     
     setIsLoading(true);
     setError(null);
-    setHasSearched(true);
     
     try {
       console.log('🔵 Preparing filters...');
       const filters = {
-        appointmentType: formData.appointmentType,
-        specialty: formData.careType,
-        date: formData.preferredDate === 'any' ? null : getDateFromPreference(formData.preferredDate),
-        timeOfDay: formData.preferredTimeOfDay,
+        appointmentType: searchFormData.appointmentType,
+        specialty: searchFormData.careType,
+        date: searchFormData.preferredDate === 'any' ? null : getDateFromPreference(searchFormData.preferredDate),
+        timeOfDay: searchFormData.preferredTimeOfDay,
       };
       console.log('🔵 Filters prepared:', filters);
       
@@ -147,7 +145,6 @@ export function ProviderDiscovery() {
       console.log('🔵 Data received:', data);
       
       setDoctors(data);
-      // DON'T setCurrentStep here - we're already on step 3
     } catch (err) {
       console.error('🔴 Error in handleSearch:', err);
       setError(err.message);
@@ -157,12 +154,33 @@ export function ProviderDiscovery() {
     }
   };
 
+  // Search for providers
+  const handleSearch = async () => {
+    await runSearch(formData);
+  };
+
   // Helper to convert date preference to actual date
   const getDateFromPreference = (preference) => {
     const option = DATE_OPTIONS.find(opt => opt.value === preference);
     if (!option || option.value === 'any') return null;
     return addDays(new Date(), option.days);
   };
+
+  // If arriving from questionnaire with prefilled query params, run search immediately.
+  useEffect(() => {
+    if (searchParams.get('autoSearch') !== '1') return;
+
+    const prefilledFormData = {
+      appointmentType: searchParams.get('appointmentType') || 'no-preference',
+      careType: searchParams.get('careType') || '',
+      preferredDate: searchParams.get('preferredDate') || 'any',
+      preferredTimeOfDay: searchParams.get('preferredTimeOfDay') || 'any',
+    };
+
+    setFormData(prefilledFormData);
+    setCurrentStep(3);
+    void runSearch(prefilledFormData);
+  }, [searchParams]);
 
   // Helper function to convert date preference to actual date range
   const getDateRangeFromPreference = (preference) => {
@@ -290,8 +308,25 @@ export function ProviderDiscovery() {
   }, [doctors, formData]);
 
   // Transform doctor data for DoctorCard
+  const getNextAvailableFromSlots = (slots = []) => {
+    if (!Array.isArray(slots) || slots.length === 0) return null;
+
+    const parsedDates = slots
+      .map((slot) => {
+        if (!slot?.slot_date || !slot?.start_time) return null;
+        const date = new Date(`${slot.slot_date}T${slot.start_time}`);
+        if (Number.isNaN(date.getTime())) return null;
+        return date;
+      })
+      .filter((value) => value !== null)
+      .sort((a, b) => a.getTime() - b.getTime());
+
+    return parsedDates.length > 0 ? parsedDates[0].toISOString() : null;
+  };
+
   const transformDoctorForCard = (doctor) => ({
-    id: doctor.id.toString(),
+    // Profile/booking routes expect users.id, not doctors.id.
+    id: String(doctor.user_id || doctor.id),
     name: doctor.full_name,
     specialty: doctor.specialty,
     photo: doctor.photo || '',
@@ -301,7 +336,7 @@ export function ProviderDiscovery() {
     clinicLocation: doctor.clinic_location || 'Location not specified',
     virtualAvailable: doctor.virtual_available,
     inPersonAvailable: doctor.in_person_available,
-    nextAvailable: doctor.next_available || new Date().toISOString(),
+    nextAvailable: doctor.next_available || getNextAvailableFromSlots(doctor.availability_slots),
     verified: doctor.verification_status === 'approved',
     availableSlots: doctor.availability_slots || [],
   });
@@ -607,30 +642,11 @@ export function ProviderDiscovery() {
             Next
             <ArrowRight className="h-4 w-4" />
           </Button>
-        ) : currentStep === 3 && !hasSearched ? ( // On results step but haven't searched yet
-          <Button
-            onClick={handleSearch}
-            disabled={isLoading}
-            className="gap-2"
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Searching...
-              </>
-            ) : (
-              <>
-                Find Providers
-                <Search className="h-4 w-4" />
-              </>
-            )}
-          </Button>
-        ) : currentStep === 3 && hasSearched ? ( // On results step after search
+        ) : currentStep === 3 ? ( // On results step
           <Button
             variant="outline"
             onClick={() => {
               setCurrentStep(0);
-              setHasSearched(false);
               setDoctors([]);
               setFormData({
                 appointmentType: '',

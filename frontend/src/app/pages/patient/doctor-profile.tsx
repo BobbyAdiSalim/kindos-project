@@ -62,7 +62,7 @@ export function DoctorProfile() {
         clinicLocation: doctorFromApi.clinic_location || 'Location not provided.',
         virtualAvailable: doctorFromApi.virtual_available ?? true,
         inPersonAvailable: doctorFromApi.in_person_available ?? true,
-        nextAvailable: mockDoctor?.nextAvailable || new Date().toISOString(),
+        nextAvailable: mockDoctor?.nextAvailable || null,
         verified: doctorFromApi.verification_status === 'approved',
       }
     : mockDoctor;
@@ -79,6 +79,10 @@ export function DoctorProfile() {
   }
 
   const doctorReviews = mockReviews.filter((r) => r.doctorId === doctor.id);
+  const nextAvailableDate = doctor.nextAvailable ? new Date(doctor.nextAvailable) : null;
+  const hasNextAvailableDate = Boolean(
+    nextAvailableDate && !Number.isNaN(nextAvailableDate.getTime())
+  );
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-4xl">
@@ -182,7 +186,9 @@ export function DoctorProfile() {
               <div>
                 <h3 className="font-semibold mb-2">Next Available</h3>
                 <p className="text-muted-foreground">
-                  {format(new Date(doctor.nextAvailable), 'MMMM d, yyyy \'at\' h:mm a')}
+                  {hasNextAvailableDate
+                    ? format(nextAvailableDate as Date, 'MMMM d, yyyy \'at\' h:mm a')
+                    : 'No available dates'}
                 </p>
               </div>
             </CardContent>
