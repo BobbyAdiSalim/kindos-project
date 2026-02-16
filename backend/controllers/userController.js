@@ -5,6 +5,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { Readable } from 'stream';
+import { Op } from 'sequelize';
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { sequelize, User, Patient, Doctor, AdminLog } from '../models/index.js';
 
