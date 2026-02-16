@@ -59,7 +59,48 @@
 </head>
 
 <body>
-    <div id="doc" class="markdown-body container-fluid no-highlight-all comment-enabled" data-hard-breaks="true" lang="en-US" style=""><h1 id="CRC-Cards-Sprint-1" data-id="CRC-Cards-Sprint-1" style=""><a class="anchor hidden-xs" href="#CRC-Cards-Sprint-1" title="CRC-Cards-Sprint-1"><span class="octicon octicon-link ph ph-link-simple-horizontal"></span></a><span>CRC Cards [Sprint 1]</span></h1><h2 id="ModelsClasses-for-Data" data-id="ModelsClasses-for-Data" style=""><a class="anchor hidden-xs" href="#ModelsClasses-for-Data" title="ModelsClasses-for-Data"><span class="octicon octicon-link ph ph-link-simple-horizontal"></span></a><span>Models/Classes (for Data)</span></h2><h3 id="User" data-id="User" style=""><a class="anchor hidden-xs" href="#User" title="User"><span class="octicon octicon-link ph ph-link-simple-horizontal"></span></a><span>User</span></h3><p><strong><span>Subclasses:</span></strong><span> Patient, Doctor (subclasses in the E/R diagram sense)</span></p><p><strong><span>Responsibilities:</span></strong></p><ul>
+    <div id="doc" class="markdown-body container-fluid no-highlight-all comment-enabled" data-hard-breaks="true" lang="en-US" style=""><h1 id="System-Design" data-id="System-Design" style=""><a class="anchor hidden-xs" href="#System-Design" title="System-Design"><span class="octicon octicon-link ph ph-link-simple-horizontal"></span></a><span>System Design</span></h1><h2 id="System-Interactions" data-id="System-Interactions" style=""><a class="anchor hidden-xs" href="#System-Interactions" title="System-Interactions"><span class="octicon octicon-link ph ph-link-simple-horizontal"></span></a><span>System Interactions</span></h2><h3 id="Frontend-↔-Backend-API" data-id="Frontend-↔-Backend-API" style=""><a class="anchor hidden-xs" href="#Frontend-↔-Backend-API" title="Frontend-↔-Backend-API"><span class="octicon octicon-link ph ph-link-simple-horizontal"></span></a><span>Frontend ↔ Backend API</span></h3><ul>
+<li><span>The frontend is a browser Single-Page Application (SPA) built with React and React Router, it calls backend APIs via fetch to /api/* for authentication, profile, admin verification, and availability flows</span></li>
+<li><span>In local dev, /api requests are proxied by Vite to the backend at </span><a href="http://localhost:4000" target="_blank" rel="noopener"><span>http://localhost:4000</span></a></li>
+</ul><h3 id="Backend-API--Authorization" data-id="Backend-API--Authorization" style=""><a class="anchor hidden-xs" href="#Backend-API--Authorization" title="Backend-API--Authorization"><span class="octicon octicon-link ph ph-link-simple-horizontal"></span></a><span>Backend API + Authorization</span></h3><ul>
+<li><span>The backend is an Express server that exposes routes under /api, with JWT middleware for protecting role-specific routes</span></li>
+<li><span>We use sequelize for most data access operations</span></li>
+<li><span>The server uses active route handlers that are primarily model/controller-based.</span></li>
+</ul><h3 id="Authentication-and-Password-Reset-Flows" data-id="Authentication-and-Password-Reset-Flows" style=""><a class="anchor hidden-xs" href="#Authentication-and-Password-Reset-Flows" title="Authentication-and-Password-Reset-Flows"><span class="octicon octicon-link ph ph-link-simple-horizontal"></span></a><span>Authentication and Password Reset Flows</span></h3><p><span>Authentication flow:</span><br>
+<span>Credentials will be sent from frontend -&gt; Backend verifies the password then using bcrypt it will hash the password -&gt; JWT is issued -&gt; Frontend stores auth state in localStorage</span><br>
+<span>Password reset flow:</span><br>
+<span>Token is generated in the backend -&gt; Hashed reset token is stored with its expiry time -&gt; Reset link is sent via email -&gt; Token will be checked and validated -&gt; Updates password</span></p><h3 id="Email-Integration" data-id="Email-Integration" style=""><a class="anchor hidden-xs" href="#Email-Integration" title="Email-Integration"><span class="octicon octicon-link ph ph-link-simple-horizontal"></span></a><span>Email Integration</span></h3><ul>
+<li><span>Email is handled either by console logging (EMAIL_PROVIDER=console) or through SMTP via nodemailer</span></li>
+</ul><h3 id="Doctor-Verification-Document-Storage" data-id="Doctor-Verification-Document-Storage" style=""><a class="anchor hidden-xs" href="#Doctor-Verification-Document-Storage" title="Doctor-Verification-Document-Storage"><span class="octicon octicon-link ph ph-link-simple-horizontal"></span></a><span>Doctor Verification Document Storage</span></h3><ul>
+<li><span>When doctors register, they upload verification documents. The backend validates them and stores them in Cloudflare R2 using the S3 API. Admins can then pull them up for review.</span></li>
+</ul><h3 id="MockPlaceholder-Areas" data-id="MockPlaceholder-Areas" style=""><a class="anchor hidden-xs" href="#MockPlaceholder-Areas" title="MockPlaceholder-Areas"><span class="octicon octicon-link ph ph-link-simple-horizontal"></span></a><span>Mock/Placeholder Areas</span></h3><ul>
+<li><span>Some parts of our app are still using mock data that is hardcoded. This includes (but not limited to) appointments and analytics. Which means that not all features that were shown were using data from our database yet.</span></li>
+</ul><hr><h2 id="Assumptions" data-id="Assumptions" style=""><a class="anchor hidden-xs" href="#Assumptions" title="Assumptions"><span class="octicon octicon-link ph ph-link-simple-horizontal"></span></a><span>Assumptions</span></h2><h3 id="Runtime-and-Tooling" data-id="Runtime-and-Tooling" style=""><a class="anchor hidden-xs" href="#Runtime-and-Tooling" title="Runtime-and-Tooling"><span class="octicon octicon-link ph ph-link-simple-horizontal"></span></a><span>Runtime and Tooling</span></h3><ul>
+<li><span>We assume modern Node.js with ESM and </span><span class="smartypants">–</span><span>env-file support. The Frontend build/transpile is handled by Vit, and no explicit tsc type-checking step is is configured.</span></li>
+</ul><h3 id="Database-and-Schema-Lifecycle" data-id="Database-and-Schema-Lifecycle" style=""><a class="anchor hidden-xs" href="#Database-and-Schema-Lifecycle" title="Database-and-Schema-Lifecycle"><span class="octicon octicon-link ph ph-link-simple-horizontal"></span></a><span>Database and Schema Lifecycle</span></h3><ul>
+<li><span>The database we used is PostgreSQL and we use Sequelize as our Object-Relational Mapper (ORM).</span><br>
+<span>Schema lifecycle currently assumes sequelize.sync()-based synchronization rather than migration files.</span></li>
+</ul><h3 id="Networking-and-Deployment" data-id="Networking-and-Deployment" style=""><a class="anchor hidden-xs" href="#Networking-and-Deployment" title="Networking-and-Deployment"><span class="octicon octicon-link ph ph-link-simple-horizontal"></span></a><span>Networking and Deployment</span></h3><ul>
+<li><span>In dev, the frontend runs on port 5173 and the backend on 4000, where the proxy id . In production, we're assuming either same-origin deployment or an external reverse proxy to handle CORS, since the backend doesn't set up CORS middleware itself.</span></li>
+</ul><h3 id="Browser-Capabilities" data-id="Browser-Capabilities" style=""><a class="anchor hidden-xs" href="#Browser-Capabilities" title="Browser-Capabilities"><span class="octicon octicon-link ph ph-link-simple-horizontal"></span></a><span>Browser Capabilities</span></h3><ul>
+<li><span>We expect the browser to support localStorage, fetch, atob, and FileReader</span></li>
+</ul><h3 id="Security-and-Operations" data-id="Security-and-Operations" style=""><a class="anchor hidden-xs" href="#Security-and-Operations" title="Security-and-Operations"><span class="octicon octicon-link ph ph-link-simple-horizontal"></span></a><span>Security and Operations</span></h3><ul>
+<li><span>Credentials are sent in the request body, so transport security depends on HTTPS being set up in production. Password hashing is done server-side for now. We plan to add client-side hashing later on.</span></li>
+<li><span>Doctor verification flows require Cloudflare R2 environment configuration. Since without it, doctor document persistence fails</span></li>
+</ul><h1 id="System-Architecture" data-id="System-Architecture" style=""><a class="anchor hidden-xs" href="#System-Architecture" title="System-Architecture"><span class="octicon octicon-link ph ph-link-simple-horizontal"></span></a><span>System Architecture</span></h1><p><span>The diagram can be accessed in the following link:</span></p><ul>
+<li><span>Please download it and view it on your local browser for higher quality.</span></li>
+<li><span>Download Link: </span><a href="https://github.com/BobbyAdiSalim/kindos-project/blob/develop/doc/sprint1/SYSTEM_ARCHITECTURE.svg" target="_blank" rel="noopener"><span>https://github.com/BobbyAdiSalim/kindos-project/blob/develop/doc/sprint1/SYSTEM_ARCHITECTURE.svg</span></a></li>
+<li><span>Preview Link: </span><a href="https://raw.githubusercontent.com/gist/danielstevanus88/988f23167547db80d013835030fa2dd6/raw/00aea6c2557d66aee73c694eadb4b473866e0414/System_Architecture.svg" target="_blank" rel="noopener"><span>https://raw.githubusercontent.com/gist/danielstevanus88/988f23167547db80d013835030fa2dd6/raw/00aea6c2557d66aee73c694eadb4b473866e0414/System_Architecture.svg</span></a></li>
+</ul><p><span>We use 3-Tier System Architecture consisting of three layers, the Data tier, the Presentation tier, and the Application tier.</span></p><p><span>There are several reasons of why we chose to use this System Architecture as listed below:</span></p><ol style="padding-left: 2em;">
+<li><span>The Architecture</span></li>
+</ol><p><span>The architecture itself separate three parts in software development, such as the Data tier which in our case correspond to databases, the Presentation tier which in our case the Browser and Frontend, and Application tier that has the business logic to process user inputs and make requests to the Data tier.</span></p><p><span>This separation enables us to</span></p><ul>
+<li><span>Finding bugs is easier as we can isolate test on a previous non-buggy tiers.</span></li>
+<li><span>An outage in one tier is less likely to impact the availability or performance of the other tiers.</span></li>
+<li><span>Security, as frontend (Presentation tier) can't directly send request to the database (Data tier). Hence, most security-related code will be on the Application tier.</span></li>
+<li><span>Easier task assignments, as all parts are separated, hence one can develop on one tier wihout the need to wait for other tier (may need some Mock code).</span></li>
+</ul><ol start="2" style="padding-left: 2em;">
+<li><span>Past Experience</span></li>
+</ol><p><span>We have developed an Android application in CSCB07 with similar architecture. We used MVP (Model-View-Presenter) architecture on our Android app projects as required by the course CSCB07. While familiarity helped us move faster, the main reason was that 3-tier aligns with our goals of maintainability, testability, easier collaboration, and faster delivery.</span></p><h1 id="CRC-Cards-Sprint-1" data-id="CRC-Cards-Sprint-1" style=""><a class="anchor hidden-xs" href="#CRC-Cards-Sprint-1" title="CRC-Cards-Sprint-1"><span class="octicon octicon-link ph ph-link-simple-horizontal"></span></a><span>CRC Cards [Sprint 1]</span></h1><h2 id="ModelsClasses-for-Data" data-id="ModelsClasses-for-Data" style=""><a class="anchor hidden-xs" href="#ModelsClasses-for-Data" title="ModelsClasses-for-Data"><span class="octicon octicon-link ph ph-link-simple-horizontal"></span></a><span>Models/Classes (for Data)</span></h2><h3 id="User" data-id="User" style=""><a class="anchor hidden-xs" href="#User" title="User"><span class="octicon octicon-link ph ph-link-simple-horizontal"></span></a><span>User</span></h3><p><strong><span>Subclasses:</span></strong><span> Patient, Doctor (subclasses in the E/R diagram sense)</span></p><p><strong><span>Responsibilities:</span></strong></p><ul>
 <li><span>Store basic account info (username, email, hashed password)</span></li>
 <li><span>Keep track of user role access (patient, doctor, admin)</span></li>
 <li><span>Handle password reset tokens and when they expire</span></li>
@@ -508,48 +549,7 @@
 <li><span>useAuth Hook</span></li>
 <li><span>React Router</span></li>
 <li><span>useNavigate</span></li>
-</ul><h1 id="System-Design" data-id="System-Design" style=""><a class="anchor hidden-xs" href="#System-Design" title="System-Design"><span class="octicon octicon-link ph ph-link-simple-horizontal"></span></a><span>System Design</span></h1><h2 id="System-Interactions" data-id="System-Interactions" style=""><a class="anchor hidden-xs" href="#System-Interactions" title="System-Interactions"><span class="octicon octicon-link ph ph-link-simple-horizontal"></span></a><span>System Interactions</span></h2><h3 id="Frontend-↔-Backend-API" data-id="Frontend-↔-Backend-API" style=""><a class="anchor hidden-xs" href="#Frontend-↔-Backend-API" title="Frontend-↔-Backend-API"><span class="octicon octicon-link ph ph-link-simple-horizontal"></span></a><span>Frontend ↔ Backend API</span></h3><ul>
-<li><span>The frontend is a browser Single-Page Application (SPA) built with React and React Router, it calls backend APIs via fetch to /api/* for authentication, profile, admin verification, and availability flows</span></li>
-<li><span>In local dev, /api requests are proxied by Vite to the backend at </span><a href="http://localhost:4000" target="_blank" rel="noopener"><span>http://localhost:4000</span></a></li>
-</ul><h3 id="Backend-API--Authorization" data-id="Backend-API--Authorization" style=""><a class="anchor hidden-xs" href="#Backend-API--Authorization" title="Backend-API--Authorization"><span class="octicon octicon-link ph ph-link-simple-horizontal"></span></a><span>Backend API + Authorization</span></h3><ul>
-<li><span>The backend is an Express server that exposes routes under /api, with JWT middleware for protecting role-specific routes</span></li>
-<li><span>We use sequelize for most data access operations</span></li>
-<li><span>The server uses active route handlers that are primarily model/controller-based.</span></li>
-</ul><h3 id="Authentication-and-Password-Reset-Flows" data-id="Authentication-and-Password-Reset-Flows" style=""><a class="anchor hidden-xs" href="#Authentication-and-Password-Reset-Flows" title="Authentication-and-Password-Reset-Flows"><span class="octicon octicon-link ph ph-link-simple-horizontal"></span></a><span>Authentication and Password Reset Flows</span></h3><p><span>Authentication flow:</span><br>
-<span>Credentials will be sent from frontend -&gt; Backend verifies the password then using bcrypt it will hash the password -&gt; JWT is issued -&gt; Frontend stores auth state in localStorage</span><br>
-<span>Password reset flow:</span><br>
-<span>Token is generated in the backend -&gt; Hashed reset token is stored with its expiry time -&gt; Reset link is sent via email -&gt; Token will be checked and validated -&gt; Updates password</span></p><h3 id="Email-Integration" data-id="Email-Integration" style=""><a class="anchor hidden-xs" href="#Email-Integration" title="Email-Integration"><span class="octicon octicon-link ph ph-link-simple-horizontal"></span></a><span>Email Integration</span></h3><ul>
-<li><span>Email is handled either by console logging (EMAIL_PROVIDER=console) or through SMTP via nodemailer</span></li>
-</ul><h3 id="Doctor-Verification-Document-Storage" data-id="Doctor-Verification-Document-Storage" style=""><a class="anchor hidden-xs" href="#Doctor-Verification-Document-Storage" title="Doctor-Verification-Document-Storage"><span class="octicon octicon-link ph ph-link-simple-horizontal"></span></a><span>Doctor Verification Document Storage</span></h3><ul>
-<li><span>When doctors register, they upload verification documents. The backend validates them and stores them in Cloudflare R2 using the S3 API. Admins can then pull them up for review.</span></li>
-</ul><h3 id="MockPlaceholder-Areas" data-id="MockPlaceholder-Areas" style=""><a class="anchor hidden-xs" href="#MockPlaceholder-Areas" title="MockPlaceholder-Areas"><span class="octicon octicon-link ph ph-link-simple-horizontal"></span></a><span>Mock/Placeholder Areas</span></h3><ul>
-<li><span>Some parts of our app are still using mock data that is hardcoded. This includes (but not limited to) appointments and analytics. Which means that not all features that were shown were using data from our database yet.</span></li>
-</ul><hr><h2 id="Assumptions" data-id="Assumptions" style=""><a class="anchor hidden-xs" href="#Assumptions" title="Assumptions"><span class="octicon octicon-link ph ph-link-simple-horizontal"></span></a><span>Assumptions</span></h2><h3 id="Runtime-and-Tooling" data-id="Runtime-and-Tooling" style=""><a class="anchor hidden-xs" href="#Runtime-and-Tooling" title="Runtime-and-Tooling"><span class="octicon octicon-link ph ph-link-simple-horizontal"></span></a><span>Runtime and Tooling</span></h3><ul>
-<li><span>We assume modern Node.js with ESM and </span><span class="smartypants">–</span><span>env-file support. The Frontend build/transpile is handled by Vit, and no explicit tsc type-checking step is is configured.</span></li>
-</ul><h3 id="Database-and-Schema-Lifecycle" data-id="Database-and-Schema-Lifecycle" style=""><a class="anchor hidden-xs" href="#Database-and-Schema-Lifecycle" title="Database-and-Schema-Lifecycle"><span class="octicon octicon-link ph ph-link-simple-horizontal"></span></a><span>Database and Schema Lifecycle</span></h3><ul>
-<li><span>The database we used is PostgreSQL and we use Sequelize as our Object-Relational Mapper (ORM).</span><br>
-<span>Schema lifecycle currently assumes sequelize.sync()-based synchronization rather than migration files.</span></li>
-</ul><h3 id="Networking-and-Deployment" data-id="Networking-and-Deployment" style=""><a class="anchor hidden-xs" href="#Networking-and-Deployment" title="Networking-and-Deployment"><span class="octicon octicon-link ph ph-link-simple-horizontal"></span></a><span>Networking and Deployment</span></h3><ul>
-<li><span>In dev, the frontend runs on port 5173 and the backend on 4000, where the proxy id . In production, we're assuming either same-origin deployment or an external reverse proxy to handle CORS, since the backend doesn't set up CORS middleware itself.</span></li>
-</ul><h3 id="Browser-Capabilities" data-id="Browser-Capabilities" style=""><a class="anchor hidden-xs" href="#Browser-Capabilities" title="Browser-Capabilities"><span class="octicon octicon-link ph ph-link-simple-horizontal"></span></a><span>Browser Capabilities</span></h3><ul>
-<li><span>We expect the browser to support localStorage, fetch, atob, and FileReader</span></li>
-</ul><h3 id="Security-and-Operations" data-id="Security-and-Operations" style=""><a class="anchor hidden-xs" href="#Security-and-Operations" title="Security-and-Operations"><span class="octicon octicon-link ph ph-link-simple-horizontal"></span></a><span>Security and Operations</span></h3><ul>
-<li><span>Credentials are sent in the request body, so transport security depends on HTTPS being set up in production. Password hashing is done server-side for now. We plan to add client-side hashing later on.</span></li>
-<li><span>Doctor verification flows require Cloudflare R2 environment configuration. Since without it, doctor document persistence fails</span></li>
-</ul><h1 id="System-Architecture" data-id="System-Architecture" style=""><a class="anchor hidden-xs" href="#System-Architecture" title="System-Architecture"><span class="octicon octicon-link ph ph-link-simple-horizontal"></span></a><span>System Architecture</span></h1><p><span>The diagram can be accessed in the following link:</span></p><ul>
-<li><span>Please download it and view it on your local browser for higher quality.</span></li>
-<li><span>Download Link: </span><a href="https://github.com/BobbyAdiSalim/kindos-project/blob/develop/doc/sprint1/SYSTEM_ARCHITECTURE.svg" target="_blank" rel="noopener"><span>https://github.com/BobbyAdiSalim/kindos-project/blob/develop/doc/sprint1/SYSTEM_ARCHITECTURE.svg</span></a></li>
-<li><span>Preview Link: </span><a href="https://raw.githubusercontent.com/gist/danielstevanus88/988f23167547db80d013835030fa2dd6/raw/00aea6c2557d66aee73c694eadb4b473866e0414/System_Architecture.svg" target="_blank" rel="noopener"><span>https://raw.githubusercontent.com/gist/danielstevanus88/988f23167547db80d013835030fa2dd6/raw/00aea6c2557d66aee73c694eadb4b473866e0414/System_Architecture.svg</span></a></li>
-</ul><p><span>We use 3-Tier System Architecture consisting of three layers, the Data tier, the Presentation tier, and the Application tier.</span></p><p><span>There are several reasons of why we chose to use this System Architecture as listed below:</span></p><ol style="padding-left: 2em;">
-<li><span>The Architecture</span></li>
-</ol><p><span>The architecture itself separate three parts in software development, such as the Data tier which in our case correspond to databases, the Presentation tier which in our case the Browser and Frontend, and Application tier that has the business logic to process user inputs and make requests to the Data tier.</span></p><p><span>This separation enables us to</span></p><ul>
-<li><span>Finding bugs is easier as we can isolate test on a previous non-buggy tiers.</span></li>
-<li><span>An outage in one tier is less likely to impact the availability or performance of the other tiers.</span></li>
-<li><span>Security, as frontend (Presentation tier) can't directly send request to the database (Data tier). Hence, most security-related code will be on the Application tier.</span></li>
-<li><span>Easier task assignments, as all parts are separated, hence one can develop on one tier wihout the need to wait for other tier (may need some Mock code).</span></li>
-</ul><ol start="2" style="padding-left: 2em;">
-<li><span>Past Experience</span></li>
-</ol><p><span>We have developed an Android application in CSCB07 with similar architecture. We used MVP (Model-View-Presenter) architecture on our Android app projects as required by the course CSCB07. While familiarity helped us move faster, the main reason was that 3-tier aligns with our goals of maintainability, testability, easier collaboration, and faster delivery.</span></p></div>
+</ul></div>
     <div class="ui-toc dropup unselectable hidden-print" style="display:none;">
         <div class="pull-right dropdown">
             <a id="tocLabel" class="ui-toc-label btn btn-default" data-toggle="dropdown" href="#" role="button" aria-haspopup="true" aria-expanded="false" title="Table of content">
@@ -557,6 +557,27 @@
             </a>
             <ul id="ui-toc" class="ui-toc-dropdown dropdown-menu" aria-labelledby="tocLabel">
                 <div class="toc"><ul class="nav">
+<li class=""><a href="#System-Design" title="System Design">System Design</a><ul class="nav">
+<li class=""><a href="#System-Interactions" title="System Interactions">System Interactions</a><ul class="nav">
+<li class=""><a href="#Frontend-↔-Backend-API" title="Frontend ↔ Backend API">Frontend ↔ Backend API</a></li>
+<li class=""><a href="#Backend-API--Authorization" title="Backend API + Authorization">Backend API + Authorization</a></li>
+<li class=""><a href="#Authentication-and-Password-Reset-Flows" title="Authentication and Password Reset Flows">Authentication and Password Reset Flows</a></li>
+<li><a href="#Email-Integration" title="Email Integration">Email Integration</a></li>
+<li><a href="#Doctor-Verification-Document-Storage" title="Doctor Verification Document Storage">Doctor Verification Document Storage</a></li>
+<li><a href="#MockPlaceholder-Areas" title="Mock/Placeholder Areas">Mock/Placeholder Areas</a></li>
+</ul>
+</li>
+<li><a href="#Assumptions" title="Assumptions">Assumptions</a><ul class="nav">
+<li><a href="#Runtime-and-Tooling" title="Runtime and Tooling">Runtime and Tooling</a></li>
+<li><a href="#Database-and-Schema-Lifecycle" title="Database and Schema Lifecycle">Database and Schema Lifecycle</a></li>
+<li><a href="#Networking-and-Deployment" title="Networking and Deployment">Networking and Deployment</a></li>
+<li><a href="#Browser-Capabilities" title="Browser Capabilities">Browser Capabilities</a></li>
+<li><a href="#Security-and-Operations" title="Security and Operations">Security and Operations</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#System-Architecture" title="System Architecture">System Architecture</a></li>
 <li><a href="#CRC-Cards-Sprint-1" title="CRC Cards [Sprint 1]">CRC Cards [Sprint 1]</a><ul class="nav">
 <li><a href="#ModelsClasses-for-Data" title="Models/Classes (for Data)">Models/Classes (for Data)</a><ul class="nav">
 <li><a href="#User" title="User">User</a></li>
@@ -622,27 +643,6 @@
 </li>
 </ul>
 </li>
-<li><a href="#System-Design" title="System Design">System Design</a><ul class="nav">
-<li><a href="#System-Interactions" title="System Interactions">System Interactions</a><ul class="nav">
-<li><a href="#Frontend-↔-Backend-API" title="Frontend ↔ Backend API">Frontend ↔ Backend API</a></li>
-<li><a href="#Backend-API--Authorization" title="Backend API + Authorization">Backend API + Authorization</a></li>
-<li><a href="#Authentication-and-Password-Reset-Flows" title="Authentication and Password Reset Flows">Authentication and Password Reset Flows</a></li>
-<li><a href="#Email-Integration" title="Email Integration">Email Integration</a></li>
-<li><a href="#Doctor-Verification-Document-Storage" title="Doctor Verification Document Storage">Doctor Verification Document Storage</a></li>
-<li><a href="#MockPlaceholder-Areas" title="Mock/Placeholder Areas">Mock/Placeholder Areas</a></li>
-</ul>
-</li>
-<li><a href="#Assumptions" title="Assumptions">Assumptions</a><ul class="nav">
-<li><a href="#Runtime-and-Tooling" title="Runtime and Tooling">Runtime and Tooling</a></li>
-<li><a href="#Database-and-Schema-Lifecycle" title="Database and Schema Lifecycle">Database and Schema Lifecycle</a></li>
-<li><a href="#Networking-and-Deployment" title="Networking and Deployment">Networking and Deployment</a></li>
-<li><a href="#Browser-Capabilities" title="Browser Capabilities">Browser Capabilities</a></li>
-<li><a href="#Security-and-Operations" title="Security and Operations">Security and Operations</a></li>
-</ul>
-</li>
-</ul>
-</li>
-<li><a href="#System-Architecture" title="System Architecture">System Architecture</a></li>
 </ul>
 </div><div class="toc-menu"><a class="expand-toggle" href="#">Expand all</a><a class="back-to-top" href="#">Back to top</a><a class="go-to-bottom" href="#">Go to bottom</a></div>
             </ul>
@@ -650,6 +650,27 @@
     </div>
     <div id="ui-toc-affix" class="ui-affix-toc ui-toc-dropdown unselectable hidden-print" data-spy="affix" style="top:17px;display:none;"  >
         <div class="toc"><ul class="nav">
+<li class=""><a href="#System-Design" title="System Design">System Design</a><ul class="nav">
+<li class=""><a href="#System-Interactions" title="System Interactions">System Interactions</a><ul class="nav">
+<li class=""><a href="#Frontend-↔-Backend-API" title="Frontend ↔ Backend API">Frontend ↔ Backend API</a></li>
+<li class=""><a href="#Backend-API--Authorization" title="Backend API + Authorization">Backend API + Authorization</a></li>
+<li class=""><a href="#Authentication-and-Password-Reset-Flows" title="Authentication and Password Reset Flows">Authentication and Password Reset Flows</a></li>
+<li><a href="#Email-Integration" title="Email Integration">Email Integration</a></li>
+<li><a href="#Doctor-Verification-Document-Storage" title="Doctor Verification Document Storage">Doctor Verification Document Storage</a></li>
+<li><a href="#MockPlaceholder-Areas" title="Mock/Placeholder Areas">Mock/Placeholder Areas</a></li>
+</ul>
+</li>
+<li><a href="#Assumptions" title="Assumptions">Assumptions</a><ul class="nav">
+<li><a href="#Runtime-and-Tooling" title="Runtime and Tooling">Runtime and Tooling</a></li>
+<li><a href="#Database-and-Schema-Lifecycle" title="Database and Schema Lifecycle">Database and Schema Lifecycle</a></li>
+<li><a href="#Networking-and-Deployment" title="Networking and Deployment">Networking and Deployment</a></li>
+<li><a href="#Browser-Capabilities" title="Browser Capabilities">Browser Capabilities</a></li>
+<li><a href="#Security-and-Operations" title="Security and Operations">Security and Operations</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#System-Architecture" title="System Architecture">System Architecture</a></li>
 <li><a href="#CRC-Cards-Sprint-1" title="CRC Cards [Sprint 1]">CRC Cards [Sprint 1]</a><ul class="nav">
 <li><a href="#ModelsClasses-for-Data" title="Models/Classes (for Data)">Models/Classes (for Data)</a><ul class="nav">
 <li><a href="#User" title="User">User</a></li>
@@ -715,27 +736,6 @@
 </li>
 </ul>
 </li>
-<li><a href="#System-Design" title="System Design">System Design</a><ul class="nav">
-<li><a href="#System-Interactions" title="System Interactions">System Interactions</a><ul class="nav">
-<li><a href="#Frontend-↔-Backend-API" title="Frontend ↔ Backend API">Frontend ↔ Backend API</a></li>
-<li><a href="#Backend-API--Authorization" title="Backend API + Authorization">Backend API + Authorization</a></li>
-<li><a href="#Authentication-and-Password-Reset-Flows" title="Authentication and Password Reset Flows">Authentication and Password Reset Flows</a></li>
-<li><a href="#Email-Integration" title="Email Integration">Email Integration</a></li>
-<li><a href="#Doctor-Verification-Document-Storage" title="Doctor Verification Document Storage">Doctor Verification Document Storage</a></li>
-<li><a href="#MockPlaceholder-Areas" title="Mock/Placeholder Areas">Mock/Placeholder Areas</a></li>
-</ul>
-</li>
-<li><a href="#Assumptions" title="Assumptions">Assumptions</a><ul class="nav">
-<li><a href="#Runtime-and-Tooling" title="Runtime and Tooling">Runtime and Tooling</a></li>
-<li><a href="#Database-and-Schema-Lifecycle" title="Database and Schema Lifecycle">Database and Schema Lifecycle</a></li>
-<li><a href="#Networking-and-Deployment" title="Networking and Deployment">Networking and Deployment</a></li>
-<li><a href="#Browser-Capabilities" title="Browser Capabilities">Browser Capabilities</a></li>
-<li><a href="#Security-and-Operations" title="Security and Operations">Security and Operations</a></li>
-</ul>
-</li>
-</ul>
-</li>
-<li><a href="#System-Architecture" title="System Architecture">System Architecture</a></li>
 </ul>
 </div><div class="toc-menu"><a class="expand-toggle" href="#">Expand all</a><a class="back-to-top" href="#">Back to top</a><a class="go-to-bottom" href="#">Go to bottom</a></div>
     </div>
