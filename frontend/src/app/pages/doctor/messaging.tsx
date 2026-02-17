@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Link } from 'react-router';
 import { Button } from '@/app/components/ui/button';
-import { Card, CardContent } from '@/app/components/ui/card';
-import { Input } from '@/app/components/ui/input';
+import { Card } from '@/app/components/ui/card';
 import { ScrollArea } from '@/app/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/app/components/ui/avatar';
 import { Badge } from '@/app/components/ui/badge';
@@ -25,7 +24,9 @@ import {
   emitMessage,
   onNewMessage,
 } from '@/app/lib/socket';
-import { Send, ArrowLeft, MessageSquare, Check, X, UserPlus } from 'lucide-react';
+import { ConversationList } from '@/app/components/chat/conversation-list';
+import { ChatPanel, EmptyChatPanel } from '@/app/components/chat/chat-panel';
+import { ArrowLeft, Check, X, UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
 
 export function DoctorMessaging() {
@@ -38,7 +39,6 @@ export function DoctorMessaging() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [respondingId, setRespondingId] = useState<number | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
   const prevConnectionRef = useRef<number | null>(null);
 
   const currentUserId = user ? Number(user.id) : 0;
@@ -110,11 +110,6 @@ export function DoctorMessaging() {
     return cleanup;
   }, [activeConnection, token]);
 
-  // Scroll to bottom on new messages
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
-
   const handleSend = useCallback(async () => {
     if (!messageInput.trim() || !activeConnection || sending) return;
 
@@ -136,11 +131,9 @@ export function DoctorMessaging() {
     try {
       await respondToConnection(token, connectionId, status);
 
-      // Remove from pending
       setPendingRequests((prev) => prev.filter((r) => r.id !== connectionId));
 
       if (status === 'accepted') {
-        // Refresh connections to include the newly accepted one
         const data = await getMyConnections(token);
         setConnections(data.connections);
         toast.success('Connection accepted!');
@@ -196,52 +189,13 @@ export function DoctorMessaging() {
             </div>
 
             <TabsContent value="conversations" className="flex-1 m-0">
-              <ScrollArea className="h-full">
-                {acceptedConnections.length === 0 ? (
-                  <div className="p-4 text-center text-muted-foreground text-sm">
-                    <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                    <p>No conversations yet.</p>
-                    <p className="mt-1">Accept a patient's connect request to start chatting.</p>
-                  </div>
-                ) : (
-                  <div className="divide-y">
-                    {acceptedConnections.map((conn) => {
-                      const patientName = conn.patient?.full_name || 'Patient';
-                      const isActive = activeConnection?.id === conn.id;
-                      return (
-                        <button
-                          key={conn.id}
-                          onClick={() => setActiveConnection(conn)}
-                          className={`w-full text-left p-4 hover:bg-muted/50 transition-colors ${
-                            isActive ? 'bg-muted' : ''
-                          }`}
-                        >
-                          <div className="flex items-center gap-3">
-                            <Avatar className="h-10 w-10 flex-shrink-0">
-                              <AvatarFallback>{patientName[0]}</AvatarFallback>
-                            </Avatar>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center justify-between">
-                                <p className="font-medium truncate">{patientName}</p>
-                                {(conn.unreadCount ?? 0) > 0 && (
-                                  <Badge variant="default" className="ml-2 text-xs">
-                                    {conn.unreadCount}
-                                  </Badge>
-                                )}
-                              </div>
-                              {conn.lastMessage && (
-                                <p className="text-xs text-muted-foreground truncate mt-1">
-                                  {conn.lastMessage.content}
-                                </p>
-                              )}
-                            </div>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </ScrollArea>
+              <ConversationList
+                connections={acceptedConnections}
+                activeConnectionId={activeConnection?.id ?? null}
+                onSelect={setActiveConnection}
+                contactRole="patient"
+                emptyMessage="No conversations yet. Accept a patient's connect request to start chatting."
+              />
             </TabsContent>
 
             <TabsContent value="requests" className="flex-1 m-0">
@@ -303,81 +257,17 @@ export function DoctorMessaging() {
         {/* Chat panel */}
         <Card className="flex-1 flex flex-col">
           {activeConnection ? (
-            <>
-              <CardContent className="p-4 border-b">
-                <h2 className="font-semibold text-lg">
-                  {activeConnection.patient?.full_name || 'Patient'}
-                </h2>
-              </CardContent>
-
-              <ScrollArea className="flex-1 p-4">
-                <div className="space-y-4">
-                  {messages.map((msg) => {
-                    const isMine = msg.sender_id === currentUserId;
-                    const initial = msg.sender?.username?.[0]?.toUpperCase() || '?';
-                    return (
-                      <div
-                        key={msg.id}
-                        className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}
-                      >
-                        <div
-                          className={`flex gap-2 max-w-[70%] ${
-                            isMine ? 'flex-row-reverse' : ''
-                          }`}
-                        >
-                          <Avatar className="h-8 w-8 flex-shrink-0">
-                            <AvatarFallback>{initial}</AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <div
-                              className={`rounded-lg p-3 ${
-                                isMine
-                                  ? 'bg-primary text-primary-foreground'
-                                  : 'bg-muted'
-                              }`}
-                            >
-                              {msg.content}
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {new Date(msg.created_at).toLocaleTimeString()}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                  <div ref={messagesEndRef} />
-                </div>
-              </ScrollArea>
-
-              <div className="p-4 border-t">
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Type a message..."
-                    value={messageInput}
-                    onChange={(e) => setMessageInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        handleSend();
-                      }
-                    }}
-                    disabled={sending}
-                  />
-                  <Button size="icon" onClick={handleSend} disabled={sending || !messageInput.trim()}>
-                    <Send className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            </>
+            <ChatPanel
+              contactName={activeConnection.patient?.full_name || 'Patient'}
+              messages={messages}
+              currentUserId={currentUserId}
+              messageInput={messageInput}
+              onMessageInputChange={setMessageInput}
+              onSend={handleSend}
+              sending={sending}
+            />
           ) : (
-            <div className="flex-1 flex items-center justify-center text-muted-foreground">
-              <div className="text-center">
-                <MessageSquare className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p className="text-lg font-medium">Select a conversation</p>
-                <p className="text-sm mt-1">Choose a patient from the sidebar to start chatting</p>
-              </div>
-            </div>
+            <EmptyChatPanel />
           )}
         </Card>
       </div>

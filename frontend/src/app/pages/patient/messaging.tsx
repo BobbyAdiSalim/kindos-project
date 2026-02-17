@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Link } from 'react-router';
 import { Button } from '@/app/components/ui/button';
 import { Card, CardContent } from '@/app/components/ui/card';
-import { Input } from '@/app/components/ui/input';
 import { ScrollArea } from '@/app/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/app/components/ui/avatar';
 import { Badge } from '@/app/components/ui/badge';
@@ -22,7 +21,9 @@ import {
   emitMessage,
   onNewMessage,
 } from '@/app/lib/socket';
-import { Send, ArrowLeft, MessageSquare } from 'lucide-react';
+import { ConversationList } from '@/app/components/chat/conversation-list';
+import { ChatPanel, EmptyChatPanel } from '@/app/components/chat/chat-panel';
+import { ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 
 export function Messaging() {
@@ -33,7 +34,6 @@ export function Messaging() {
   const [messageInput, setMessageInput] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
   const prevConnectionRef = useRef<number | null>(null);
 
   const currentUserId = user ? Number(user.id) : 0;
@@ -64,7 +64,6 @@ export function Messaging() {
   useEffect(() => {
     if (!activeConnection || activeConnection.status !== 'accepted') return;
 
-    // Leave previous conversation room
     if (prevConnectionRef.current && prevConnectionRef.current !== activeConnection.id) {
       leaveConversation(prevConnectionRef.current);
     }
@@ -75,7 +74,6 @@ export function Messaging() {
         setMessages(data.messages);
         await markMessagesRead(token, activeConnection.id);
 
-        // Update unread count in sidebar
         setConnections((prev) =>
           prev.map((c) =>
             c.id === activeConnection.id ? { ...c, unreadCount: 0 } : c
@@ -97,17 +95,11 @@ export function Messaging() {
 
     const cleanup = onNewMessage((message: MessageInfo) => {
       setMessages((prev) => [...prev, message]);
-      // Mark as read since we're viewing the conversation
       markMessagesRead(token, activeConnection.id).catch(() => {});
     });
 
     return cleanup;
   }, [activeConnection, token]);
-
-  // Scroll to bottom on new messages
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
 
   const handleSend = useCallback(async () => {
     if (!messageInput.trim() || !activeConnection || sending) return;
@@ -153,156 +145,57 @@ export function Messaging() {
           <CardContent className="p-4 border-b">
             <h2 className="font-semibold">Conversations</h2>
           </CardContent>
-          <ScrollArea className="flex-1">
-            {acceptedConnections.length === 0 && pendingConnections.length === 0 ? (
-              <div className="p-4 text-center text-muted-foreground text-sm">
-                <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                <p>No conversations yet.</p>
-                <p className="mt-1">Connect with a doctor from their profile to start messaging.</p>
-              </div>
-            ) : (
-              <div className="divide-y">
-                {acceptedConnections.map((conn) => {
-                  const doctorName = conn.doctor?.full_name || 'Doctor';
-                  const isActive = activeConnection?.id === conn.id;
-                  return (
-                    <button
-                      key={conn.id}
-                      onClick={() => setActiveConnection(conn)}
-                      className={`w-full text-left p-4 hover:bg-muted/50 transition-colors ${
-                        isActive ? 'bg-muted' : ''
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <Avatar className="h-10 w-10 flex-shrink-0">
-                          <AvatarFallback>{doctorName[0]}</AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between">
-                            <p className="font-medium truncate">{doctorName}</p>
-                            {(conn.unreadCount ?? 0) > 0 && (
-                              <Badge variant="default" className="ml-2 text-xs">
-                                {conn.unreadCount}
-                              </Badge>
-                            )}
-                          </div>
-                          <p className="text-sm text-muted-foreground truncate">
-                            {conn.doctor?.specialty || ''}
-                          </p>
-                          {conn.lastMessage && (
-                            <p className="text-xs text-muted-foreground truncate mt-1">
-                              {conn.lastMessage.content}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
-                {pendingConnections.map((conn) => {
-                  const doctorName = conn.doctor?.full_name || 'Doctor';
-                  return (
-                    <div key={conn.id} className="p-4 opacity-60">
-                      <div className="flex items-center gap-3">
-                        <Avatar className="h-10 w-10 flex-shrink-0">
-                          <AvatarFallback>{doctorName[0]}</AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium truncate">{doctorName}</p>
-                          <Badge variant="outline" className="mt-1 text-xs">
-                            Pending
-                          </Badge>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </ScrollArea>
-        </Card>
-
-        {/* Chat panel */}
-        <Card className="flex-1 flex flex-col">
-          {activeConnection ? (
-            <>
-              <CardContent className="p-4 border-b">
-                <h2 className="font-semibold text-lg">
-                  {activeConnection.doctor?.full_name || 'Doctor'}
-                </h2>
-                <p className="text-sm text-muted-foreground">
-                  {activeConnection.doctor?.specialty || ''}
-                </p>
-              </CardContent>
-
-              <ScrollArea className="flex-1 p-4">
-                <div className="space-y-4">
-                  {messages.map((msg) => {
-                    const isMine = msg.sender_id === currentUserId;
-                    const initial = msg.sender?.username?.[0]?.toUpperCase() || '?';
+          <ConversationList
+            connections={acceptedConnections}
+            activeConnectionId={activeConnection?.id ?? null}
+            onSelect={setActiveConnection}
+            contactRole="doctor"
+            emptyMessage="No conversations yet. Connect with a doctor from their profile to start messaging."
+          />
+          {/* Pending connections shown below */}
+          {pendingConnections.length > 0 && (
+            <div className="border-t">
+              <ScrollArea>
+                <div className="divide-y">
+                  {pendingConnections.map((conn) => {
+                    const doctorName = conn.doctor?.full_name || 'Doctor';
                     return (
-                      <div
-                        key={msg.id}
-                        className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}
-                      >
-                        <div
-                          className={`flex gap-2 max-w-[70%] ${
-                            isMine ? 'flex-row-reverse' : ''
-                          }`}
-                        >
-                          <Avatar className="h-8 w-8 flex-shrink-0">
-                            <AvatarFallback>{initial}</AvatarFallback>
+                      <div key={conn.id} className="p-4 opacity-60">
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-10 w-10 flex-shrink-0">
+                            <AvatarFallback>{doctorName[0]}</AvatarFallback>
                           </Avatar>
-                          <div>
-                            <div
-                              className={`rounded-lg p-3 ${
-                                isMine
-                                  ? 'bg-primary text-primary-foreground'
-                                  : 'bg-muted'
-                              }`}
-                            >
-                              {msg.content}
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {new Date(msg.created_at).toLocaleTimeString()}
-                            </p>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium truncate">{doctorName}</p>
+                            <Badge variant="outline" className="mt-1 text-xs">
+                              Pending
+                            </Badge>
                           </div>
                         </div>
                       </div>
                     );
                   })}
-                  <div ref={messagesEndRef} />
                 </div>
               </ScrollArea>
-
-              <div className="p-4 border-t">
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Type a message..."
-                    value={messageInput}
-                    onChange={(e) => setMessageInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        handleSend();
-                      }
-                    }}
-                    disabled={sending}
-                  />
-                  <Button size="icon" onClick={handleSend} disabled={sending || !messageInput.trim()}>
-                    <Send className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            </>
-          ) : (
-            <div className="flex-1 flex items-center justify-center text-muted-foreground">
-              <div className="text-center">
-                <MessageSquare className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p className="text-lg font-medium">Select a conversation</p>
-                <p className="text-sm mt-1">Choose a doctor from the sidebar to start chatting</p>
-              </div>
             </div>
+          )}
+        </Card>
+
+        {/* Chat panel */}
+        <Card className="flex-1 flex flex-col">
+          {activeConnection ? (
+            <ChatPanel
+              contactName={activeConnection.doctor?.full_name || 'Doctor'}
+              contactSubtitle={activeConnection.doctor?.specialty || ''}
+              messages={messages}
+              currentUserId={currentUserId}
+              messageInput={messageInput}
+              onMessageInputChange={setMessageInput}
+              onSend={handleSend}
+              sending={sending}
+            />
+          ) : (
+            <EmptyChatPanel />
           )}
         </Card>
       </div>
