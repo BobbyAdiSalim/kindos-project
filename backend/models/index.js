@@ -13,6 +13,7 @@ import Message from './Message.js';
 import Review from './Review.js';
 import Questionnaire from './Questionnaire.js';
 import AdminLog from './AdminLog.js';
+import Connection from './Connection.js';
 
 // Define associations between models
 
@@ -78,6 +79,14 @@ AdminLog.belongsTo(User, { foreignKey: 'admin_id', as: 'admin' });
 Doctor.hasMany(AdminLog, { foreignKey: 'target_doctor_id', as: 'verificationLogs' });
 AdminLog.belongsTo(Doctor, { foreignKey: 'target_doctor_id', as: 'targetDoctor' });
 
+// Patient <-> Connection (One-to-Many)
+Patient.hasMany(Connection, { foreignKey: 'patient_id', as: 'connections' });
+Connection.belongsTo(Patient, { foreignKey: 'patient_id', as: 'patient' });
+
+// Doctor <-> Connection (One-to-Many)
+Doctor.hasMany(Connection, { foreignKey: 'doctor_id', as: 'connections' });
+Connection.belongsTo(Doctor, { foreignKey: 'doctor_id', as: 'doctor' });
+
 /**
  * Sync database (create tables)
  * WARNING: Use migrations in production instead of sync()
@@ -106,4 +115,5 @@ export {
   Review,
   Questionnaire,
   AdminLog,
+  Connection,
 };
