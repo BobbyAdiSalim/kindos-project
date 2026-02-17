@@ -9,7 +9,7 @@ import { Label } from '@/app/components/ui/label';
 import { Textarea } from '@/app/components/ui/textarea';
 import { AppointmentCard } from '@/app/components/appointment-card';
 import { mockAppointments } from '@/app/lib/mock-data';
-import { Calendar, Settings, Clock, AlertCircle } from 'lucide-react';
+import { Calendar, Settings, Clock, AlertCircle, MessageSquare } from 'lucide-react';
 import { useAuth } from '@/app/lib/auth-context';
 import { toast } from 'sonner';
 
@@ -265,6 +265,12 @@ export function DoctorDashboard() {
             <Button variant="outline">
               <Clock className="h-4 w-4 mr-2" />
               Availability
+            </Button>
+          </Link>
+          <Link to="/doctor/messages">
+            <Button variant="outline">
+              <MessageSquare className="h-4 w-4 mr-2" />
+              Messages
             </Button>
           </Link>
           <Link to="/doctor/profile">

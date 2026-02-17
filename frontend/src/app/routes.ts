@@ -30,6 +30,7 @@ import { DoctorAppointmentDetail } from '@/app/pages/doctor/appointment-detail';
 import { PatientHistory } from '@/app/pages/doctor/patient-history';
 import { AppointmentSummary } from '@/app/pages/doctor/appointment-summary';
 import { VerificationStatus } from '@/app/pages/doctor/verification-status';
+import { DoctorMessaging } from '@/app/pages/doctor/messaging';
 
 // Admin pages
 import { AdminDashboard } from '@/app/pages/admin/dashboard';
@@ -87,6 +88,7 @@ export const router = createBrowserRouter([
           { path: 'patient/:patientId/history', Component: PatientHistory },
           { path: 'appointment/:id/summary', Component: AppointmentSummary },
           { path: 'verification', Component: VerificationStatus },
+          { path: 'messages', Component: DoctorMessaging },
         ],
       },
 
