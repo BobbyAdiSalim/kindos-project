@@ -1,18 +1,86 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { Button } from '@/app/components/ui/button';
 import { Card, CardContent } from '@/app/components/ui/card';
-import { mockAppointments } from '@/app/lib/mock-data';
 import { format } from 'date-fns';
 import { Calendar, Clock, FileText } from 'lucide-react';
 import { AppointmentTypeBadge, StatusBadge } from '@/app/components/status-badges';
+import { useAuth } from '@/app/lib/auth-context';
+import { formatTime24to12 } from '@/app/lib/availability-api';
+import {
+  getAppointmentById,
+  updateAppointmentDecision,
+  type AppointmentRecord,
+} from '@/app/lib/appointment-api';
+import { toast } from 'sonner';
+
+const mapAppointmentStatus = (appointment: AppointmentRecord) => {
+  if (appointment.status === 'cancelled' && appointment.declined_by_doctor) {
+    return 'declined';
+  }
+  return appointment.status;
+};
 
 export function DoctorAppointmentDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const appointment = mockAppointments.find(apt => apt.id === id);
+  const { token } = useAuth();
+  const [appointment, setAppointment] = useState<AppointmentRecord | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  if (!appointment) return <div>Appointment not found</div>;
+  useEffect(() => {
+    const loadAppointment = async () => {
+      if (!id || !token) {
+        setLoading(false);
+        setError('Appointment not found.');
+        return;
+      }
+
+      try {
+        setLoading(true);
+        const data = await getAppointmentById(token, id);
+        setAppointment(data);
+        setError('');
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load appointment.');
+        setAppointment(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadAppointment();
+  }, [id, token]);
+
+  const status = useMemo(
+    () => (appointment ? mapAppointmentStatus(appointment) : 'pending'),
+    [appointment]
+  );
+
+  const handleDecision = async (action: 'confirm' | 'decline') => {
+    if (!token || !id) return;
+
+    try {
+      setActionLoading(true);
+      const updated = await updateAppointmentDecision(token, id, action);
+      setAppointment(updated);
+      toast.success(action === 'confirm' ? 'Booking confirmed.' : 'Booking declined.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update booking.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  if (loading) {
+    return <div className="container mx-auto px-4 py-12 text-center">Loading appointment details...</div>;
+  }
+
+  if (!appointment) {
+    return <div className="container mx-auto px-4 py-12 text-center">{error || 'Appointment not found.'}</div>;
+  }
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-3xl">
@@ -24,11 +92,11 @@ export function DoctorAppointmentDetail() {
         <div className="flex items-start justify-between">
           <div>
             <h1 className="text-2xl md:text-3xl font-semibold mb-2">
-              Appointment with {appointment.patientName}
+              Appointment with {appointment.patient?.full_name || 'Patient'}
             </h1>
             <div className="flex gap-2">
-              <AppointmentTypeBadge type={appointment.type} />
-              <StatusBadge status={appointment.status as any} />
+              <AppointmentTypeBadge type={appointment.appointment_type} />
+              <StatusBadge status={status} />
             </div>
           </div>
         </div>
@@ -41,7 +109,7 @@ export function DoctorAppointmentDetail() {
                 <div>
                   <p className="font-medium">Date</p>
                   <p className="text-muted-foreground">
-                    {format(new Date(appointment.date), 'MMMM d, yyyy')}
+                    {format(new Date(`${appointment.appointment_date}T00:00:00`), 'MMMM d, yyyy')}
                   </p>
                 </div>
               </div>
@@ -51,7 +119,7 @@ export function DoctorAppointmentDetail() {
                 <div>
                   <p className="font-medium">Time</p>
                   <p className="text-muted-foreground">
-                    {appointment.time} ({appointment.duration} minutes)
+                    {formatTime24to12(appointment.start_time)} ({appointment.duration} minutes)
                   </p>
                 </div>
               </div>
@@ -79,22 +147,32 @@ export function DoctorAppointmentDetail() {
         </Card>
 
         <div className="flex gap-3">
-          {appointment.status === 'upcoming' && (
+          {appointment.status === 'scheduled' && (
             <>
-              <Button variant="outline" className="flex-1">
-                Reschedule
+              <Button
+                className="flex-1"
+                onClick={() => handleDecision('confirm')}
+                disabled={actionLoading}
+              >
+                Confirm
               </Button>
-              <Button variant="outline" className="flex-1">
-                Cancel
+              <Button
+                variant="destructive"
+                className="flex-1"
+                onClick={() => handleDecision('decline')}
+                disabled={actionLoading}
+              >
+                Decline
               </Button>
             </>
           )}
-          {appointment.status === 'completed' ? (
+          {appointment.status === 'completed' && (
             <Button className="w-full" onClick={() => navigate(`/doctor/appointment/${appointment.id}/summary`)}>
               <FileText className="h-4 w-4 mr-2" />
               View Summary
             </Button>
-          ) : (
+          )}
+          {(appointment.status === 'confirmed' || appointment.status === 'no-show') && (
             <Button className="w-full" onClick={() => navigate(`/doctor/appointment/${appointment.id}/summary`)}>
               <FileText className="h-4 w-4 mr-2" />
               Add Summary
