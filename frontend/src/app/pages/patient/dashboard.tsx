@@ -1,15 +1,73 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { Button } from '@/app/components/ui/button';
 import { Card, CardContent } from '@/app/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/app/components/ui/tabs';
 import { AppointmentCard } from '@/app/components/appointment-card';
-import { mockAppointments } from '@/app/lib/mock-data';
 import { Plus, Calendar as CalendarIcon } from 'lucide-react';
+import { useAuth } from '@/app/lib/auth-context';
+import { formatTime24to12 } from '@/app/lib/availability-api';
+import { getMyAppointments, type AppointmentRecord } from '@/app/lib/appointment-api';
+
+const mapAppointmentStatus = (appointment: AppointmentRecord) => {
+  if (appointment.status === 'cancelled' && appointment.declined_by_doctor) {
+    return 'declined';
+  }
+
+  return appointment.status;
+};
+
+const toAppointmentCardData = (appointment: AppointmentRecord) => ({
+  id: String(appointment.id),
+  doctorName: appointment.doctor?.full_name || 'Doctor',
+  patientName: appointment.patient?.full_name || undefined,
+  date: appointment.appointment_date,
+  time: formatTime24to12(appointment.start_time),
+  type: appointment.appointment_type,
+  status: mapAppointmentStatus(appointment),
+  reason: appointment.reason,
+});
 
 export function PatientDashboard() {
-  const upcomingAppointments = mockAppointments.filter(apt => apt.status === 'upcoming');
-  const pastAppointments = mockAppointments.filter(apt => apt.status === 'completed');
+  const { token } = useAuth();
+  const [appointments, setAppointments] = useState<AppointmentRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    const loadAppointments = async () => {
+      if (!token) {
+        setLoading(false);
+        setAppointments([]);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        setError('');
+        const data = await getMyAppointments(token);
+        setAppointments(data);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load appointments.');
+        setAppointments([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadAppointments();
+  }, [token]);
+
+  const { upcomingAppointments, pastAppointments } = useMemo(() => {
+    const upcoming = appointments
+      .filter((appointment) => appointment.status === 'scheduled' || appointment.status === 'confirmed')
+      .map(toAppointmentCardData);
+    const past = appointments
+      .filter((appointment) => !['scheduled', 'confirmed'].includes(appointment.status))
+      .map(toAppointmentCardData);
+
+    return { upcomingAppointments: upcoming, pastAppointments: past };
+  }, [appointments]);
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-5xl">
@@ -38,7 +96,22 @@ export function PatientDashboard() {
         </TabsList>
 
         <TabsContent value="upcoming" className="mt-6 space-y-4">
-          {upcomingAppointments.length === 0 ? (
+          {loading ? (
+            <Card>
+              <CardContent className="p-12 text-center text-muted-foreground">
+                Loading appointments...
+              </CardContent>
+            </Card>
+          ) : error ? (
+            <Card>
+              <CardContent className="p-12 text-center">
+                <p className="text-muted-foreground mb-4">{error}</p>
+                <Button variant="outline" onClick={() => window.location.reload()}>
+                  Retry
+                </Button>
+              </CardContent>
+            </Card>
+          ) : upcomingAppointments.length === 0 ? (
             <Card>
               <CardContent className="p-12 text-center">
                 <CalendarIcon className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
@@ -63,7 +136,13 @@ export function PatientDashboard() {
         </TabsContent>
 
         <TabsContent value="past" className="mt-6 space-y-4">
-          {pastAppointments.length === 0 ? (
+          {loading ? (
+            <Card>
+              <CardContent className="p-12 text-center text-muted-foreground">
+                Loading appointments...
+              </CardContent>
+            </Card>
+          ) : pastAppointments.length === 0 ? (
             <Card>
               <CardContent className="p-12 text-center text-muted-foreground">
                 No past appointments

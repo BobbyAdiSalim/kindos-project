@@ -1,7 +1,16 @@
 import React from 'react';
 import { Badge } from '@/app/components/ui/badge';
 
-type StatusType = 'verified' | 'pending' | 'cancelled' | 'completed' | 'upcoming';
+type StatusType =
+  | 'verified'
+  | 'pending'
+  | 'scheduled'
+  | 'confirmed'
+  | 'declined'
+  | 'cancelled'
+  | 'completed'
+  | 'no-show'
+  | 'upcoming';
 
 interface StatusBadgeProps {
   status: StatusType;
@@ -10,8 +19,12 @@ interface StatusBadgeProps {
 const statusConfig = {
   verified: { label: 'Verified', className: 'bg-green-100 text-green-800 hover:bg-green-100' },
   pending: { label: 'Pending', className: 'bg-yellow-100 text-yellow-800 hover:bg-yellow-100' },
+  scheduled: { label: 'Pending Confirmation', className: 'bg-amber-100 text-amber-800 hover:bg-amber-100' },
+  confirmed: { label: 'Confirmed', className: 'bg-emerald-100 text-emerald-800 hover:bg-emerald-100' },
+  declined: { label: 'Declined', className: 'bg-rose-100 text-rose-800 hover:bg-rose-100' },
   cancelled: { label: 'Cancelled', className: 'bg-red-100 text-red-800 hover:bg-red-100' },
   completed: { label: 'Completed', className: 'bg-blue-100 text-blue-800 hover:bg-blue-100' },
+  'no-show': { label: 'No Show', className: 'bg-slate-200 text-slate-800 hover:bg-slate-200' },
   upcoming: { label: 'Upcoming', className: 'bg-primary/20 text-primary-foreground hover:bg-primary/20' },
 };
 

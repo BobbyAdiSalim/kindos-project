@@ -31,6 +31,14 @@ import {
   getDoctorsWithAvailability,
   getBookableSlots,
 } from "../controllers/availabilityController.js";
+import {
+  createAppointmentBooking,
+  getMyAppointments,
+  getAppointmentById,
+  updateAppointmentDecision,
+  cancelAppointmentByPatient,
+  rescheduleAppointmentByPatient,
+} from "../controllers/bookingController.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 
 /**
@@ -206,6 +214,33 @@ router.get("/availability/doctor/:userId/slots", (req, res) => {
 // Public route - Get raw availability for a specific doctor (for patients)
 router.get("/availability/doctor/:doctorId", (req, res) => {
   getDoctorAvailability(req, res);
+});
+
+/**
+ * Appointment Booking Routes
+ */
+router.post("/appointments", requireAuth, requireRole("patient"), (req, res) => {
+  createAppointmentBooking(req, res);
+});
+
+router.get("/appointments/my", requireAuth, requireRole("patient", "doctor"), (req, res) => {
+  getMyAppointments(req, res);
+});
+
+router.get("/appointments/:appointmentId", requireAuth, requireRole("patient", "doctor"), (req, res) => {
+  getAppointmentById(req, res);
+});
+
+router.patch("/appointments/:appointmentId/status", requireAuth, requireRole("doctor"), (req, res) => {
+  updateAppointmentDecision(req, res);
+});
+
+router.patch("/appointments/:appointmentId/cancel", requireAuth, requireRole("patient"), (req, res) => {
+  cancelAppointmentByPatient(req, res);
+});
+
+router.patch("/appointments/:appointmentId/reschedule", requireAuth, requireRole("patient"), (req, res) => {
+  rescheduleAppointmentByPatient(req, res);
 });
 
 /**

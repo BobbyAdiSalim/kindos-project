@@ -11,6 +11,12 @@ import { Badge } from '@/app/components/ui/badge';
 import { mockDoctors } from '@/app/lib/mock-data';
 import { getPublicProfile, type DoctorProfile } from '@/app/lib/profile-api';
 import { getBookableSlots, formatTime24to12, type TimeSlot } from '@/app/lib/availability-api';
+import {
+  ApiError,
+  createAppointmentBooking,
+  type AppointmentRecord,
+} from '@/app/lib/appointment-api';
+import { useAuth } from '@/app/lib/auth-context';
 import { cn } from '@/app/components/ui/utils';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
@@ -19,6 +25,7 @@ import { Clock, Video, MapPin, Loader2, CalendarIcon, ArrowLeft } from 'lucide-r
 export function Booking() {
   const { doctorId } = useParams();
   const navigate = useNavigate();
+  const { token } = useAuth();
 
   const [doctor, setDoctor] = useState<any>(null);
   const [doctorLoading, setDoctorLoading] = useState(true);
@@ -34,6 +41,25 @@ export function Booking() {
   const [availableSlots, setAvailableSlots] = useState<TimeSlot[]>([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [slotsError, setSlotsError] = useState('');
+  const [bookingSubmitting, setBookingSubmitting] = useState(false);
+
+  const loadSlots = async (date: Date, userId: string) => {
+    setSlotsLoading(true);
+    setSlotsError('');
+    setSelectedTime('');
+
+    try {
+      const dateStr = format(date, 'yyyy-MM-dd');
+      const data = await getBookableSlots(userId, dateStr);
+      setAvailableSlots(data.slots);
+    } catch (err: any) {
+      console.error('Failed to load time slots:', err);
+      setSlotsError(err.message || 'Could not load available times');
+      setAvailableSlots([]);
+    } finally {
+      setSlotsLoading(false);
+    }
+  };
 
   // Fetch doctor profile from API with mock fallback
   useEffect(() => {
@@ -84,25 +110,7 @@ export function Booking() {
       return;
     }
 
-    const fetchSlots = async () => {
-      setSlotsLoading(true);
-      setSlotsError('');
-      setSelectedTime('');
-
-      try {
-        const dateStr = format(selectedDate, 'yyyy-MM-dd');
-        const data = await getBookableSlots(doctorId, dateStr);
-        setAvailableSlots(data.slots);
-      } catch (err: any) {
-        console.error('Failed to load time slots:', err);
-        setSlotsError(err.message || 'Could not load available times');
-        setAvailableSlots([]);
-      } finally {
-        setSlotsLoading(false);
-      }
-    };
-
-    fetchSlots();
+    loadSlots(selectedDate, doctorId);
   }, [selectedDate, doctorId]);
 
   const virtualUnavailable = !doctor?.virtualAvailable;
@@ -137,6 +145,16 @@ export function Booking() {
     inPersonAvailableForSelection,
   ]);
 
+  useEffect(() => {
+    if (!selectedSlot) return;
+    const [startHour, startMinute] = selectedSlot.start_time.split(':').map(Number);
+    const [endHour, endMinute] = selectedSlot.end_time.split(':').map(Number);
+    const minutes = ((endHour * 60) + endMinute) - ((startHour * 60) + startMinute);
+    if (minutes > 0) {
+      setDuration(String(minutes));
+    }
+  }, [selectedSlot]);
+
   if (doctorLoading) {
     return (
       <div className="container mx-auto px-4 py-12 text-center">
@@ -157,7 +175,7 @@ export function Booking() {
     );
   }
 
-  const handleBooking = () => {
+  const handleBooking = async () => {
     if (!selectedDate || !selectedTime || !reason) {
       toast.error('Please fill in all required fields');
       return;
@@ -171,8 +189,44 @@ export function Booking() {
       return;
     }
 
-    toast.success('Appointment booked successfully!');
-    navigate('/patient/booking/confirmation');
+    if (!selectedSlot || !doctorId) {
+      toast.error('Please select an available time slot.');
+      return;
+    }
+
+    const doctorUserId = Number(doctorId);
+    if (!Number.isInteger(doctorUserId) || doctorUserId <= 0) {
+      toast.error('Invalid doctor selected.');
+      return;
+    }
+
+    try {
+      setBookingSubmitting(true);
+      const bookedAppointment = await createAppointmentBooking(token, {
+        doctor_user_id: doctorUserId,
+        appointment_date: format(selectedDate, 'yyyy-MM-dd'),
+        start_time: selectedSlot.start_time,
+        end_time: selectedSlot.end_time,
+        appointment_type: appointmentType,
+        reason: reason.trim(),
+        notes: notes.trim() || undefined,
+        accessibility_needs: accessibility,
+      });
+
+      toast.success('Appointment request submitted.');
+      navigate('/patient/booking/confirmation', {
+        state: { appointment: bookedAppointment as AppointmentRecord },
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to book appointment.';
+      toast.error(message);
+
+      if (error instanceof ApiError && error.status === 409 && selectedDate && doctorId) {
+        await loadSlots(selectedDate, doctorId);
+      }
+    } finally {
+      setBookingSubmitting(false);
+    }
   };
 
   return (
@@ -405,10 +459,13 @@ export function Booking() {
           <div className="space-y-2">
             <Label htmlFor="duration">Duration</Label>
             <Select value={duration} onValueChange={setDuration}>
-              <SelectTrigger id="duration">
+              <SelectTrigger id="duration" disabled>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
+                {!['15', '30', '45', '60'].includes(duration) && (
+                  <SelectItem value={duration}>{duration} minutes</SelectItem>
+                )}
                 <SelectItem value="15">15 minutes</SelectItem>
                 <SelectItem value="30">30 minutes</SelectItem>
                 <SelectItem value="45">45 minutes</SelectItem>
@@ -498,8 +555,13 @@ export function Booking() {
               <Button variant="outline" onClick={() => navigate(-1)} className="flex-1 sm:flex-none">
                 Cancel
               </Button>
-              <Button onClick={handleBooking} size="lg" className="flex-1 sm:flex-none">
-                Confirm Booking
+              <Button
+                onClick={handleBooking}
+                size="lg"
+                className="flex-1 sm:flex-none"
+                disabled={bookingSubmitting}
+              >
+                {bookingSubmitting ? 'Submitting...' : 'Confirm Booking'}
               </Button>
             </div>
           </div>

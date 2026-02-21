@@ -1,5 +1,5 @@
 // Doctor pages
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { Button } from '@/app/components/ui/button';
 import { Card, CardContent } from '@/app/components/ui/card';
@@ -8,20 +8,46 @@ import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
 import { Textarea } from '@/app/components/ui/textarea';
 import { AppointmentCard } from '@/app/components/appointment-card';
-import { mockAppointments } from '@/app/lib/mock-data';
 import { Calendar, Settings, Clock, AlertCircle } from 'lucide-react';
 import { useAuth } from '@/app/lib/auth-context';
 import { toast } from 'sonner';
+import { formatTime24to12 } from '@/app/lib/availability-api';
+import {
+  getMyAppointments,
+  updateAppointmentDecision,
+  type AppointmentRecord,
+} from '@/app/lib/appointment-api';
+
+const mapAppointmentStatus = (appointment: AppointmentRecord) => {
+  if (appointment.status === 'cancelled' && appointment.declined_by_doctor) {
+    return 'declined';
+  }
+
+  return appointment.status;
+};
+
+const toAppointmentCardData = (appointment: AppointmentRecord) => ({
+  id: String(appointment.id),
+  doctorName: appointment.doctor?.full_name || 'Doctor',
+  patientName: appointment.patient?.full_name || 'Patient',
+  date: appointment.appointment_date,
+  time: formatTime24to12(appointment.start_time),
+  type: appointment.appointment_type,
+  status: mapAppointmentStatus(appointment),
+  reason: appointment.reason,
+});
 
 export function DoctorDashboard() {
   const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
   const { user, token, updateUser } = useAuth();
   const isVerified = user?.verified === true;
-  const upcomingAppointments = mockAppointments.filter(apt => apt.status === 'upcoming');
-  const pastAppointments = mockAppointments.filter(apt => apt.status === 'completed');
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
+  const [appointmentsLoading, setAppointmentsLoading] = useState(false);
+  const [appointmentActionId, setAppointmentActionId] = useState<string | null>(null);
+  const [appointmentsError, setAppointmentsError] = useState('');
+  const [appointments, setAppointments] = useState<AppointmentRecord[]>([]);
   const [formData, setFormData] = useState({
     fullName: '',
     specialty: '',
@@ -79,6 +105,29 @@ export function DoctorDashboard() {
 
     loadMyDoctorProfile();
   }, [token]);
+
+  useEffect(() => {
+    const loadAppointments = async () => {
+      if (!token || !isVerified) {
+        setAppointments([]);
+        return;
+      }
+
+      try {
+        setAppointmentsLoading(true);
+        setAppointmentsError('');
+        const data = await getMyAppointments(token);
+        setAppointments(data);
+      } catch (error) {
+        setAppointmentsError(error instanceof Error ? error.message : 'Failed to load appointments.');
+        setAppointments([]);
+      } finally {
+        setAppointmentsLoading(false);
+      }
+    };
+
+    loadAppointments();
+  }, [token, isVerified]);
 
   const handleVerificationDocumentChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -156,6 +205,37 @@ export function DoctorDashboard() {
       setSubmitting(false);
     }
   };
+
+  const handleDecision = async (appointmentId: string, action: 'confirm' | 'decline') => {
+    if (!token) {
+      toast.error('Authentication required.');
+      return;
+    }
+
+    try {
+      setAppointmentActionId(appointmentId);
+      const updated = await updateAppointmentDecision(token, appointmentId, action);
+      setAppointments((prev) => prev.map((appointment) => (
+        appointment.id === updated.id ? updated : appointment
+      )));
+      toast.success(action === 'confirm' ? 'Booking confirmed.' : 'Booking declined.');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to update booking status.');
+    } finally {
+      setAppointmentActionId(null);
+    }
+  };
+
+  const { upcomingAppointments, pastAppointments } = useMemo(() => {
+    const upcoming = appointments
+      .filter((appointment) => appointment.status === 'scheduled' || appointment.status === 'confirmed')
+      .map(toAppointmentCardData);
+    const past = appointments
+      .filter((appointment) => !['scheduled', 'confirmed'].includes(appointment.status))
+      .map(toAppointmentCardData);
+
+    return { upcomingAppointments: upcoming, pastAppointments: past };
+  }, [appointments]);
 
   if (!isVerified) {
     const isDenied = user?.verificationStatus === 'denied';
@@ -288,7 +368,19 @@ export function DoctorDashboard() {
         </TabsList>
 
         <TabsContent value="upcoming" className="mt-6 space-y-4">
-          {upcomingAppointments.length === 0 ? (
+          {appointmentsLoading ? (
+            <Card>
+              <CardContent className="p-12 text-center text-muted-foreground">
+                Loading appointments...
+              </CardContent>
+            </Card>
+          ) : appointmentsError ? (
+            <Card>
+              <CardContent className="p-12 text-center text-muted-foreground">
+                {appointmentsError}
+              </CardContent>
+            </Card>
+          ) : upcomingAppointments.length === 0 ? (
             <Card>
               <CardContent className="p-12 text-center text-muted-foreground">
                 No upcoming appointments
@@ -300,13 +392,26 @@ export function DoctorDashboard() {
                 key={appointment.id}
                 appointment={appointment}
                 userRole="doctor"
+                onConfirm={(appointmentId) => {
+                  handleDecision(appointmentId, 'confirm');
+                }}
+                onDecline={(appointmentId) => {
+                  handleDecision(appointmentId, 'decline');
+                }}
+                actionLoadingId={appointmentActionId}
               />
             ))
           )}
         </TabsContent>
 
         <TabsContent value="past" className="mt-6 space-y-4">
-          {pastAppointments.length === 0 ? (
+          {appointmentsLoading ? (
+            <Card>
+              <CardContent className="p-12 text-center text-muted-foreground">
+                Loading appointments...
+              </CardContent>
+            </Card>
+          ) : pastAppointments.length === 0 ? (
             <Card>
               <CardContent className="p-12 text-center text-muted-foreground">
                 No past appointments
