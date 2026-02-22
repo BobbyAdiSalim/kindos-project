@@ -13,6 +13,7 @@ import Message from './Message.js';
 import Review from './Review.js';
 import Questionnaire from './Questionnaire.js';
 import AdminLog from './AdminLog.js';
+import WaitlistEntry from './WaitlistEntry.js';
 
 // Define associations between models
 
@@ -78,6 +79,89 @@ AdminLog.belongsTo(User, { foreignKey: 'admin_id', as: 'admin' });
 Doctor.hasMany(AdminLog, { foreignKey: 'target_doctor_id', as: 'verificationLogs' });
 AdminLog.belongsTo(Doctor, { foreignKey: 'target_doctor_id', as: 'targetDoctor' });
 
+// Patient <-> WaitlistEntry (One-to-Many)
+Patient.hasMany(WaitlistEntry, { foreignKey: 'patient_id', as: 'waitlistEntries' });
+WaitlistEntry.belongsTo(Patient, { foreignKey: 'patient_id', as: 'patient' });
+
+// Doctor <-> WaitlistEntry (One-to-Many)
+Doctor.hasMany(WaitlistEntry, { foreignKey: 'doctor_id', as: 'waitlistEntries' });
+WaitlistEntry.belongsTo(Doctor, { foreignKey: 'doctor_id', as: 'doctor' });
+
+const repairLegacyWaitlistSchema = async () => {
+  const [tableRows] = await sequelize.query(
+    "SELECT to_regclass('public.waitlist_entries') AS table_name"
+  );
+  const tableName = tableRows?.[0]?.table_name || null;
+  if (!tableName) {
+    return;
+  }
+
+  const [columnRows] = await sequelize.query(`
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'waitlist_entries'
+  `);
+  const existingColumns = new Set(columnRows.map((row) => row.column_name));
+  const missingDesiredTimeColumns = (
+    !existingColumns.has('desired_start_time')
+    || !existingColumns.has('desired_end_time')
+  );
+
+  if (!missingDesiredTimeColumns) {
+    return;
+  }
+
+  console.warn('[db] Repairing legacy waitlist_entries schema (adding desired_start_time/desired_end_time).');
+
+  await sequelize.transaction(async (transaction) => {
+    await sequelize.query(`
+      ALTER TABLE public.waitlist_entries
+      ADD COLUMN IF NOT EXISTS desired_start_time TIME DEFAULT '00:00:00'::time,
+      ADD COLUMN IF NOT EXISTS desired_end_time TIME DEFAULT '00:30:00'::time;
+    `, { transaction });
+
+    await sequelize.query(`
+      UPDATE public.waitlist_entries
+      SET
+        desired_start_time = COALESCE(desired_start_time, '00:00:00'::time),
+        desired_end_time = COALESCE(desired_end_time, '00:30:00'::time)
+      WHERE desired_start_time IS NULL OR desired_end_time IS NULL;
+    `, { transaction });
+
+    await sequelize.query(`
+      ALTER TABLE public.waitlist_entries
+      ALTER COLUMN desired_start_time SET NOT NULL,
+      ALTER COLUMN desired_end_time SET NOT NULL,
+      ALTER COLUMN desired_start_time DROP DEFAULT,
+      ALTER COLUMN desired_end_time DROP DEFAULT;
+    `, { transaction });
+
+    await sequelize.query(
+      'DROP INDEX IF EXISTS public.waitlist_entries_doctor_id_desired_date_appointment_type_status;',
+      { transaction }
+    );
+    await sequelize.query(
+      'DROP INDEX IF EXISTS public.waitlist_entries_unique_patient_doctor_date_type;',
+      { transaction }
+    );
+
+    await sequelize.query(
+      'DROP INDEX IF EXISTS public.waitlist_entries_doctor_id_desired_date_desired_start_time_appo;',
+      { transaction }
+    );
+
+    await sequelize.query(`
+      CREATE INDEX IF NOT EXISTS waitlist_entries_slot_status_idx
+      ON public.waitlist_entries (doctor_id, desired_date, desired_start_time, appointment_type, status);
+    `, { transaction });
+
+    await sequelize.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS waitlist_entries_unique_patient_doctor_date_type
+      ON public.waitlist_entries (patient_id, doctor_id, desired_date, desired_start_time, desired_end_time, appointment_type);
+    `, { transaction });
+  });
+};
+
 /**
  * Sync database (create tables)
  * WARNING: Use migrations in production instead of sync()
@@ -85,6 +169,7 @@ AdminLog.belongsTo(Doctor, { foreignKey: 'target_doctor_id', as: 'targetDoctor' 
  */
 export async function syncDatabase(force = false) {
   try {
+    await repairLegacyWaitlistSchema();
     await sequelize.sync({ force, alter: !force });
     console.log('Database synchronized successfully');
   } catch (error) {
@@ -106,4 +191,5 @@ export {
   Review,
   Questionnaire,
   AdminLog,
+  WaitlistEntry,
 };

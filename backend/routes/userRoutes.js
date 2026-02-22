@@ -39,6 +39,11 @@ import {
   cancelAppointmentByPatient,
   rescheduleAppointmentByPatient,
 } from "../controllers/bookingController.js";
+import {
+  joinWaitlist,
+  getMyWaitlistEntries,
+  removeMyWaitlistEntry,
+} from "../controllers/waitlistController.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 
 /**
@@ -241,6 +246,21 @@ router.patch("/appointments/:appointmentId/cancel", requireAuth, requireRole("pa
 
 router.patch("/appointments/:appointmentId/reschedule", requireAuth, requireRole("patient"), (req, res) => {
   rescheduleAppointmentByPatient(req, res);
+});
+
+/**
+ * Waitlist Routes
+ */
+router.post("/waitlist", requireAuth, requireRole("patient"), (req, res) => {
+  joinWaitlist(req, res);
+});
+
+router.get("/waitlist/my", requireAuth, requireRole("patient"), (req, res) => {
+  getMyWaitlistEntries(req, res);
+});
+
+router.delete("/waitlist/:waitlistEntryId", requireAuth, requireRole("patient"), (req, res) => {
+  removeMyWaitlistEntry(req, res);
 });
 
 /**

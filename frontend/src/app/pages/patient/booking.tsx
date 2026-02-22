@@ -10,17 +10,34 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/app/components/ui/badge';
 import { mockDoctors } from '@/app/lib/mock-data';
 import { getPublicProfile, type DoctorProfile } from '@/app/lib/profile-api';
-import { getBookableSlots, formatTime24to12, type TimeSlot } from '@/app/lib/availability-api';
+import {
+  getBookableSlots,
+  formatTime24to12,
+  type BookedTimeSlot,
+  type TimeSlot,
+} from '@/app/lib/availability-api';
 import {
   ApiError,
   createAppointmentBooking,
   type AppointmentRecord,
 } from '@/app/lib/appointment-api';
+import {
+  joinWaitlist,
+  type WaitlistNotificationPreference,
+} from '@/app/lib/waitlist-api';
 import { useAuth } from '@/app/lib/auth-context';
 import { cn } from '@/app/components/ui/utils';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
-import { Clock, Video, MapPin, Loader2, CalendarIcon, ArrowLeft } from 'lucide-react';
+import {
+  ArrowLeft,
+  Bell,
+  CalendarIcon,
+  Clock,
+  Loader2,
+  MapPin,
+  Video,
+} from 'lucide-react';
 
 export function Booking() {
   const { doctorId } = useParams();
@@ -39,23 +56,30 @@ export function Booking() {
   const [accessibility, setAccessibility] = useState<string[]>([]);
 
   const [availableSlots, setAvailableSlots] = useState<TimeSlot[]>([]);
+  const [bookedSlots, setBookedSlots] = useState<BookedTimeSlot[]>([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [slotsError, setSlotsError] = useState('');
   const [bookingSubmitting, setBookingSubmitting] = useState(false);
+  const [selectedBookedSlot, setSelectedBookedSlot] = useState('');
+  const [waitlistSubmitting, setWaitlistSubmitting] = useState(false);
+  const [waitlistPreference, setWaitlistPreference] = useState<WaitlistNotificationPreference>('in-app');
 
   const loadSlots = async (date: Date, userId: string) => {
     setSlotsLoading(true);
     setSlotsError('');
     setSelectedTime('');
+    setSelectedBookedSlot('');
 
     try {
       const dateStr = format(date, 'yyyy-MM-dd');
-      const data = await getBookableSlots(userId, dateStr);
+      const data = await getBookableSlots(userId, dateStr, undefined, { includeBooked: true });
       setAvailableSlots(data.slots);
+      setBookedSlots(data.booked_slots);
     } catch (err: any) {
       console.error('Failed to load time slots:', err);
       setSlotsError(err.message || 'Could not load available times');
       setAvailableSlots([]);
+      setBookedSlots([]);
     } finally {
       setSlotsLoading(false);
     }
@@ -107,6 +131,7 @@ export function Booking() {
   useEffect(() => {
     if (!selectedDate || !doctorId) {
       setAvailableSlots([]);
+      setBookedSlots([]);
       return;
     }
 
@@ -117,6 +142,8 @@ export function Booking() {
   const inPersonUnavailable = !doctor?.inPersonAvailable;
   const appointmentTypeLocked = !selectedTime;
   const selectedSlot = availableSlots.find((slot) => slot.start_time === selectedTime);
+  const selectedBookedSlotDetails = bookedSlots.find((slot) => slot.start_time === selectedBookedSlot);
+  const waitlistMode = Boolean(selectedBookedSlotDetails && !selectedTime);
   const slotSupportsType = (slot: TimeSlot, type: 'virtual' | 'in-person') =>
     Array.isArray(slot.appointment_types) && slot.appointment_types.includes(type);
   const virtualAvailableForSelection =
@@ -229,6 +256,43 @@ export function Booking() {
     }
   };
 
+  const handleJoinWaitlist = async () => {
+    if (!selectedDate || !selectedBookedSlotDetails || !doctorId) {
+      toast.error('Please select a booked time slot first.');
+      return;
+    }
+
+    const doctorUserId = Number(doctorId);
+    if (!Number.isInteger(doctorUserId) || doctorUserId <= 0) {
+      toast.error('Invalid doctor selected.');
+      return;
+    }
+
+    try {
+      setWaitlistSubmitting(true);
+      await joinWaitlist(token, {
+        doctor_user_id: doctorUserId,
+        desired_date: format(selectedDate, 'yyyy-MM-dd'),
+        desired_start_time: selectedBookedSlotDetails.start_time,
+        desired_end_time: selectedBookedSlotDetails.end_time,
+        appointment_type: selectedBookedSlotDetails.booked_appointment_type,
+        notification_preference: waitlistPreference,
+      });
+
+      toast.success('Added to waitlist for this appointment slot.');
+      navigate('/patient/waitlist');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to join waitlist.';
+      toast.error(message);
+
+      if (selectedDate && doctorId) {
+        await loadSlots(selectedDate, doctorId);
+      }
+    } finally {
+      setWaitlistSubmitting(false);
+    }
+  };
+
   return (
     <div className="container mx-auto px-4 py-8 max-w-4xl">
       <Button variant="ghost" onClick={() => navigate(-1)} className="mb-6">
@@ -298,14 +362,19 @@ export function Booking() {
                 <Clock className="h-5 w-5" />
                 Select Time
               </CardTitle>
-              {!slotsLoading && !slotsError && availableSlots.length > 0 && (
-                <Badge variant="secondary">
-                  {availableSlots.length} slot{availableSlots.length !== 1 ? 's' : ''} available
-                </Badge>
+              {!slotsLoading && !slotsError && (
+                <div className="flex items-center gap-2">
+                  <Badge variant="secondary">
+                    {availableSlots.length} available
+                  </Badge>
+                  <Badge variant="outline" className="border-amber-300 text-amber-700">
+                    {bookedSlots.length} booked
+                  </Badge>
+                </div>
               )}
             </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-5">
             {slotsLoading ? (
               <div className="flex flex-col items-center justify-center py-12">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -317,52 +386,98 @@ export function Booking() {
                 <p className="font-semibold mb-1">Unable to load times</p>
                 <p className="text-sm text-muted-foreground">{slotsError}</p>
               </div>
-            ) : availableSlots.length === 0 ? (
+            ) : availableSlots.length === 0 && bookedSlots.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12">
                 <Clock className="h-12 w-12 mb-4 text-muted-foreground" />
-                <p className="font-semibold mb-1">No available times</p>
-                <p className="text-sm text-muted-foreground">No slots available for this date.</p>
+                <p className="font-semibold mb-1">No time slots found</p>
                 <p className="text-sm text-muted-foreground">Try selecting a different date.</p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-2 max-h-96 overflow-y-auto">
-                {availableSlots.map((slot) => (
-                  <Button
-                    key={slot.start_time}
-                    variant={selectedTime === slot.start_time ? 'default' : 'outline'}
-                    className="justify-start"
-                    onClick={() => setSelectedTime(slot.start_time)}
-                  >
-                    <div className="flex items-center justify-between w-full gap-2">
-                      <span className="inline-flex items-center min-w-0">
-                        <Clock className="h-4 w-4 mr-2 shrink-0" />
-                        {formatTime24to12(slot.start_time)}
-                      </span>
+              <>
+                <div>
+                  <div className="mb-2 flex items-center justify-between">
+                    <p className="text-sm font-medium">Available Now</p>
+                    <p className="text-xs text-muted-foreground">Book immediately</p>
+                  </div>
+                  {availableSlots.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No open slots on this date.</p>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto">
+                      {availableSlots.map((slot) => (
+                        <Button
+                          key={slot.start_time}
+                          variant={selectedTime === slot.start_time ? 'default' : 'outline'}
+                          className="justify-start"
+                          onClick={() => {
+                            setSelectedTime(slot.start_time);
+                            setSelectedBookedSlot('');
+                          }}
+                        >
+                          <div className="flex items-center justify-between w-full gap-2">
+                            <span className="inline-flex items-center min-w-0">
+                              <Clock className="h-4 w-4 mr-2 shrink-0" />
+                              {formatTime24to12(slot.start_time)}
+                            </span>
 
-                      <span className="inline-flex items-center gap-1 shrink-0">
-                        {slotSupportsType(slot, 'virtual') && (
-                          <span
-                            className="inline-flex h-5 w-5 items-center justify-center rounded border border-blue-500 bg-blue-100 text-[10px] font-semibold text-blue-700"
-                            title="Virtual available"
-                            aria-label="Virtual available"
-                          >
-                            V
-                          </span>
-                        )}
-                        {slotSupportsType(slot, 'in-person') && (
-                          <span
-                            className="inline-flex h-5 w-5 items-center justify-center rounded border border-green-600 bg-green-100 text-[10px] font-semibold text-green-700"
-                            title="In-person available"
-                            aria-label="In-person available"
-                          >
-                            I
-                          </span>
-                        )}
-                      </span>
+                            <span className="inline-flex items-center gap-1 shrink-0">
+                              {slotSupportsType(slot, 'virtual') && (
+                                <span
+                                  className="inline-flex h-5 w-5 items-center justify-center rounded border border-blue-500 bg-blue-100 text-[10px] font-semibold text-blue-700"
+                                  title="Virtual available"
+                                  aria-label="Virtual available"
+                                >
+                                  V
+                                </span>
+                              )}
+                              {slotSupportsType(slot, 'in-person') && (
+                                <span
+                                  className="inline-flex h-5 w-5 items-center justify-center rounded border border-green-600 bg-green-100 text-[10px] font-semibold text-green-700"
+                                  title="In-person available"
+                                  aria-label="In-person available"
+                                >
+                                  I
+                                </span>
+                              )}
+                            </span>
+                          </div>
+                        </Button>
+                      ))}
                     </div>
-                  </Button>
-                ))}
-              </div>
+                  )}
+                </div>
+
+                <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3">
+                  <div className="mb-2 flex items-center justify-between">
+                    <p className="text-sm font-medium text-amber-900">Booked Slots</p>
+                    <p className="text-xs text-amber-700">Join waitlist for these times</p>
+                  </div>
+                  {bookedSlots.length === 0 ? (
+                    <p className="text-sm text-amber-800">No booked slots to waitlist on this date.</p>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto">
+                      {bookedSlots.map((slot) => (
+                        <Button
+                          key={`booked-${slot.start_time}`}
+                          variant={selectedBookedSlot === slot.start_time ? 'secondary' : 'outline'}
+                          className={cn(
+                            'justify-start border-amber-300 text-amber-900 hover:bg-amber-100',
+                            selectedBookedSlot === slot.start_time && 'bg-amber-100'
+                          )}
+                          onClick={() => {
+                            setSelectedBookedSlot(slot.start_time);
+                            setSelectedTime('');
+                          }}
+                        >
+                          <span className="inline-flex items-center gap-2">
+                            <Bell className="h-4 w-4" />
+                            {formatTime24to12(slot.start_time)}
+                          </span>
+                        </Button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </>
             )}
           </CardContent>
         </Card>
@@ -528,12 +643,73 @@ export function Booking() {
         </CardContent>
       </Card>
 
+      {waitlistMode && selectedDate && selectedBookedSlotDetails && (
+        <Card className="mt-6 border-amber-200 bg-gradient-to-r from-amber-50/70 to-transparent">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-amber-900">
+              <Bell className="h-5 w-5" />
+              Waitlist This Appointment
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-amber-900">
+              If this patient cancels, the earliest waitlist request gets auto-assigned this slot.
+            </p>
+            <div className="flex flex-wrap gap-4 text-sm text-amber-900">
+              <span className="inline-flex items-center gap-1">
+                <CalendarIcon className="h-4 w-4" />
+                {format(selectedDate, 'MMM d, yyyy')}
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <Clock className="h-4 w-4" />
+                {formatTime24to12(selectedBookedSlotDetails.start_time)}
+              </span>
+              <Badge variant="outline" className="border-amber-300 text-amber-800">
+                {selectedBookedSlotDetails.booked_appointment_type === 'virtual' ? 'Virtual' : 'In-Person'}
+              </Badge>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="waitlist-preference">Notification Preference</Label>
+              <Select
+                value={waitlistPreference}
+                onValueChange={(value) => setWaitlistPreference(value as WaitlistNotificationPreference)}
+              >
+                <SelectTrigger id="waitlist-preference" className="max-w-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="in-app">In-app only</SelectItem>
+                  <SelectItem value="email">Email only</SelectItem>
+                  <SelectItem value="sms">SMS only</SelectItem>
+                  <SelectItem value="both">Email + SMS</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Booking Summary & Actions */}
       <Card className="mt-6">
         <CardContent className="p-6 bg-muted/30 rounded-xl">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="text-sm space-y-1">
-              {selectedDate && selectedTime ? (
+              {waitlistMode && selectedDate && selectedBookedSlotDetails ? (
+                <>
+                  <p className="font-medium">Waitlist Summary</p>
+                  <div className="flex flex-wrap gap-4 text-muted-foreground">
+                    <span className="flex items-center gap-1">
+                      <CalendarIcon className="h-4 w-4" />
+                      {format(selectedDate, 'MMM d, yyyy')}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Bell className="h-4 w-4" />
+                      {formatTime24to12(selectedBookedSlotDetails.start_time)}
+                    </span>
+                  </div>
+                </>
+              ) : selectedDate && selectedTime ? (
                 <>
                   <p className="font-medium">Booking Summary</p>
                   <div className="flex flex-wrap gap-4 text-muted-foreground">
@@ -548,21 +724,32 @@ export function Booking() {
                   </div>
                 </>
               ) : (
-                <p className="text-muted-foreground">Select a date and time to continue</p>
+                <p className="text-muted-foreground">Select an available or booked slot to continue</p>
               )}
             </div>
             <div className="flex gap-3 w-full sm:w-auto">
               <Button variant="outline" onClick={() => navigate(-1)} className="flex-1 sm:flex-none">
                 Cancel
               </Button>
-              <Button
-                onClick={handleBooking}
-                size="lg"
-                className="flex-1 sm:flex-none"
-                disabled={bookingSubmitting}
-              >
-                {bookingSubmitting ? 'Submitting...' : 'Confirm Booking'}
-              </Button>
+              {waitlistMode ? (
+                <Button
+                  onClick={handleJoinWaitlist}
+                  size="lg"
+                  className="flex-1 sm:flex-none bg-amber-600 hover:bg-amber-700"
+                  disabled={waitlistSubmitting}
+                >
+                  {waitlistSubmitting ? 'Joining...' : 'Join Waitlist'}
+                </Button>
+              ) : (
+                <Button
+                  onClick={handleBooking}
+                  size="lg"
+                  className="flex-1 sm:flex-none"
+                  disabled={bookingSubmitting}
+                >
+                  {bookingSubmitting ? 'Submitting...' : 'Confirm Booking'}
+                </Button>
+              )}
             </div>
           </div>
         </CardContent>

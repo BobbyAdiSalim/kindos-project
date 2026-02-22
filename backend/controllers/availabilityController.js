@@ -79,13 +79,13 @@ function applySlotOverrides(generatedSlots, specificSlots) {
 }
 
 /**
- * Check if a slot overlaps with any existing appointment.
+ * Find an overlapping appointment for a slot, if one exists.
  */
-function isSlotBooked(slot, appointments) {
+function getOverlappingAppointment(slot, appointments) {
   const slotStart = timeToMinutes(slot.startTime);
   const slotEnd = timeToMinutes(slot.endTime);
 
-  return appointments.some((appt) => {
+  return appointments.find((appt) => {
     const apptStart = timeToMinutes(appt.start_time);
     const apptEnd = timeToMinutes(appt.end_time);
     return slotStart < apptEnd && slotEnd > apptStart;
@@ -413,7 +413,8 @@ export const getDoctorAvailability = async (req, res) => {
 export const getBookableSlots = async (req, res) => {
   try {
     const { userId } = req.params;
-    const { date, appointmentType } = req.query;
+    const { date, appointmentType, includeBooked } = req.query;
+    const shouldIncludeBooked = String(includeBooked || '').toLowerCase() === 'true';
 
     if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       return res.status(400).json({ message: 'Valid date parameter required (YYYY-MM-DD)' });
@@ -468,20 +469,37 @@ export const getBookableSlots = async (req, res) => {
       },
     });
 
-    // 6. Filter out booked slots
-    let availableSlots = generatedSlots.filter(
-      (slot) => !isSlotBooked(slot, appointments)
-    );
+    // 6. Split into available/booked slot groups
+    let availableSlots = [];
+    let bookedSlots = [];
+
+    for (const slot of generatedSlots) {
+      const overlappingAppointment = getOverlappingAppointment(slot, appointments);
+      if (!overlappingAppointment) {
+        availableSlots.push(slot);
+        continue;
+      }
+
+      bookedSlots.push({
+        ...slot,
+        bookedAppointmentType: overlappingAppointment.appointment_type,
+      });
+    }
 
     // 7. Optionally filter by appointment type
     if (appointmentType) {
       availableSlots = availableSlots.filter(
         (slot) => slot.appointmentTypes.includes(appointmentType)
       );
+
+      bookedSlots = bookedSlots.filter(
+        (slot) => slot.bookedAppointmentType === appointmentType
+      );
     }
 
     // 8. Sort by start time
     availableSlots.sort((a, b) => a.startTime.localeCompare(b.startTime));
+    bookedSlots.sort((a, b) => a.startTime.localeCompare(b.startTime));
 
     res.json({
       date,
@@ -491,6 +509,14 @@ export const getBookableSlots = async (req, res) => {
         end_time: slot.endTime,
         appointment_types: slot.appointmentTypes,
       })),
+      booked_slots: shouldIncludeBooked
+        ? bookedSlots.map((slot) => ({
+            start_time: slot.startTime,
+            end_time: slot.endTime,
+            appointment_types: slot.appointmentTypes,
+            booked_appointment_type: slot.bookedAppointmentType,
+          }))
+        : [],
     });
   } catch (error) {
     console.error('Error fetching bookable slots:', error);

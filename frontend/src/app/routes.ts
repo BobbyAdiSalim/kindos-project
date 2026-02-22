@@ -70,7 +70,7 @@ export const router = createBrowserRouter([
           { path: 'appointment/:id', Component: AppointmentDetail },
           { path: 'messages', Component: Messaging },
           { path: 'review/:appointmentId', Component: WriteReview },
-          { path: 'waitlist/:doctorId', Component: JoinWaitlist },
+          { path: 'waitlist', Component: JoinWaitlist },
         ],
       },
 
