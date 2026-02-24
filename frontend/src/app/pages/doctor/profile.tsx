@@ -101,12 +101,9 @@ export function DoctorProfileEdit() {
     try {
       let url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=8&addressdetails=1`;
       
-      // ✅ Add country restriction - THIS IS THE KEY
       url += `&countrycodes=us,ca,mx`; // Change this to your country
       
-      // ✅ Use a large viewbox as gentle bias (without bounded=1)
       if (viewBounds.minlat && viewBounds.maxlat && viewBounds.minlon && viewBounds.maxlon) {
-        // Use a very large viewbox (3x the current view) just as a gentle bias
         const latRange = viewBounds.maxlat - viewBounds.minlat;
         const lonRange = viewBounds.maxlon - viewBounds.minlon;
         
@@ -118,7 +115,6 @@ export function DoctorProfileEdit() {
         };
         
         url += `&viewbox=${expandedBounds.minlon},${expandedBounds.minlat},${expandedBounds.maxlon},${expandedBounds.maxlat}`;
-        // ❌ NO bounded=1 - this allows results outside the box, just prioritizes inside
       }
       
       url += `&accept-language=en`;

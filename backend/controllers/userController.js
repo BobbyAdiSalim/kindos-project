@@ -890,6 +890,13 @@ export const updateMyProfile = async (req, res) => {
         }
       }
 
+      if (req.body.latitude !== undefined && req.body.latitude !== '') {
+        doctorUpdates.latitude = req.body.latitude;
+      }
+      if (req.body.longitude !== undefined && req.body.longitude !== '') {
+        doctorUpdates.longitude = req.body.longitude;
+      }
+
       if (Object.prototype.hasOwnProperty.call(req.body, 'profileComplete')) {
         const normalizedProfileComplete = normalizeBoolean(req.body.profileComplete);
         if (normalizedProfileComplete !== undefined) {
