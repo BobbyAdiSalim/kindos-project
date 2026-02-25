@@ -40,6 +40,7 @@ if (force) {
     console.log('  - reviews');
     console.log('  - questionnaires');
     console.log('  - admin_logs');
+    console.log('  - connections');
     console.log('');
 
     process.exit(0);

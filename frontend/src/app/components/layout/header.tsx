@@ -44,6 +44,13 @@ export function Header({ showAuth = true }: HeaderProps) {
     return '/';
   };
 
+  const getMessagesLink = () => {
+    if (!user) return null;
+    if (user.role === 'patient') return '/patient/messages';
+    if (user.role === 'doctor') return '/doctor/messages';
+    return null;
+  };
+
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container mx-auto flex h-16 items-center justify-between px-4 md:px-6">
@@ -79,6 +86,11 @@ export function Header({ showAuth = true }: HeaderProps) {
                 <DropdownMenuItem asChild>
                   <Link to={getProfileLink()}>Profile</Link>
                 </DropdownMenuItem>
+                {getMessagesLink() && (
+                  <DropdownMenuItem asChild>
+                    <Link to={getMessagesLink()!}>Messages</Link>
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem onClick={handleLogout}>
                   <LogOut className="mr-2 h-4 w-4" />
                   Log out
@@ -121,6 +133,11 @@ export function Header({ showAuth = true }: HeaderProps) {
                 <DropdownMenuItem asChild>
                   <Link to={getProfileLink()}>Profile</Link>
                 </DropdownMenuItem>
+                {getMessagesLink() && (
+                  <DropdownMenuItem asChild>
+                    <Link to={getMessagesLink()!}>Messages</Link>
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem onClick={handleLogout}>
                   <LogOut className="mr-2 h-4 w-4" />
                   Log out
