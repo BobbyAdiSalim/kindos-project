@@ -40,6 +40,14 @@ import {
   sendMessage,
   markMessagesRead,
 } from "../controllers/chatController.js";
+import {
+  createAppointmentBooking,
+  getMyAppointments,
+  getAppointmentById,
+  updateAppointmentDecision,
+  cancelAppointmentByPatient,
+  rescheduleAppointmentByPatient,
+} from "../controllers/bookingController.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 
 /**
@@ -254,6 +262,34 @@ router.post("/chat/messages/:connectionId", requireAuth, requireRole("patient", 
 // Mark messages as read in a conversation
 router.patch("/chat/messages/:connectionId/read", requireAuth, requireRole("patient", "doctor"), (req, res) => {
   markMessagesRead(req, res);
+});
+
+/*
+ * Appointment Booking Routes
+ */
+
+router.post("/appointments", requireAuth, requireRole("patient"), (req, res) => {
+  createAppointmentBooking(req, res);
+});
+
+router.get("/appointments/my", requireAuth, requireRole("patient", "doctor"), (req, res) => {
+  getMyAppointments(req, res);
+});
+
+router.get("/appointments/:appointmentId", requireAuth, requireRole("patient", "doctor"), (req, res) => {
+  getAppointmentById(req, res);
+});
+
+router.patch("/appointments/:appointmentId/status", requireAuth, requireRole("doctor"), (req, res) => {
+  updateAppointmentDecision(req, res);
+});
+
+router.patch("/appointments/:appointmentId/cancel", requireAuth, requireRole("patient"), (req, res) => {
+  cancelAppointmentByPatient(req, res);
+});
+
+router.patch("/appointments/:appointmentId/reschedule", requireAuth, requireRole("patient"), (req, res) => {
+  rescheduleAppointmentByPatient(req, res);
 });
 
 /**
