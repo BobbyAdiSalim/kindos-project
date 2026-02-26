@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Link } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import { Button } from '@/app/components/ui/button';
 import { Card } from '@/app/components/ui/card';
 import { ScrollArea } from '@/app/components/ui/scroll-area';
@@ -31,6 +31,7 @@ import { toast } from 'sonner';
 
 export function DoctorMessaging() {
   const { user, token } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [connections, setConnections] = useState<ConnectionInfo[]>([]);
   const [pendingRequests, setPendingRequests] = useState<ConnectionInfo[]>([]);
   const [activeConnection, setActiveConnection] = useState<ConnectionInfo | null>(null);
@@ -40,6 +41,7 @@ export function DoctorMessaging() {
   const [sending, setSending] = useState(false);
   const [respondingId, setRespondingId] = useState<number | null>(null);
   const prevConnectionRef = useRef<number | null>(null);
+  const initialConnectionIdRef = useRef<number | null>(Number(searchParams.get('connectionId')) || null);
 
   const currentUserId = user ? Number(user.id) : 0;
 
@@ -53,6 +55,13 @@ export function DoctorMessaging() {
         ]);
         setConnections(connectionsData.connections);
         setPendingRequests(requestsData.requests);
+
+        if (initialConnectionIdRef.current) {
+          const match = connectionsData.connections.find(
+            (c) => c.id === initialConnectionIdRef.current && c.status === 'accepted'
+          );
+          if (match) setActiveConnection(match);
+        }
       } catch (err: any) {
         toast.error(err.message);
       } finally {
@@ -68,6 +77,16 @@ export function DoctorMessaging() {
     if (!token) return;
     getSocket(token);
   }, [token]);
+
+  // Sync active connection id to URL
+  useEffect(() => {
+    if (activeConnection) {
+      setSearchParams((prev) => {
+        prev.set('connectionId', String(activeConnection.id));
+        return prev;
+      }, { replace: true });
+    }
+  }, [activeConnection]);
 
   // Load messages when active connection changes
   useEffect(() => {
@@ -96,6 +115,13 @@ export function DoctorMessaging() {
     loadMessages();
     joinConversation(activeConnection.id);
     prevConnectionRef.current = activeConnection.id;
+
+    const s = getSocket(token);
+    const handleReconnect = () => joinConversation(activeConnection.id);
+    s.on('connect', handleReconnect);
+    return () => {
+      s.off('connect', handleReconnect);
+    };
   }, [activeConnection, token]);
 
   // Listen for real-time messages
