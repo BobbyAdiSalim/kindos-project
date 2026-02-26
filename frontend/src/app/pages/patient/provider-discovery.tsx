@@ -163,14 +163,13 @@ export function ProviderDiscovery() {
   };
 
   const hasMatchingAvailability = (doctor: any) => {
-    if (!doctor.availability_slots?.length) return false;
-
     const preferredDateRange = getDateRangeFromPreference(formData.preferredDate);
     const preferredTimeRange = TIME_OF_DAY_OPTIONS.find(
       opt => opt.value === formData.preferredTimeOfDay
     )?.range;
 
-    return doctor.availability_slots.some((slot: any) => {
+    // Check explicit slots first
+    const hasMatchingSlot = doctor.availability_slots?.some((slot: any) => {
       if (preferredDateRange) {
         const slotDate = parseISO(slot.slot_date);
         if (slotDate < preferredDateRange.start || slotDate > preferredDateRange.end) return false;
@@ -185,6 +184,38 @@ export function ProviderDiscovery() {
       }
 
       return slot.is_available;
+    });
+
+    if (hasMatchingSlot) return true;
+
+    // Fall back to recurring patterns
+    if (!doctor.availability_patterns?.length) return false;
+
+    // Compute the set of day_of_week values covered by the date preference
+    const coveredDays: Set<number> = new Set();
+    if (!preferredDateRange) {
+      // 'any' date — all days match, skip day filtering
+    } else {
+      const current = new Date(preferredDateRange.start);
+      const end = new Date(preferredDateRange.end);
+      while (current <= end) {
+        coveredDays.add(current.getDay());
+        current.setDate(current.getDate() + 1);
+      }
+    }
+
+    return doctor.availability_patterns.some((pattern: any) => {
+      if (coveredDays.size > 0 && !coveredDays.has(pattern.day_of_week)) return false;
+
+      if (preferredTimeRange && formData.preferredTimeOfDay !== 'any') {
+        if (!(pattern.start_time < preferredTimeRange.end && pattern.end_time > preferredTimeRange.start)) return false;
+      }
+
+      if (formData.appointmentType !== 'no-preference') {
+        if (!pattern.appointment_type?.includes(formData.appointmentType)) return false;
+      }
+
+      return true;
     });
   };
 

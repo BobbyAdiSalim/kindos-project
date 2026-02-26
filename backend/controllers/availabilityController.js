@@ -505,136 +505,145 @@ export const getBookableSlots = async (req, res) => {
  */
 export const getDoctorsWithAvailability = async (req, res) => {
   try {
-    const { 
-      appointmentType, 
-      specialty, 
-      date, 
+    const {
+      appointmentType,
+      specialty,
+      date,
       timeOfDay,
       language,
-      limit = 50, 
-      offset = 0 
+      limit = 50,
+      offset = 0
     } = req.query;
 
     console.log('Fetching doctors with availability filters:', { appointmentType, specialty, date, timeOfDay, language });
 
-    // Build the availability slot query
+    const timeRanges = {
+      morning: { start: '08:00:00', end: '12:00:00' },
+      afternoon: { start: '12:00:00', end: '17:00:00' },
+      evening: { start: '17:00:00', end: '21:00:00' }
+    };
+
+    // Build slot where clause
     const slotWhereClause = {
       is_available: true,
     };
 
-    // Filter by date if provided
     if (date) {
       slotWhereClause.slot_date = date;
-      console.log('Filtering by date:', date);
     }
 
-    // Filter by appointment type
     if (appointmentType && appointmentType !== 'no-preference' && appointmentType !== 'any') {
-      slotWhereClause.appointment_type = {
-        [Op.contains]: [appointmentType]
-      };
-      console.log('Filtering by appointment type:', appointmentType);
+      slotWhereClause.appointment_type = { [Op.contains]: [appointmentType] };
     }
 
-    // Filter by time of day
     if (timeOfDay && timeOfDay !== 'any') {
-      const timeRanges = {
-        morning: { start: '08:00:00', end: '12:00:00' },
-        afternoon: { start: '12:00:00', end: '17:00:00' },
-        evening: { start: '17:00:00', end: '21:00:00' }
-      };
-      
       const range = timeRanges[timeOfDay];
       if (range) {
-        // Check for overlap between slot and time range
-        slotWhereClause.start_time = {
-          [Op.lt]: range.end
-        };
-        slotWhereClause.end_time = {
-          [Op.gt]: range.start
-        };
-        console.log('Filtering by time range:', range);
+        slotWhereClause.start_time = { [Op.lt]: range.end };
+        slotWhereClause.end_time = { [Op.gt]: range.start };
       }
     }
 
-    // Build doctor where clause - ONLY filter by verification status, IGNORE specialty for now
+    // Build pattern where clause
+    const patternWhereClause = {
+      is_active: true,
+    };
+
+    if (appointmentType && appointmentType !== 'no-preference' && appointmentType !== 'any') {
+      patternWhereClause.appointment_type = { [Op.contains]: [appointmentType] };
+    }
+
+    if (timeOfDay && timeOfDay !== 'any') {
+      const range = timeRanges[timeOfDay];
+      if (range) {
+        patternWhereClause.start_time = { [Op.lt]: range.end };
+        patternWhereClause.end_time = { [Op.gt]: range.start };
+      }
+    }
+
+    if (date) {
+      const dayOfWeek = new Date(date + 'T00:00:00').getDay();
+      patternWhereClause.day_of_week = dayOfWeek;
+    }
+
+    // Build doctor where clause
     const doctorWhereClause = {
       verification_status: "approved",
     };
 
-    // IGNORING SPECIALTY FILTER FOR NOW
-    // if (specialty && specialty !== "all" && specialty !== 'any') {
-    //   doctorWhereClause.specialty = { [Op.iLike]: `%${specialty}%` };
-    // }
-
-    // Filter by language if needed
     if (language && language !== "all" && language !== 'any') {
       doctorWhereClause.languages = { [Op.contains]: [language] };
-      console.log('Filtering by language:', language);
     }
 
     console.log('Slot where clause:', JSON.stringify(slotWhereClause, null, 2));
+    console.log('Pattern where clause:', JSON.stringify(patternWhereClause, null, 2));
     console.log('Doctor where clause:', JSON.stringify(doctorWhereClause, null, 2));
 
-    // First, find all matching availability slots
-    const slots = await AvailabilitySlot.findAll({
-      where: slotWhereClause,
-      include: [{
-        model: Doctor,
-        as: 'doctor',
-        where: doctorWhereClause,
-        required: true,
-      }],
-      order: [['slot_date', 'ASC'], ['start_time', 'ASC']],
+    // Query doctors with LEFT JOIN on both slots and patterns
+    const doctorsRaw = await Doctor.findAll({
+      where: doctorWhereClause,
+      include: [
+        {
+          model: AvailabilitySlot,
+          as: 'availabilitySlots',
+          where: slotWhereClause,
+          required: false,
+        },
+        {
+          model: AvailabilityPattern,
+          as: 'availabilityPatterns',
+          where: patternWhereClause,
+          required: false,
+        },
+      ],
+      order: [
+        [{ model: AvailabilitySlot, as: 'availabilitySlots' }, 'slot_date', 'ASC'],
+        [{ model: AvailabilitySlot, as: 'availabilitySlots' }, 'start_time', 'ASC'],
+      ],
     });
 
-    console.log(`Found ${slots.length} matching slots`);
+    // Keep only doctors who have at least one matching slot OR pattern
+    const filtered = doctorsRaw.filter(d =>
+      d.availabilitySlots.length > 0 || d.availabilityPatterns.length > 0
+    );
 
-    // Group slots by doctor
-    const doctorMap = new Map();
-    
-    slots.forEach(slot => {
-      const doctor = slot.doctor;
-      if (!doctor) return;
-      
-      if (!doctorMap.has(doctor.id)) {
-        // Transform doctor data
-        doctorMap.set(doctor.id, {
-          id: doctor.id,
-          user_id: doctor.user_id,
-          full_name: doctor.full_name,
-          specialty: doctor.specialty,
-          phone: doctor.phone,
-          bio: doctor.bio,
-          languages: doctor.languages || [],
-          clinic_location: doctor.clinic_location,
-          latitude: doctor.latitude,
-          longitude: doctor.longitude,
-          virtual_available: doctor.virtual_available,
-          in_person_available: doctor.in_person_available,
-          verification_status: doctor.verification_status,
-          verified_at: doctor.verified_at,
-          profile_complete: doctor.profile_complete,
-          created_at: doctor.created_at,
-          updated_at: doctor.updated_at,
-          availability_slots: []
-        });
-      }
-      
-      // Add slot to doctor's slots
-      doctorMap.get(doctor.id).availability_slots.push({
-        id: slot.id,
-        slot_date: slot.slot_date,
-        start_time: slot.start_time,
-        end_time: slot.end_time,
-        is_available: slot.is_available,
-        appointment_type: slot.appointment_type,
-      });
-    });
+    console.log(`Found ${filtered.length} doctors with availability`);
 
-    const doctors = Array.from(doctorMap.values());
-    
-    console.log(`Returning ${doctors.length} doctors with availability`);
+    const doctors = filtered.map(doctor => ({
+      id: doctor.id,
+      user_id: doctor.user_id,
+      full_name: doctor.full_name,
+      specialty: doctor.specialty,
+      phone: doctor.phone,
+      bio: doctor.bio,
+      languages: doctor.languages || [],
+      clinic_location: doctor.clinic_location,
+      latitude: doctor.latitude,
+      longitude: doctor.longitude,
+      virtual_available: doctor.virtual_available,
+      in_person_available: doctor.in_person_available,
+      verification_status: doctor.verification_status,
+      verified_at: doctor.verified_at,
+      profile_complete: doctor.profile_complete,
+      created_at: doctor.created_at,
+      updated_at: doctor.updated_at,
+      availability_slots: doctor.availabilitySlots.map(s => ({
+        id: s.id,
+        slot_date: s.slot_date,
+        start_time: s.start_time,
+        end_time: s.end_time,
+        is_available: s.is_available,
+        appointment_type: s.appointment_type,
+      })),
+      availability_patterns: doctor.availabilityPatterns.map(p => ({
+        id: p.id,
+        day_of_week: p.day_of_week,
+        start_time: p.start_time,
+        end_time: p.end_time,
+        appointment_type: p.appointment_type,
+        is_active: p.is_active,
+      })),
+    }));
 
     res.status(200).json({
       success: true,
