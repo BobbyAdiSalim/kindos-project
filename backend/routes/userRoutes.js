@@ -47,6 +47,7 @@ import {
   updateAppointmentDecision,
   cancelAppointmentByPatient,
   rescheduleAppointmentByPatient,
+  getPatientHistory,
 } from "../controllers/bookingController.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 
@@ -290,6 +291,15 @@ router.patch("/appointments/:appointmentId/cancel", requireAuth, requireRole("pa
 
 router.patch("/appointments/:appointmentId/reschedule", requireAuth, requireRole("patient"), (req, res) => {
   rescheduleAppointmentByPatient(req, res);
+});
+
+/**
+ * @route   GET /api/patients/:patientId/history
+ * @desc    Get patient information and appointment history (doctor only)
+ * @access  Private (Doctor)
+ */
+router.get("/patients/:patientId/history", requireAuth, requireRole("doctor"), (req, res) => {
+  getPatientHistory(req, res);
 });
 
 /**

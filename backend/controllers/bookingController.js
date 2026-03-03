@@ -793,3 +793,113 @@ export const updateAppointmentDecision = async (req, res) => {
     res.status(statusCode).json({ message });
   }
 };
+
+/**
+ * Get patient information and appointment history for doctor view
+ * @route GET /api/patients/:patientId/history
+ * @access Private (Doctor only)
+ */
+export const getPatientHistory = async (req, res) => {
+  try {
+    const { patientId } = req.params;
+    const { userId: doctorUserId, role } = req.auth || {};
+
+    if (!doctorUserId || role !== 'doctor') {
+      return res.status(403).json({ message: 'Only doctors can access patient history.' });
+    }
+
+    const patientIdNum = Number(patientId);
+    if (!Number.isInteger(patientIdNum) || patientIdNum <= 0) {
+      return res.status(400).json({ message: 'Invalid patient ID.' });
+    }
+
+    console.log(`Doctor (user_id: ${doctorUserId}) is requesting history for patient_id: ${patientIdNum}`);
+
+    // Get patient information
+    const patient = await Patient.findOne({
+      where: { id: patientIdNum },
+      include: [
+        {
+          model: User,
+          as: 'user',
+          attributes: ['id', 'username', 'email'],
+        },
+      ],
+    });
+
+    console.log('Fetched patient info:', patient ? {
+      id: patient.id,
+      user_id: patient.user_id,
+      full_name: patient.full_name,
+      email: patient.user?.email || null,
+      phone: patient.phone,
+      date_of_birth: patient.date_of_birth,
+    } : null);
+
+    if (!patient) {
+      return res.status(404).json({ message: 'Patient not found.' });
+    }
+
+    // Get all completed appointments for this patient
+    const appointments = await Appointment.findAll({
+      where: {
+        patient_id: patientIdNum,
+        status: 'completed',
+      },
+      include: [
+        {
+          model: Doctor,
+          as: 'doctor',
+          include: [{ model: User, as: 'user', attributes: ['id', 'username'] }],
+        },
+      ],
+      order: [['appointment_date', 'DESC'], ['start_time', 'DESC']],
+    });
+
+    console.log(`Fetched ${appointments.length} completed appointments for patient_id: ${patientIdNum}`);
+
+    // Serialize appointments
+    const serializedAppointments = appointments.map((apt) => ({
+      id: apt.id,
+      appointment_date: apt.appointment_date,
+      start_time: apt.start_time,
+      end_time: apt.end_time,
+      appointment_type: apt.appointment_type,
+      status: apt.status,
+      duration: apt.duration,
+      reason: apt.reason,
+      summary: apt.summary,
+      summary_written_at: apt.summary_written_at,
+      doctor: apt.doctor
+        ? {
+            id: apt.doctor.id,
+            user_id: apt.doctor.user_id,
+            full_name: apt.doctor.full_name,
+            specialty: apt.doctor.specialty,
+            clinic_location: apt.doctor.clinic_location,
+            username: apt.doctor.user?.username || null,
+          }
+        : null,
+      created_at: apt.created_at,
+      updated_at: apt.updated_at,
+    }));
+
+    console.log('Serialized appointments for response:', serializedAppointments);
+
+    res.json({
+      patient: {
+        id: patient.id,
+        user_id: patient.user_id,
+        full_name: patient.full_name,
+        email: patient.user?.email || null,
+        phone: patient.phone,
+        date_of_birth: patient.date_of_birth,
+      },
+      appointments: serializedAppointments,
+    });
+  } catch (error) {
+    console.error('Error fetching patient history:', error);
+    res.status(500).json({ message: 'Failed to fetch patient history.' });
+  }
+};
+
