@@ -175,16 +175,10 @@ export function DoctorAppointmentDetail() {
               </Button>
             </>
           )}
-          {appointment.status === 'completed' && (
-            <Button className="w-full" onClick={() => navigate(`/doctor/appointment/${appointment.id}/summary`)}>
-              <FileText className="h-4 w-4 mr-2" />
-              View Summary
-            </Button>
-          )}
           {(appointment.status === 'confirmed' || appointment.status === 'no-show') && (
             <Button className="w-full" onClick={() => navigate(`/doctor/appointment/${appointment.id}/summary`)}>
               <FileText className="h-4 w-4 mr-2" />
-              Add Summary
+              Mark as Complete
             </Button>
           )}
         </div>
