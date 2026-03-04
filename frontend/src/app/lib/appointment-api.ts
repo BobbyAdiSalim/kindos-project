@@ -187,3 +187,46 @@ export const rescheduleAppointment = async (
   const data = await parseJsonResponse(response);
   return (data as AppointmentSingleResponse).appointment;
 };
+
+export interface PatientInfo {
+  id: number;
+  user_id: number;
+  full_name: string;
+  email: string | null;
+  phone: string | null;
+  date_of_birth: string | null;
+}
+
+export interface PatientHistoryAppointment {
+  id: number;
+  appointment_date: string;
+  start_time: string;
+  end_time: string;
+  appointment_type: AppointmentType;
+  status: AppointmentStatus;
+  duration: number;
+  reason: string;
+  summary: string | null;
+  summary_written_at: string | null;
+  doctor: AppointmentDoctor | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PatientHistoryResponse {
+  patient: PatientInfo;
+  appointments: PatientHistoryAppointment[];
+}
+
+export const getPatientHistory = async (
+  token: string | null,
+  patientId: number
+): Promise<PatientHistoryResponse> => {
+  const response = await fetch(`${API_BASE}/patients/${patientId}/history`, {
+    headers: withAuth(token),
+  });
+
+  const data = await parseJsonResponse(response);
+  return data as PatientHistoryResponse;
+};
+
