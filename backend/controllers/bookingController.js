@@ -840,6 +840,32 @@ export const getPatientHistory = async (req, res) => {
       return res.status(404).json({ message: 'Patient not found.' });
     }
 
+    // Get doctor's profile
+    const doctor = await Doctor.findOne({
+      where: { user_id: doctorUserId },
+    });
+
+    if (!doctor) {
+      return res.status(404).json({ message: 'Doctor profile not found.' });
+    }
+
+    // Check if doctor has an active (scheduled or confirmed) appointment with this patient
+    const activeAppointment = await Appointment.findOne({
+      where: {
+        patient_id: patientIdNum,
+        doctor_id: doctor.id,
+        status: {
+          [Op.in]: ['scheduled', 'confirmed'],
+        },
+      },
+    });
+
+    if (!activeAppointment) {
+      return res.status(403).json({ 
+        message: 'You do not have an active appointment with this patient.' 
+      });
+    }
+
     // Get all completed appointments for this patient
     const appointments = await Appointment.findAll({
       where: {

@@ -98,17 +98,16 @@ export function DoctorAppointmentDetail() {
               <AppointmentTypeBadge type={appointment.appointment_type} />
               <StatusBadge status={status} />
             </div>
-                    {appointment.patient && (
-                      <Button
-                        variant="outline"
-                        className="mt-2 sm:mt-4"
-                        onClick={() => navigate(`/doctor/patient/${appointment.patient!.id}/history`)}
-                      >
-                        <User className="h-4 w-4 mr-2" />
-                        Patient History
-                      </Button>
-                    )}
           </div>
+          {['scheduled', 'confirmed'].includes(appointment.status) && appointment.patient && (
+            <Button
+              variant="outline"
+              onClick={() => navigate(`/doctor/patient/${appointment.patient!.id}/history`)}
+            >
+              <User className="h-4 w-4 mr-2" />
+              Patient History
+            </Button>
+          )}
         </div>
 
         <Card>
