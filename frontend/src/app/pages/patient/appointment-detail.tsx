@@ -306,6 +306,18 @@ export function AppointmentDetail() {
               </div>
             )}
 
+            {appointment.status === 'completed' && appointment.summary && (
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+                <h3 className="font-semibold mb-2 text-emerald-900">Visit Summary</h3>
+                <p className="text-emerald-900 whitespace-pre-wrap">{appointment.summary}</p>
+                {appointment.summary_written_at && (
+                  <p className="text-xs text-emerald-800 mt-3">
+                    Added on {format(new Date(appointment.summary_written_at), 'MMMM d, yyyy h:mm a')}
+                  </p>
+                )}
+              </div>
+            )}
+
             {status === 'scheduled' && (
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm">
                 <p className="text-amber-900">

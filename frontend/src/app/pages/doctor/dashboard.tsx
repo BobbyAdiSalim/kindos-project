@@ -264,9 +264,12 @@ export function DoctorDashboard() {
     }
   };
 
-  const { upcomingAppointments, pastAppointments } = useMemo(() => {
+  const { requestAppointments, upcomingAppointments, pastAppointments } = useMemo(() => {
+    const requests = appointments
+      .filter((appointment) => appointment.status === 'scheduled')
+      .map(toAppointmentCardData);
     const upcoming = appointments
-      .filter((appointment) => appointment.status === 'scheduled' || appointment.status === 'confirmed')
+      .filter((appointment) => appointment.status === 'confirmed')
       .map(toAppointmentCardData);
     const past = appointments
       .filter((appointment) => !['scheduled', 'confirmed'].includes(appointment.status))
@@ -278,7 +281,11 @@ export function DoctorDashboard() {
       })
       .map(toAppointmentCardData);
 
-    return { upcomingAppointments: upcoming, pastAppointments: past };
+    return {
+      requestAppointments: requests,
+      upcomingAppointments: upcoming,
+      pastAppointments: past,
+    };
   }, [appointments]);
 
   if (!isVerified) {
@@ -473,6 +480,9 @@ export function DoctorDashboard() {
 
       <Tabs defaultValue="upcoming" className="w-full">
         <TabsList className="w-full md:w-auto">
+          <TabsTrigger value="requests" className="flex-1 md:flex-none">
+            Requests ({requestAppointments.length})
+          </TabsTrigger>
           <TabsTrigger value="upcoming" className="flex-1 md:flex-none">
             <Calendar className="h-4 w-4 mr-2" />
             Upcoming ({upcomingAppointments.length})
@@ -481,6 +491,43 @@ export function DoctorDashboard() {
             Past ({pastAppointments.length})
           </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="requests" className="mt-6 space-y-4">
+          {appointmentsLoading ? (
+            <Card>
+              <CardContent className="p-12 text-center text-muted-foreground">
+                Loading appointments...
+              </CardContent>
+            </Card>
+          ) : appointmentsError ? (
+            <Card>
+              <CardContent className="p-12 text-center text-muted-foreground">
+                {appointmentsError}
+              </CardContent>
+            </Card>
+          ) : requestAppointments.length === 0 ? (
+            <Card>
+              <CardContent className="p-12 text-center text-muted-foreground">
+                No pending requests
+              </CardContent>
+            </Card>
+          ) : (
+            requestAppointments.map(appointment => (
+              <AppointmentCard
+                key={appointment.id}
+                appointment={appointment}
+                userRole="doctor"
+                onConfirm={(appointmentId) => {
+                  handleDecision(appointmentId, 'confirm');
+                }}
+                onDecline={(appointmentId) => {
+                  handleDecision(appointmentId, 'decline');
+                }}
+                actionLoadingId={appointmentActionId}
+              />
+            ))
+          )}
+        </TabsContent>
 
         <TabsContent value="upcoming" className="mt-6 space-y-4">
           {appointmentsLoading ? (
@@ -507,13 +554,6 @@ export function DoctorDashboard() {
                 key={appointment.id}
                 appointment={appointment}
                 userRole="doctor"
-                onConfirm={(appointmentId) => {
-                  handleDecision(appointmentId, 'confirm');
-                }}
-                onDecline={(appointmentId) => {
-                  handleDecision(appointmentId, 'decline');
-                }}
-                actionLoadingId={appointmentActionId}
               />
             ))
           )}
