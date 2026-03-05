@@ -6,6 +6,7 @@
 import { AvailabilityPattern, AvailabilitySlot } from '../models/Availability.js';
 import Doctor from '../models/Doctor.js';
 import Appointment from '../models/Appointment.js';
+import sequelize from '../config/database.js';
 import { Op } from 'sequelize';
 
 const ALLOWED_DURATIONS = [30, 60];
@@ -185,23 +186,24 @@ export const setAvailabilityPatterns = async (req, res) => {
       return res.status(404).json({ message: 'Doctor profile not found' });
     }
 
-    // Delete existing patterns for this doctor
-    await AvailabilityPattern.destroy({ where: { doctor_id: doctor.id } });
+    // Delete and recreate patterns atomically
+    const createdPatterns = await sequelize.transaction(async (transaction) => {
+      await AvailabilityPattern.destroy({ where: { doctor_id: doctor.id }, transaction });
 
-    // Create new patterns
-    const createdPatterns = await Promise.all(
-      patterns.map((pattern) =>
-        AvailabilityPattern.create({
-          doctor_id: doctor.id,
-          day_of_week: pattern.day_of_week,
-          start_time: pattern.start_time,
-          end_time: pattern.end_time,
-          appointment_duration: pattern.appointment_duration || 30,
-          appointment_type: pattern.appointment_type || ['virtual', 'in-person'],
-          is_active: pattern.is_active !== false,
-        })
-      )
-    );
+      return Promise.all(
+        patterns.map((pattern) =>
+          AvailabilityPattern.create({
+            doctor_id: doctor.id,
+            day_of_week: pattern.day_of_week,
+            start_time: pattern.start_time,
+            end_time: pattern.end_time,
+            appointment_duration: pattern.appointment_duration || 30,
+            appointment_type: pattern.appointment_type || ['virtual', 'in-person'],
+            is_active: pattern.is_active !== false,
+          }, { transaction })
+        )
+      );
+    });
 
     res.json({
       message: 'Availability patterns updated successfully',

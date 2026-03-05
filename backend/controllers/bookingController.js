@@ -10,7 +10,7 @@ import {
 } from '../models/index.js';
 import waitlistService from '../services/WaitlistService.js';
 
-const ACTIVE_APPOINTMENT_STATUSES = ['scheduled', 'confirmed', 'completed', 'no-show'];
+const ACTIVE_APPOINTMENT_STATUSES = ['scheduled', 'confirmed'];
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_REGEX = /^([01]\d|2[0-3]):([0-5]\d)(:[0-5]\d)?$/;
 const APPOINTMENT_TYPES = new Set(['virtual', 'in-person']);
