@@ -1,5 +1,10 @@
-const EMAIL_PROVIDER = process.env.EMAIL_PROVIDER || 'console';
-const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+const cleanEnv = (value, fallback = '') => {
+  if (value === undefined || value === null || value === '') return fallback;
+  return String(value).replace(/\r/g, '').trim();
+};
+
+const EMAIL_PROVIDER = cleanEnv(process.env.EMAIL_PROVIDER, 'console');
+const FRONTEND_URL = cleanEnv(process.env.FRONTEND_URL, 'http://localhost:5173');
 
 const escapeHtml = (value) =>
   String(value)
@@ -48,17 +53,17 @@ const sendEmail = async ({ to, subject, text, html, label }) => {
 
   const { default: nodemailer } = await import('nodemailer');
   const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: Number(process.env.SMTP_PORT || 587),
-    secure: String(process.env.SMTP_SECURE || 'false') === 'true',
+    host: cleanEnv(process.env.SMTP_HOST),
+    port: Number(cleanEnv(process.env.SMTP_PORT, '587')),
+    secure: cleanEnv(process.env.SMTP_SECURE, 'false') === 'true',
     auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
+      user: cleanEnv(process.env.SMTP_USER),
+      pass: cleanEnv(process.env.SMTP_PASS),
     },
   });
 
   await transporter.sendMail({
-    from: process.env.EMAIL_FROM || process.env.SMTP_USER,
+    from: cleanEnv(process.env.EMAIL_FROM) || cleanEnv(process.env.SMTP_USER),
     to,
     subject,
     text,

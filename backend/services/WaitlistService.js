@@ -7,7 +7,7 @@ import {
   Message,
   Appointment,
 } from '../models/index.js';
-import { sendWaitlistAutoBookedEmail } from '../utils/waitlistEmail.js';
+import { sendWaitlistAutoBookedEmail, sendWaitlistSlotOpenedEmail } from '../utils/waitlistEmail.js';
 
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_REGEX = /^([01]\d|2[0-3]):([0-5]\d)(:[0-5]\d)?$/;
@@ -404,11 +404,11 @@ class WaitlistService {
       }
     }
 
-    if (shouldSendEmailNotification(nextEntry.notification_preference) && entryPatient?.user?.email) {
+    if (entryPatient?.user?.email) {
       const patientDisplayName = entryPatient.full_name || entryPatient.user?.username || 'Patient';
       const doctorDisplayName = entryDoctor?.full_name || entryDoctor?.user?.username || 'your provider';
 
-      // Keep email side-effect non-blocking for cancellation flow.
+      // Auto-booking removes the patient from active waitlist; always attempt email notification.
       void sendWaitlistAutoBookedEmail({
         to: entryPatient.user.email,
         patientName: patientDisplayName,
@@ -489,6 +489,23 @@ class WaitlistService {
       entry.status = 'notified';
       entry.last_notified_at = now;
       await entry.save({ transaction });
+
+      if (shouldSendEmailNotification(entry.notification_preference) && entry.patient?.user?.email) {
+        const patientDisplayName = entry.patient.full_name || entry.patient.user?.username || 'Patient';
+        const doctorDisplayName = entry.doctor?.full_name || entry.doctor?.user?.username || 'your provider';
+
+        void sendWaitlistSlotOpenedEmail({
+          to: entry.patient.user.email,
+          patientName: patientDisplayName,
+          doctorName: doctorDisplayName,
+          appointmentDate,
+          appointmentStartTime,
+          appointmentEndTime,
+          appointmentType,
+        }).catch((error) => {
+          console.error('Failed to send waitlist slot-opened email:', error);
+        });
+      }
     }
 
     return { notifiedCount: entries.length };

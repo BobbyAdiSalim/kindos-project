@@ -690,8 +690,6 @@ export function Booking() {
                 <SelectContent>
                   <SelectItem value="in-app">In-app only</SelectItem>
                   <SelectItem value="email">Email only</SelectItem>
-                  <SelectItem value="sms">SMS only</SelectItem>
-                  <SelectItem value="both">Email + SMS</SelectItem>
                 </SelectContent>
               </Select>
             </div>
