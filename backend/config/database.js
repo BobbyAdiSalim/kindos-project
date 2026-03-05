@@ -5,13 +5,18 @@
 
 import { Sequelize } from 'sequelize';
 
+const cleanEnv = (value, fallback = undefined) => {
+  if (value === undefined || value === null || value === '') return fallback;
+  return String(value).replace(/\r/g, '').trim();
+};
+
 const sequelize = new Sequelize(
-  process.env.PG_DATABASE,
-  process.env.PG_USER,
-  process.env.PG_PWD,
+  cleanEnv(process.env.PG_DATABASE),
+  cleanEnv(process.env.PG_USER),
+  cleanEnv(process.env.PG_PWD),
   {
-    host: process.env.PG_HOST,
-    port: process.env.PG_PORT || 5432,
+    host: cleanEnv(process.env.PG_HOST, 'localhost'),
+    port: Number(cleanEnv(process.env.PG_PORT, '5432')),
     dialect: 'postgres',
     logging: process.env.NODE_ENV === 'development' ? console.log : false,
     pool: {

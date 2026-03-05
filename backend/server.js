@@ -16,6 +16,10 @@ const PORT = Number(process.env.PORT) || 4000;
 const SHOULD_SEED = shouldSeedDevelopmentData(process.argv, process.env);
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-key";
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
+const cleanEnv = (value, fallback = undefined) => {
+  if (value === undefined || value === null || value === "") return fallback;
+  return String(value).replace(/\r/g, "").trim();
+};
 
 // Socket.io setup with CORS
 const io = new SocketIOServer(httpServer, {
@@ -95,11 +99,11 @@ let pool;
 async function connectToPG() {
   try {
     pool = new Pool({
-      user: process.env.PG_USER,
-      host: process.env.PG_HOST,
-      database: process.env.PG_DATABASE,
-      password: process.env.PG_PWD,
-      port: process.env.PG_PORT,
+      user: cleanEnv(process.env.PG_USER),
+      host: cleanEnv(process.env.PG_HOST, "localhost"),
+      database: cleanEnv(process.env.PG_DATABASE),
+      password: cleanEnv(process.env.PG_PWD),
+      port: Number(cleanEnv(process.env.PG_PORT, "5432")),
     });
 
     // Store pool in app.locals to make it accessible in routes

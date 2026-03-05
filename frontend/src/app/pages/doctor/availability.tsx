@@ -34,6 +34,12 @@ const generateTimeSlots = () => {
 const timeSlots = generateTimeSlots();
 const durationOptions = [15, 30, 45, 60, 90, 120];
 const defaultAppointmentTypes = ['virtual', 'in-person'];
+const normalizeToken = (value: unknown): string | null => {
+  if (typeof value !== 'string') return null;
+  const cleaned = value.replace(/[\r\n]/g, '').trim();
+  if (!cleaned) return null;
+  return cleaned.startsWith('Bearer ') ? cleaned.slice(7).trim() : cleaned;
+};
 
 const createWeeklySchedule = (enabledByDefault: (dayIndex: number) => boolean): WeeklySchedule =>
   days.reduce((acc, day, index) => ({
@@ -86,7 +92,8 @@ export function AvailabilitySetup() {
     if (!raw) return {};
     try {
       const { token } = JSON.parse(raw);
-      return { Authorization: `Bearer ${token}` };
+      const safeToken = normalizeToken(token);
+      return safeToken ? { Authorization: `Bearer ${safeToken}` } : {};
     } catch {
       return {};
     }
