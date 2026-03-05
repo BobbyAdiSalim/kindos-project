@@ -14,6 +14,7 @@ import Review from './Review.js';
 import Questionnaire from './Questionnaire.js';
 import AdminLog from './AdminLog.js';
 import WaitlistEntry from './WaitlistEntry.js';
+import Connection from './Connection.js';
 
 // Define associations between models
 
@@ -161,6 +162,13 @@ const repairLegacyWaitlistSchema = async () => {
     `, { transaction });
   });
 };
+// Patient <-> Connection (One-to-Many)
+Patient.hasMany(Connection, { foreignKey: 'patient_id', as: 'connections' });
+Connection.belongsTo(Patient, { foreignKey: 'patient_id', as: 'patient' });
+
+// Doctor <-> Connection (One-to-Many)
+Doctor.hasMany(Connection, { foreignKey: 'doctor_id', as: 'connections' });
+Connection.belongsTo(Doctor, { foreignKey: 'doctor_id', as: 'doctor' });
 
 /**
  * Sync database (create tables)
@@ -192,4 +200,5 @@ export {
   Questionnaire,
   AdminLog,
   WaitlistEntry,
+  Connection,
 };

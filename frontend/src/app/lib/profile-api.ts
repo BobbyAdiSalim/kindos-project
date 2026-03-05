@@ -32,6 +32,8 @@ export interface DoctorProfile {
   clinic_location?: string | null;
   virtual_available?: boolean;
   in_person_available?: boolean;
+  latitude?: string | null;
+  longitude?: string | null;
 }
 
 export interface ProfileResponse {

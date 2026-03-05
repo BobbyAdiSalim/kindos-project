@@ -47,6 +47,11 @@ export function Header({ showAuth = true }: HeaderProps) {
   const getWaitlistLink = () => {
     if (!user || user.role !== 'patient') return null;
     return '/patient/waitlist';
+  const getMessagesLink = () => {
+    if (!user) return null;
+    if (user.role === 'patient') return '/patient/messages';
+    if (user.role === 'doctor') return '/doctor/messages';
+    return null;
   };
 
   return (
@@ -87,6 +92,9 @@ export function Header({ showAuth = true }: HeaderProps) {
                 {getWaitlistLink() && (
                   <DropdownMenuItem asChild>
                     <Link to={getWaitlistLink() as string}>Waitlist</Link>
+                {getMessagesLink() && (
+                  <DropdownMenuItem asChild>
+                    <Link to={getMessagesLink()!}>Messages</Link>
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuItem onClick={handleLogout}>
@@ -134,6 +142,9 @@ export function Header({ showAuth = true }: HeaderProps) {
                 {getWaitlistLink() && (
                   <DropdownMenuItem asChild>
                     <Link to={getWaitlistLink() as string}>Waitlist</Link>
+                {getMessagesLink() && (
+                  <DropdownMenuItem asChild>
+                    <Link to={getMessagesLink()!}>Messages</Link>
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuItem onClick={handleLogout}>

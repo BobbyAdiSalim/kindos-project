@@ -1,13 +1,16 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { Button } from '@/app/components/ui/button';
-import { Card, CardContent } from '@/app/components/ui/card';
+import { Card } from '@/app/components/ui/card';
 import { ScrollArea } from '@/app/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/app/components/ui/avatar';
 import { Badge } from '@/app/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/app/components/ui/tabs';
 import { useAuth } from '@/app/lib/auth-context';
 import {
   getMyConnections,
+  getPendingRequests,
+  respondToConnection,
   getConversation,
   sendMessageApi,
   markMessagesRead,
@@ -23,32 +26,38 @@ import {
 } from '@/app/lib/socket';
 import { ConversationList } from '@/app/components/chat/conversation-list';
 import { ChatPanel, EmptyChatPanel } from '@/app/components/chat/chat-panel';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Check, X, UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
 
-export function Messaging() {
+export function DoctorMessaging() {
   const { user, token } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [connections, setConnections] = useState<ConnectionInfo[]>([]);
+  const [pendingRequests, setPendingRequests] = useState<ConnectionInfo[]>([]);
   const [activeConnection, setActiveConnection] = useState<ConnectionInfo | null>(null);
   const [messages, setMessages] = useState<MessageInfo[]>([]);
   const [messageInput, setMessageInput] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [respondingId, setRespondingId] = useState<number | null>(null);
   const prevConnectionRef = useRef<number | null>(null);
   const initialConnectionIdRef = useRef<number | null>(Number(searchParams.get('connectionId')) || null);
 
   const currentUserId = user ? Number(user.id) : 0;
 
-  // Load connections
+  // Load connections and pending requests
   useEffect(() => {
-    const loadConnections = async () => {
+    const loadData = async () => {
       try {
-        const data = await getMyConnections(token);
-        setConnections(data.connections);
+        const [connectionsData, requestsData] = await Promise.all([
+          getMyConnections(token),
+          getPendingRequests(token),
+        ]);
+        setConnections(connectionsData.connections);
+        setPendingRequests(requestsData.requests);
 
         if (initialConnectionIdRef.current) {
-          const match = data.connections.find(
+          const match = connectionsData.connections.find(
             (c) => c.id === initialConnectionIdRef.current && c.status === 'accepted'
           );
           if (match) setActiveConnection(match);
@@ -60,7 +69,7 @@ export function Messaging() {
       }
     };
 
-    loadConnections();
+    loadData();
   }, [token]);
 
   // Connect socket
@@ -143,8 +152,28 @@ export function Messaging() {
     }
   }, [messageInput, activeConnection, token, sending]);
 
+  const handleRespond = async (connectionId: number, status: 'accepted' | 'rejected') => {
+    setRespondingId(connectionId);
+    try {
+      await respondToConnection(token, connectionId, status);
+
+      setPendingRequests((prev) => prev.filter((r) => r.id !== connectionId));
+
+      if (status === 'accepted') {
+        const data = await getMyConnections(token);
+        setConnections(data.connections);
+        toast.success('Connection accepted!');
+      } else {
+        toast.success('Connection rejected.');
+      }
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setRespondingId(null);
+    }
+  };
+
   const acceptedConnections = connections.filter((c) => c.status === 'accepted');
-  const pendingConnections = connections.filter((c) => c.status === 'pending');
 
   if (loading) {
     return (
@@ -156,7 +185,7 @@ export function Messaging() {
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-6xl">
-      <Link to="/patient/dashboard">
+      <Link to="/doctor/dashboard">
         <Button variant="ghost" className="mb-6">
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back to Dashboard
@@ -166,53 +195,96 @@ export function Messaging() {
       <h1 className="text-2xl font-semibold mb-6">Messages</h1>
 
       <div className="flex gap-4 h-[600px]">
-        {/* Sidebar — conversation list */}
+        {/* Sidebar */}
         <Card className="w-80 flex-shrink-0 flex flex-col">
-          <CardContent className="p-4 border-b">
-            <h2 className="font-semibold">Conversations</h2>
-          </CardContent>
-          <ConversationList
-            connections={acceptedConnections}
-            activeConnectionId={activeConnection?.id ?? null}
-            onSelect={setActiveConnection}
-            contactRole="doctor"
-            emptyMessage="No conversations yet. Connect with a doctor from their profile to start messaging."
-          />
-          {/* Pending connections shown below */}
-          {pendingConnections.length > 0 && (
-            <div className="border-t">
-              <ScrollArea>
-                <div className="divide-y">
-                  {pendingConnections.map((conn) => {
-                    const doctorName = conn.doctor?.full_name || 'Doctor';
-                    return (
-                      <div key={conn.id} className="p-4 opacity-60">
-                        <div className="flex items-center gap-3">
-                          <Avatar className="h-10 w-10 flex-shrink-0">
-                            <AvatarFallback>{doctorName[0]}</AvatarFallback>
-                          </Avatar>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium truncate">{doctorName}</p>
-                            <Badge variant="outline" className="mt-1 text-xs">
-                              Pending
-                            </Badge>
+          <Tabs defaultValue="conversations" className="flex flex-col h-full">
+            <div className="border-b px-2 pt-2">
+              <TabsList className="w-full">
+                <TabsTrigger value="conversations" className="flex-1">
+                  Chats
+                </TabsTrigger>
+                <TabsTrigger value="requests" className="flex-1">
+                  Requests
+                  {pendingRequests.length > 0 && (
+                    <Badge variant="destructive" className="ml-2 text-xs px-1.5">
+                      {pendingRequests.length}
+                    </Badge>
+                  )}
+                </TabsTrigger>
+              </TabsList>
+            </div>
+
+            <TabsContent value="conversations" className="flex-1 m-0">
+              <ConversationList
+                connections={acceptedConnections}
+                activeConnectionId={activeConnection?.id ?? null}
+                onSelect={setActiveConnection}
+                contactRole="patient"
+                emptyMessage="No conversations yet. Accept a patient's connect request to start chatting."
+              />
+            </TabsContent>
+
+            <TabsContent value="requests" className="flex-1 m-0">
+              <ScrollArea className="h-full">
+                {pendingRequests.length === 0 ? (
+                  <div className="p-4 text-center text-muted-foreground text-sm">
+                    <UserPlus className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                    <p>No pending requests.</p>
+                  </div>
+                ) : (
+                  <div className="divide-y">
+                    {pendingRequests.map((req) => {
+                      const patientName = req.patient?.full_name || 'Patient';
+                      const isResponding = respondingId === req.id;
+                      return (
+                        <div key={req.id} className="p-4">
+                          <div className="flex items-center gap-3 mb-3">
+                            <Avatar className="h-10 w-10 flex-shrink-0">
+                              <AvatarFallback>{patientName[0]}</AvatarFallback>
+                            </Avatar>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium truncate">{patientName}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {new Date(req.created_at).toLocaleDateString()}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              className="flex-1"
+                              onClick={() => handleRespond(req.id, 'accepted')}
+                              disabled={isResponding}
+                            >
+                              <Check className="h-4 w-4 mr-1" />
+                              Accept
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="flex-1"
+                              onClick={() => handleRespond(req.id, 'rejected')}
+                              disabled={isResponding}
+                            >
+                              <X className="h-4 w-4 mr-1" />
+                              Reject
+                            </Button>
                           </div>
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                      );
+                    })}
+                  </div>
+                )}
               </ScrollArea>
-            </div>
-          )}
+            </TabsContent>
+          </Tabs>
         </Card>
 
         {/* Chat panel */}
         <Card className="flex-1 flex flex-col">
           {activeConnection ? (
             <ChatPanel
-              contactName={activeConnection.doctor?.full_name || 'Doctor'}
-              contactSubtitle={activeConnection.doctor?.specialty || ''}
+              contactName={activeConnection.patient?.full_name || 'Patient'}
               messages={messages}
               currentUserId={currentUserId}
               messageInput={messageInput}

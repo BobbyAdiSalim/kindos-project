@@ -32,12 +32,22 @@ import {
   getBookableSlots,
 } from "../controllers/availabilityController.js";
 import {
+  sendConnectRequest,
+  getMyConnections,
+  getPendingRequests,
+  respondToConnection,
+  getConversation,
+  sendMessage,
+  markMessagesRead,
+} from "../controllers/chatController.js";
+import {
   createAppointmentBooking,
   getMyAppointments,
   getAppointmentById,
   updateAppointmentDecision,
   cancelAppointmentByPatient,
   rescheduleAppointmentByPatient,
+  getPatientHistory,
 } from "../controllers/bookingController.js";
 import {
   joinWaitlist,
@@ -222,8 +232,48 @@ router.get("/availability/doctor/:doctorId", (req, res) => {
 });
 
 /**
+ * Chat Routes - Connection requests and messaging
+ */
+
+// Send a connect request to a doctor (patient only)
+router.post("/chat/connect", requireAuth, requireRole("patient"), (req, res) => {
+  sendConnectRequest(req, res);
+});
+
+// Get all connections for the current user
+router.get("/chat/connections", requireAuth, requireRole("patient", "doctor"), (req, res) => {
+  getMyConnections(req, res);
+});
+
+// Get pending connect requests (doctor only)
+router.get("/chat/requests/pending", requireAuth, requireRole("doctor"), (req, res) => {
+  getPendingRequests(req, res);
+});
+
+// Accept or reject a connection request (doctor only)
+router.patch("/chat/connections/:connectionId", requireAuth, requireRole("doctor"), (req, res) => {
+  respondToConnection(req, res);
+});
+
+// Get messages for a conversation
+router.get("/chat/messages/:connectionId", requireAuth, requireRole("patient", "doctor"), (req, res) => {
+  getConversation(req, res);
+});
+
+// Send a message in a conversation
+router.post("/chat/messages/:connectionId", requireAuth, requireRole("patient", "doctor"), (req, res) => {
+  sendMessage(req, res);
+});
+
+// Mark messages as read in a conversation
+router.patch("/chat/messages/:connectionId/read", requireAuth, requireRole("patient", "doctor"), (req, res) => {
+  markMessagesRead(req, res);
+});
+
+/*
  * Appointment Booking Routes
  */
+
 router.post("/appointments", requireAuth, requireRole("patient"), (req, res) => {
   createAppointmentBooking(req, res);
 });
@@ -261,6 +311,12 @@ router.get("/waitlist/my", requireAuth, requireRole("patient"), (req, res) => {
 
 router.delete("/waitlist/:waitlistEntryId", requireAuth, requireRole("patient"), (req, res) => {
   removeMyWaitlistEntry(req, res);
+ * @route   GET /api/patients/:patientId/history
+ * @desc    Get patient information and appointment history (doctor only)
+ * @access  Private (Doctor)
+ */
+router.get("/patients/:patientId/history", requireAuth, requireRole("doctor"), (req, res) => {
+  getPatientHistory(req, res);
 });
 
 /**

@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router';
 import { Button } from '@/app/components/ui/button';
 import { Card, CardContent } from '@/app/components/ui/card';
 import { format } from 'date-fns';
-import { Calendar, Clock, FileText } from 'lucide-react';
+import { Calendar, Clock, FileText, User } from 'lucide-react';
 import { AppointmentTypeBadge, StatusBadge } from '@/app/components/status-badges';
 import { useAuth } from '@/app/lib/auth-context';
 import { formatTime24to12 } from '@/app/lib/availability-api';
@@ -89,7 +89,7 @@ export function DoctorAppointmentDetail() {
       </Button>
 
       <div className="space-y-6">
-        <div className="flex items-start justify-between">
+        <div className="flex flex-col sm:flex-row items-start justify-between gap-4">
           <div>
             <h1 className="text-2xl md:text-3xl font-semibold mb-2">
               Appointment with {appointment.patient?.full_name || 'Patient'}
@@ -99,6 +99,15 @@ export function DoctorAppointmentDetail() {
               <StatusBadge status={status} />
             </div>
           </div>
+          {['scheduled', 'confirmed'].includes(appointment.status) && appointment.patient && (
+            <Button
+              variant="outline"
+              onClick={() => navigate(`/doctor/patient/${appointment.patient!.id}/history`)}
+            >
+              <User className="h-4 w-4 mr-2" />
+              Patient History
+            </Button>
+          )}
         </div>
 
         <Card>
