@@ -37,6 +37,7 @@ if (force) {
     console.log('  - availability_patterns');
     console.log('  - availability_slots');
     console.log('  - messages');
+    console.log('  - waitlist_entries');
     console.log('  - reviews');
     console.log('  - questionnaires');
     console.log('  - admin_logs');

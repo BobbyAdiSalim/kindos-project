@@ -4,10 +4,15 @@ export interface TimeSlot {
   appointment_types: string[];
 }
 
+export interface BookedTimeSlot extends TimeSlot {
+  booked_appointment_type: 'virtual' | 'in-person';
+}
+
 export interface BookableSlotsResponse {
   date: string;
   doctor_id: number;
   slots: TimeSlot[];
+  booked_slots: BookedTimeSlot[];
 }
 
 const API_BASE = '/api';
@@ -21,11 +26,17 @@ const API_BASE = '/api';
 export const getBookableSlots = async (
   userId: string,
   date: string,
-  appointmentType?: string
+  appointmentType?: string,
+  options?: {
+    includeBooked?: boolean;
+  }
 ): Promise<BookableSlotsResponse> => {
   const params = new URLSearchParams({ date });
   if (appointmentType) {
     params.set('appointmentType', appointmentType);
+  }
+  if (options?.includeBooked) {
+    params.set('includeBooked', 'true');
   }
 
   const response = await fetch(
@@ -37,7 +48,13 @@ export const getBookableSlots = async (
     throw new Error(data?.message || 'Failed to fetch available time slots');
   }
 
-  return data as BookableSlotsResponse;
+  const typedData = data as Partial<BookableSlotsResponse>;
+  return {
+    date: String(typedData.date || date),
+    doctor_id: Number(typedData.doctor_id || 0),
+    slots: Array.isArray(typedData.slots) ? typedData.slots : [],
+    booked_slots: Array.isArray(typedData.booked_slots) ? typedData.booked_slots : [],
+  };
 };
 
 /**

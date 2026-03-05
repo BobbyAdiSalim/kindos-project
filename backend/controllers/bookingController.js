@@ -8,6 +8,7 @@ import {
   AvailabilityPattern,
   AvailabilitySlot,
 } from '../models/index.js';
+import waitlistService from '../services/WaitlistService.js';
 
 const ACTIVE_APPOINTMENT_STATUSES = ['scheduled', 'confirmed', 'completed', 'no-show'];
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
@@ -479,7 +480,7 @@ export const cancelAppointmentByPatient = async (req, res) => {
       return res.status(400).json({ message: 'Invalid appointment ID.' });
     }
 
-    const updatedAppointment = await sequelize.transaction(async (transaction) => {
+    const { updatedAppointment, waitlistAssignment } = await sequelize.transaction(async (transaction) => {
       const patient = await getPatientForUser(patientUserId, transaction);
 
       const appointment = await Appointment.findOne({
@@ -508,15 +509,24 @@ export const cancelAppointmentByPatient = async (req, res) => {
 
       await appointment.save({ transaction });
 
-      return Appointment.findByPk(appointment.id, {
+      const waitlistAssignment = await waitlistService.fulfillWaitlistForCancelledAppointment({
+        cancelledAppointment: appointment,
+        cancelledByUserId: patientUserId,
+        transaction,
+      });
+
+      const updatedAppointment = await Appointment.findByPk(appointment.id, {
         include: appointmentInclude,
         transaction,
       });
+
+      return { updatedAppointment, waitlistAssignment };
     });
 
     res.json({
       message: 'Appointment cancelled successfully.',
       appointment: serializeAppointment(updatedAppointment),
+      waitlist_assignment: waitlistAssignment,
     });
   } catch (error) {
     const statusCode = error instanceof HttpError ? error.status : 500;

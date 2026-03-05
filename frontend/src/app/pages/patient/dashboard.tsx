@@ -4,7 +4,7 @@ import { Button } from '@/app/components/ui/button';
 import { Card, CardContent } from '@/app/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/app/components/ui/tabs';
 import { AppointmentCard } from '@/app/components/appointment-card';
-import { Plus, Calendar as CalendarIcon } from 'lucide-react';
+import { Bell, Plus, Calendar as CalendarIcon } from 'lucide-react';
 import { useAuth } from '@/app/lib/auth-context';
 import { formatTime24to12 } from '@/app/lib/availability-api';
 import { getMyAppointments, type AppointmentRecord } from '@/app/lib/appointment-api';
@@ -76,12 +76,20 @@ export function PatientDashboard() {
           <h1 className="text-2xl md:text-3xl font-semibold mb-2">My Appointments</h1>
           <p className="text-muted-foreground">Manage your healthcare appointments</p>
         </div>
-        <Link to="/patient/providers">
-          <Button size="lg">
-            <Plus className="h-5 w-5 mr-2" />
-            Book Appointment
-          </Button>
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link to="/patient/waitlist">
+            <Button size="lg" variant="outline">
+              <Bell className="h-5 w-5 mr-2" />
+              My Waitlist
+            </Button>
+          </Link>
+          <Link to="/patient/providers">
+            <Button size="lg">
+              <Plus className="h-5 w-5 mr-2" />
+              Book Appointment
+            </Button>
+          </Link>
+        </div>
       </div>
 
       <Tabs defaultValue="upcoming" className="w-full">
