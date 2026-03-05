@@ -106,6 +106,11 @@ export const AvailabilitySlot = sequelize.define(
       type: DataTypes.TIME,
       allowNull: false,
     },
+    appointment_duration: {
+      type: DataTypes.INTEGER,
+      defaultValue: 30,
+      comment: 'Duration in minutes for interval generation',
+    },
     is_available: {
       type: DataTypes.BOOLEAN,
       defaultValue: true,
