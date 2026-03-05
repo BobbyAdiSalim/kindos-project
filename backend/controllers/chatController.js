@@ -52,7 +52,8 @@ export const sendConnectRequest = async (req, res) => {
 
     return res.status(201).json({ message: 'Connect request sent.', connection });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    console.error(error);
+    return res.status(500).json({ error: 'Internal server error.' });
   }
 };
 
@@ -140,7 +141,8 @@ export const getMyConnections = async (req, res) => {
 
     return res.status(200).json({ connections: connectionsWithMeta });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    console.error(error);
+    return res.status(500).json({ error: 'Internal server error.' });
   }
 };
 
@@ -174,7 +176,8 @@ export const getPendingRequests = async (req, res) => {
 
     return res.status(200).json({ requests: pending });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    console.error(error);
+    return res.status(500).json({ error: 'Internal server error.' });
   }
 };
 
@@ -218,7 +221,8 @@ export const respondToConnection = async (req, res) => {
 
     return res.status(200).json({ message: `Connection ${status}.`, connection });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    console.error(error);
+    return res.status(500).json({ error: 'Internal server error.' });
   }
 };
 
@@ -289,7 +293,8 @@ export const getConversation = async (req, res) => {
       },
     });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    console.error(error);
+    return res.status(500).json({ error: 'Internal server error.' });
   }
 };
 
@@ -345,7 +350,8 @@ export const sendMessage = async (req, res) => {
 
     return res.status(201).json({ message: fullMessage });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    console.error(error);
+    return res.status(500).json({ error: 'Internal server error.' });
   }
 };
 
@@ -390,6 +396,7 @@ export const markMessagesRead = async (req, res) => {
 
     return res.status(200).json({ message: `${updatedCount} messages marked as read.` });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    console.error(error);
+    return res.status(500).json({ error: 'Internal server error.' });
   }
 };

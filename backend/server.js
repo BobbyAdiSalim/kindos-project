@@ -4,7 +4,7 @@ import { Server as SocketIOServer } from "socket.io";
 import jwt from "jsonwebtoken";
 import pg from "pg";
 import { shouldSeedDevelopmentData, seedDevelopmentData } from "./seed-dev-data.js";
-import { User } from "./models/index.js";
+import { User, Connection, Patient, Doctor } from "./models/index.js";
 const { Pool } = pg;
 
 // Import routes
@@ -49,6 +49,22 @@ io.use(async (socket, next) => {
   }
 });
 
+// Verify the socket user is a participant of the given connection
+const verifyConnectionMembership = async (userId, connectionId) => {
+  const id = Number(connectionId);
+  if (!Number.isInteger(id) || id <= 0) return false;
+
+  const connection = await Connection.findByPk(id, {
+    include: [
+      { model: Patient, as: "patient", attributes: ["user_id"] },
+      { model: Doctor, as: "doctor", attributes: ["user_id"] },
+    ],
+  });
+
+  if (!connection || connection.status !== "accepted") return false;
+  return connection.patient?.user_id === userId || connection.doctor?.user_id === userId;
+};
+
 // Socket.io connection handler
 io.on("connection", (socket) => {
   const { userId } = socket.auth;
@@ -56,9 +72,11 @@ io.on("connection", (socket) => {
   // Join a personal room for receiving direct notifications
   socket.join(`user_${userId}`);
 
-  // Join a conversation room
-  socket.on("join_conversation", (connectionId) => {
-    socket.join(`connection_${connectionId}`);
+  // Join a conversation room (with auth check)
+  socket.on("join_conversation", async (connectionId) => {
+    if (await verifyConnectionMembership(userId, connectionId)) {
+      socket.join(`connection_${connectionId}`);
+    }
   });
 
   // Leave a conversation room
@@ -66,22 +84,27 @@ io.on("connection", (socket) => {
     socket.leave(`connection_${connectionId}`);
   });
 
-  // Handle real-time message sending
-  socket.on("send_message", (data) => {
+  // Handle real-time message sending (with auth check)
+  socket.on("send_message", async (data) => {
     const { connectionId, message } = data;
-    // Broadcast to everyone in the conversation room except the sender
-    socket.to(`connection_${connectionId}`).emit("new_message", message);
+    if (await verifyConnectionMembership(userId, connectionId)) {
+      socket.to(`connection_${connectionId}`).emit("new_message", message);
+    }
   });
 
-  // Notify when typing
+  // Notify when typing (only if in the room already)
   socket.on("typing", (data) => {
     const { connectionId } = data;
-    socket.to(`connection_${connectionId}`).emit("user_typing", { userId });
+    if (socket.rooms.has(`connection_${connectionId}`)) {
+      socket.to(`connection_${connectionId}`).emit("user_typing", { userId });
+    }
   });
 
   socket.on("stop_typing", (data) => {
     const { connectionId } = data;
-    socket.to(`connection_${connectionId}`).emit("user_stop_typing", { userId });
+    if (socket.rooms.has(`connection_${connectionId}`)) {
+      socket.to(`connection_${connectionId}`).emit("user_stop_typing", { userId });
+    }
   });
 
   socket.on("disconnect", () => {
