@@ -8,7 +8,11 @@ import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
 import { Textarea } from '@/app/components/ui/textarea';
 import { AppointmentCard } from '@/app/components/appointment-card';
-import { Calendar, Settings, Clock, AlertCircle, MessageSquare } from 'lucide-react';
+import { Avatar, AvatarFallback } from '@/app/components/ui/avatar';
+import { Badge } from '@/app/components/ui/badge';
+import { Popover, PopoverContent, PopoverTrigger } from '@/app/components/ui/popover';
+import { ScrollArea } from '@/app/components/ui/scroll-area';
+import { Calendar, Settings, Clock, AlertCircle, MessageSquare, Check, X, UserPlus } from 'lucide-react';
 import { useAuth } from '@/app/lib/auth-context';
 import { toast } from 'sonner';
 import { formatTime24to12 } from '@/app/lib/availability-api';
@@ -17,6 +21,11 @@ import {
   updateAppointmentDecision,
   type AppointmentRecord,
 } from '@/app/lib/appointment-api';
+import {
+  getPendingRequests,
+  respondToConnection,
+  type ConnectionInfo,
+} from '@/app/lib/chat-api';
 
 const mapAppointmentStatus = (appointment: AppointmentRecord) => {
   if (appointment.status === 'cancelled' && appointment.declined_by_doctor) {
@@ -48,6 +57,8 @@ export function DoctorDashboard() {
   const [appointmentActionId, setAppointmentActionId] = useState<string | null>(null);
   const [appointmentsError, setAppointmentsError] = useState('');
   const [appointments, setAppointments] = useState<AppointmentRecord[]>([]);
+  const [pendingRequests, setPendingRequests] = useState<ConnectionInfo[]>([]);
+  const [respondingId, setRespondingId] = useState<number | null>(null);
   const [formData, setFormData] = useState({
     fullName: '',
     specialty: '',
@@ -128,6 +139,33 @@ export function DoctorDashboard() {
 
     loadAppointments();
   }, [token, isVerified]);
+
+  // Load pending connection requests
+  useEffect(() => {
+    const loadRequests = async () => {
+      if (!token || !isVerified) return;
+      try {
+        const data = await getPendingRequests(token);
+        setPendingRequests(data.requests);
+      } catch {
+        // Silently fail — not critical for dashboard
+      }
+    };
+    loadRequests();
+  }, [token, isVerified]);
+
+  const handleConnectionResponse = async (connectionId: number, status: 'accepted' | 'rejected') => {
+    setRespondingId(connectionId);
+    try {
+      await respondToConnection(token, connectionId, status);
+      setPendingRequests((prev) => prev.filter((r) => r.id !== connectionId));
+      toast.success(status === 'accepted' ? 'Connection accepted!' : 'Connection rejected.');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to respond to connection.');
+    } finally {
+      setRespondingId(null);
+    }
+  };
 
   const handleVerificationDocumentChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -365,6 +403,71 @@ export function DoctorDashboard() {
               Profile
             </Button>
           </Link>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="relative">
+                <UserPlus className="h-4 w-4 mr-2" />
+                Requests
+                {pendingRequests.length > 0 && (
+                  <Badge variant="destructive" className="absolute -top-2 -right-2 h-5 w-5 p-0 flex items-center justify-center text-xs">
+                    {pendingRequests.length}
+                  </Badge>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-80 p-0">
+              <div className="p-3 border-b">
+                <h3 className="font-semibold text-sm">Connection Requests</h3>
+              </div>
+              {pendingRequests.length === 0 ? (
+                <div className="p-4 text-center text-sm text-muted-foreground">
+                  No pending requests
+                </div>
+              ) : (
+                <ScrollArea className="max-h-72">
+                  <div className="p-2 space-y-1">
+                    {pendingRequests.map((req) => {
+                      const patientName = req.patient?.full_name || 'Patient';
+                      const isResponding = respondingId === req.id;
+                      return (
+                        <div key={req.id} className="flex items-center gap-2 p-2 rounded-md hover:bg-muted/50">
+                          <Avatar className="h-8 w-8 flex-shrink-0">
+                            <AvatarFallback className="text-xs">{patientName[0] || '?'}</AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-sm truncate">{patientName}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {new Date(req.created_at).toLocaleDateString()}
+                            </p>
+                          </div>
+                          <div className="flex gap-1 flex-shrink-0">
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-7 w-7 text-green-600 hover:text-green-700 hover:bg-green-50"
+                              onClick={() => handleConnectionResponse(req.id, 'accepted')}
+                              disabled={isResponding}
+                            >
+                              <Check className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-7 w-7 text-red-600 hover:text-red-700 hover:bg-red-50"
+                              onClick={() => handleConnectionResponse(req.id, 'rejected')}
+                              disabled={isResponding}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </ScrollArea>
+              )}
+            </PopoverContent>
+          </Popover>
         </div>
       </div>
 
