@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import { Link, useNavigate, useParams } from 'react-router';
 import { Button } from '@/app/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { AppointmentTypeBadge, StatusBadge } from '@/app/components/status-badges';
@@ -219,7 +219,16 @@ export function AppointmentDetail() {
           <CardContent className="p-6 space-y-6">
             <div>
               <h3 className="font-semibold mb-3">Provider</h3>
-              <p className="text-lg">{appointment.doctor?.full_name || 'Doctor'}</p>
+              {appointment.doctor ? (
+                <Link
+                  to={`/patient/doctor/${appointment.doctor.user_id || appointment.doctor.id}`}
+                  className="text-lg underline-offset-4 hover:underline"
+                >
+                  {appointment.doctor.full_name || 'Doctor'}
+                </Link>
+              ) : (
+                <p className="text-lg">Doctor</p>
+              )}
               {appointment.doctor?.specialty && (
                 <p className="text-muted-foreground">{appointment.doctor.specialty}</p>
               )}

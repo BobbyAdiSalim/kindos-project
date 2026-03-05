@@ -19,7 +19,7 @@ const cleanEnv = (value, fallback = undefined) => {
   return String(value).replace(/\r/g, "").trim();
 };
 const JWT_SECRET = cleanEnv(process.env.JWT_SECRET, "dev-secret-key");
-const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
+const FRONTEND_URL = cleanEnv(process.env.FRONTEND_URL, "http://localhost:5173");
 // Socket.io setup with CORS
 const io = new SocketIOServer(httpServer, {
   cors: {
