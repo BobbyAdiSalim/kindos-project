@@ -311,6 +311,9 @@ router.get("/waitlist/my", requireAuth, requireRole("patient"), (req, res) => {
 
 router.delete("/waitlist/:waitlistEntryId", requireAuth, requireRole("patient"), (req, res) => {
   removeMyWaitlistEntry(req, res);
+});
+
+ /*
  * @route   GET /api/patients/:patientId/history
  * @desc    Get patient information and appointment history (doctor only)
  * @access  Private (Doctor)
