@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { disconnectSocket } from './socket';
 
 export type UserRole = 'patient' | 'doctor' | 'admin';
 
@@ -235,6 +236,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // Intentionally ignored: local logout should still always proceed.
     }
 
+    disconnectSocket();
     localStorage.removeItem(STORAGE_KEY);
     setAuthState({ user: null, token: null });
   };
