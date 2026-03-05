@@ -64,6 +64,12 @@ export function PatientDashboard() {
       .map(toAppointmentCardData);
     const past = appointments
       .filter((appointment) => !['scheduled', 'confirmed'].includes(appointment.status))
+      .sort((a, b) => {
+        const dateCompare = new Date(`${b.appointment_date}T00:00:00`).getTime() - 
+                          new Date(`${a.appointment_date}T00:00:00`).getTime();
+        if (dateCompare !== 0) return dateCompare;
+        return b.end_time.localeCompare(a.end_time);
+      })
       .map(toAppointmentCardData);
 
     return { upcomingAppointments: upcoming, pastAppointments: past };

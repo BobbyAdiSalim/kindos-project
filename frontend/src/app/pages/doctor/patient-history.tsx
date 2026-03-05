@@ -96,7 +96,12 @@ export function PatientHistory() {
             </CardContent>
           </Card>
         ) : (
-          appointments.map((appointment) => (
+          [...appointments].sort((a, b) => {
+            const dateCompare = new Date(`${b.appointment_date}T00:00:00`).getTime() - 
+                              new Date(`${a.appointment_date}T00:00:00`).getTime();
+            if (dateCompare !== 0) return dateCompare;
+            return b.end_time.localeCompare(a.end_time);
+          }).map((appointment) => (
             <Card key={appointment.id}>
               <CardContent className="p-6">
                 <div className="space-y-3">

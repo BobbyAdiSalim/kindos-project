@@ -939,3 +939,167 @@ export const getPatientHistory = async (req, res) => {
   }
 };
 
+/**
+ * Save appointment summary (doctor only)
+ * @route PATCH /api/appointments/:appointmentId/summary
+ * @access Private (Doctor)
+ */
+export const saveSummary = async (req, res) => {
+  try {
+    const appointmentId = Number(req.params.appointmentId);
+    const doctorUserId = req.auth.userId;
+    const summary = String(req.body?.summary || '').trim();
+
+    if (!Number.isInteger(appointmentId) || appointmentId <= 0) {
+      return res.status(400).json({ message: 'Invalid appointment ID.' });
+    }
+
+    if (!summary || summary.length === 0) {
+      return res.status(400).json({ message: 'Summary cannot be empty.' });
+    }
+
+    if (summary.length > 5000) {
+      return res.status(400).json({ message: 'Summary is too long (max 5000 characters).' });
+    }
+
+    const updatedAppointment = await sequelize.transaction(async (transaction) => {
+      const doctor = await Doctor.findOne({
+        where: { user_id: doctorUserId },
+        transaction,
+        lock: transaction.LOCK.UPDATE,
+      });
+
+      if (!doctor) {
+        throw new HttpError(404, 'Doctor profile not found.');
+      }
+
+      const appointment = await Appointment.findOne({
+        where: {
+          id: appointmentId,
+          doctor_id: doctor.id,
+        },
+        transaction,
+        lock: transaction.LOCK.UPDATE,
+      });
+
+      if (!appointment) {
+        throw new HttpError(404, 'Appointment not found.');
+      }
+
+      if (!['confirmed', 'no-show'].includes(appointment.status)) {
+        throw new HttpError(
+          409,
+          'Summary can only be added for confirmed or no-show appointments.'
+        );
+      }
+
+      appointment.summary = summary;
+      appointment.summary_written_at = new Date();
+
+      await appointment.save({ transaction });
+
+      const hydratedAppointment = await Appointment.findByPk(appointment.id, {
+        include: appointmentInclude,
+        transaction,
+      });
+
+      return hydratedAppointment;
+    });
+
+    res.json({
+      message: 'Summary saved successfully.',
+      appointment: serializeAppointment(updatedAppointment),
+    });
+  } catch (error) {
+    const statusCode = error instanceof HttpError ? error.status : 500;
+    const message = error instanceof HttpError ? error.message : 'Failed to save summary.';
+
+    if (!(error instanceof HttpError)) {
+      console.error('Error saving appointment summary:', error);
+    }
+
+    res.status(statusCode).json({ message });
+  }
+};
+
+/**
+ * Mark appointment as complete (doctor only)
+ * @route PATCH /api/appointments/:appointmentId/complete
+ * @access Private (Doctor)
+ */
+export const markComplete = async (req, res) => {
+  try {
+    const appointmentId = Number(req.params.appointmentId);
+    const doctorUserId = req.auth.userId;
+
+    if (!Number.isInteger(appointmentId) || appointmentId <= 0) {
+      return res.status(400).json({ message: 'Invalid appointment ID.' });
+    }
+
+    const updatedAppointment = await sequelize.transaction(async (transaction) => {
+      const doctor = await Doctor.findOne({
+        where: { user_id: doctorUserId },
+        transaction,
+        lock: transaction.LOCK.UPDATE,
+      });
+
+      if (!doctor) {
+        throw new HttpError(404, 'Doctor profile not found.');
+      }
+
+      const appointment = await Appointment.findOne({
+        where: {
+          id: appointmentId,
+          doctor_id: doctor.id,
+        },
+        transaction,
+        lock: transaction.LOCK.UPDATE,
+      });
+
+      if (!appointment) {
+        throw new HttpError(404, 'Appointment not found.');
+      }
+
+      if (!['confirmed', 'no-show'].includes(appointment.status)) {
+        throw new HttpError(
+          409,
+          'Only confirmed or no-show appointments can be marked as complete.'
+        );
+      }
+
+      if (!appointment.summary) {
+        throw new HttpError(
+          409,
+          'Appointment must have a summary before marking as complete.'
+        );
+      }
+
+      appointment.status = 'completed';
+
+      await appointment.save({ transaction });
+
+      const hydratedAppointment = await Appointment.findByPk(appointment.id, {
+        include: appointmentInclude,
+        transaction,
+      });
+
+      return hydratedAppointment;
+    });
+
+    res.json({
+      message: 'Appointment marked as complete.',
+      appointment: serializeAppointment(updatedAppointment),
+    });
+  } catch (error) {
+    const statusCode = error instanceof HttpError ? error.status : 500;
+    const message = error instanceof HttpError
+      ? error.message
+      : 'Failed to mark appointment as complete.';
+
+    if (!(error instanceof HttpError)) {
+      console.error('Error marking appointment as complete:', error);
+    }
+
+    res.status(statusCode).json({ message });
+  }
+};

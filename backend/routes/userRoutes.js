@@ -48,6 +48,8 @@ import {
   cancelAppointmentByPatient,
   rescheduleAppointmentByPatient,
   getPatientHistory,
+  saveSummary,
+  markComplete,
 } from "../controllers/bookingController.js";
 import {
   joinWaitlist,
@@ -296,6 +298,14 @@ router.patch("/appointments/:appointmentId/cancel", requireAuth, requireRole("pa
 
 router.patch("/appointments/:appointmentId/reschedule", requireAuth, requireRole("patient"), (req, res) => {
   rescheduleAppointmentByPatient(req, res);
+});
+
+router.patch("/appointments/:appointmentId/summary", requireAuth, requireRole("doctor"), (req, res) => {
+  saveSummary(req, res);
+});
+
+router.patch("/appointments/:appointmentId/complete", requireAuth, requireRole("doctor"), (req, res) => {
+  markComplete(req, res);
 });
 
 /**

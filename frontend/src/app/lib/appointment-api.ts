@@ -230,3 +230,30 @@ export const getPatientHistory = async (
   return data as PatientHistoryResponse;
 };
 
+export const saveSummary = async (
+  token: string | null,
+  appointmentId: string,
+  summary: string
+): Promise<AppointmentRecord> => {
+  const response = await fetch(`${API_BASE}/appointments/${appointmentId}/summary`, {
+    method: 'PATCH',
+    headers: withAuth(token),
+    body: JSON.stringify({ summary }),
+  });
+
+  const data = await parseJsonResponse(response);
+  return (data as AppointmentSingleResponse).appointment;
+};
+
+export const markAppointmentComplete = async (
+  token: string | null,
+  appointmentId: string
+): Promise<AppointmentRecord> => {
+  const response = await fetch(`${API_BASE}/appointments/${appointmentId}/complete`, {
+    method: 'PATCH',
+    headers: withAuth(token),
+  });
+
+  const data = await parseJsonResponse(response);
+  return (data as AppointmentSingleResponse).appointment;
+};
