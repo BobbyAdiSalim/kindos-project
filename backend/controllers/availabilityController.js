@@ -69,11 +69,14 @@ function applySlotOverrides(generatedSlots, specificSlots) {
 
   const extraSlots = specificSlots
     .filter((s) => s.is_available)
-    .map((s) => ({
-      startTime: s.start_time.substring(0, 5),
-      endTime: s.end_time.substring(0, 5),
-      appointmentTypes: s.appointment_type || ['virtual', 'in-person'],
-    }));
+    .flatMap((s) =>
+      generateTimeSlotsFromPattern(
+        s.start_time,
+        s.end_time,
+        s.appointment_duration || 30,
+        s.appointment_type || ['virtual', 'in-person']
+      )
+    );
 
   return [...filtered, ...extraSlots];
 }
@@ -263,6 +266,7 @@ export const createAvailabilitySlots = async (req, res) => {
           slot_date: slot.slot_date,
           start_time: slot.start_time,
           end_time: slot.end_time,
+          appointment_duration: slot.appointment_duration || 30,
           is_available: slot.is_available !== false,
           appointment_type: slot.appointment_type || ['virtual', 'in-person'],
         })
@@ -291,7 +295,7 @@ export const updateAvailabilitySlot = async (req, res) => {
   try {
     const userId = req.auth.userId;
     const { slotId } = req.params;
-    const { is_available, appointment_type, start_time, end_time } = req.body;
+    const { is_available, appointment_type, start_time, end_time, appointment_duration } = req.body;
 
     const doctor = await Doctor.findOne({ where: { user_id: userId } });
     if (!doctor) {
@@ -311,6 +315,7 @@ export const updateAvailabilitySlot = async (req, res) => {
     if (appointment_type) slot.appointment_type = appointment_type;
     if (start_time) slot.start_time = start_time;
     if (end_time) slot.end_time = end_time;
+    if (appointment_duration !== undefined) slot.appointment_duration = appointment_duration;
 
     await slot.save();
     res.json({ message: 'Slot updated successfully', slot });
