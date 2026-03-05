@@ -8,6 +8,25 @@ import Doctor from '../models/Doctor.js';
 import Appointment from '../models/Appointment.js';
 import { Op } from 'sequelize';
 
+const ALLOWED_DURATIONS = [30, 60];
+const ALLOWED_APPOINTMENT_TYPES = ['virtual', 'in-person'];
+
+function isValidDuration(d) {
+  return ALLOWED_DURATIONS.includes(Number(d));
+}
+
+function isValidTimeFormat(t) {
+  return typeof t === 'string' && /^\d{2}:\d{2}(:\d{2})?$/.test(t);
+}
+
+function isValidAppointmentType(types) {
+  return (
+    Array.isArray(types) &&
+    types.length > 0 &&
+    types.every((t) => ALLOWED_APPOINTMENT_TYPES.includes(t))
+  );
+}
+
 /**
  * Convert a time string ("HH:MM:SS" or "HH:MM") to minutes since midnight.
  */
@@ -136,6 +155,30 @@ export const setAvailabilityPatterns = async (req, res) => {
       return res.status(400).json({ message: 'Invalid patterns data' });
     }
 
+    for (const p of patterns) {
+      const dow = Number(p.day_of_week);
+      if (!Number.isInteger(dow) || dow < 0 || dow > 6) {
+        return res.status(400).json({ message: `Invalid day_of_week "${p.day_of_week}": must be 0 (Sun) – 6 (Sat)` });
+      }
+      if (!isValidTimeFormat(p.start_time) || !isValidTimeFormat(p.end_time)) {
+        return res.status(400).json({ message: 'Invalid time format — expected HH:MM' });
+      }
+      if (timeToMinutes(p.start_time) >= timeToMinutes(p.end_time)) {
+        return res.status(400).json({ message: 'start_time must be before end_time' });
+      }
+      const dur = p.appointment_duration ?? 30;
+      if (!isValidDuration(dur)) {
+        return res.status(400).json({
+          message: `Invalid appointment_duration "${dur}": must be one of ${ALLOWED_DURATIONS.join(', ')} minutes`,
+        });
+      }
+      if (p.appointment_type !== undefined && !isValidAppointmentType(p.appointment_type)) {
+        return res.status(400).json({
+          message: `Invalid appointment_type: must be a non-empty array containing only ${ALLOWED_APPOINTMENT_TYPES.join(', ')}`,
+        });
+      }
+    }
+
     // Find the doctor record
     const doctor = await Doctor.findOne({ where: { user_id: userId } });
     if (!doctor) {
@@ -166,6 +209,9 @@ export const setAvailabilityPatterns = async (req, res) => {
     });
   } catch (error) {
     console.error('Error setting availability patterns:', error);
+    if (error.name === 'SequelizeUniqueConstraintError') {
+      return res.status(400).json({ message: 'Duplicate pattern: same day and start time already exists' });
+    }
     res.status(500).json({ message: 'Failed to update availability patterns' });
   }
 };
@@ -254,6 +300,29 @@ export const createAvailabilitySlots = async (req, res) => {
       return res.status(400).json({ message: 'Invalid slots data' });
     }
 
+    for (const s of slots) {
+      if (!s.slot_date || !/^\d{4}-\d{2}-\d{2}$/.test(s.slot_date)) {
+        return res.status(400).json({ message: 'Invalid slot_date — expected YYYY-MM-DD' });
+      }
+      if (!isValidTimeFormat(s.start_time) || !isValidTimeFormat(s.end_time)) {
+        return res.status(400).json({ message: 'Invalid time format — expected HH:MM' });
+      }
+      if (timeToMinutes(s.start_time) >= timeToMinutes(s.end_time)) {
+        return res.status(400).json({ message: 'start_time must be before end_time' });
+      }
+      const dur = s.appointment_duration ?? 30;
+      if (!isValidDuration(dur)) {
+        return res.status(400).json({
+          message: `Invalid appointment_duration "${dur}": must be one of ${ALLOWED_DURATIONS.join(', ')} minutes`,
+        });
+      }
+      if (s.appointment_type !== undefined && !isValidAppointmentType(s.appointment_type)) {
+        return res.status(400).json({
+          message: `Invalid appointment_type: must be a non-empty array containing only ${ALLOWED_APPOINTMENT_TYPES.join(', ')}`,
+        });
+      }
+    }
+
     const doctor = await Doctor.findOne({ where: { user_id: userId } });
     if (!doctor) {
       return res.status(404).json({ message: 'Doctor profile not found' });
@@ -308,6 +377,26 @@ export const updateAvailabilitySlot = async (req, res) => {
 
     if (!slot) {
       return res.status(404).json({ message: 'Slot not found' });
+    }
+
+    // Validate provided fields
+    if ((start_time && !isValidTimeFormat(start_time)) || (end_time && !isValidTimeFormat(end_time))) {
+      return res.status(400).json({ message: 'Invalid time format — expected HH:MM' });
+    }
+    const effectiveStart = start_time || slot.start_time;
+    const effectiveEnd = end_time || slot.end_time;
+    if (timeToMinutes(effectiveStart) >= timeToMinutes(effectiveEnd)) {
+      return res.status(400).json({ message: 'start_time must be before end_time' });
+    }
+    if (appointment_duration !== undefined && !isValidDuration(appointment_duration)) {
+      return res.status(400).json({
+        message: `Invalid appointment_duration "${appointment_duration}": must be one of ${ALLOWED_DURATIONS.join(', ')} minutes`,
+      });
+    }
+    if (appointment_type !== undefined && !isValidAppointmentType(appointment_type)) {
+      return res.status(400).json({
+        message: `Invalid appointment_type: must be a non-empty array containing only ${ALLOWED_APPOINTMENT_TYPES.join(', ')}`,
+      });
     }
 
     // Update only provided fields
