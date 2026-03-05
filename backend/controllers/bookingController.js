@@ -737,7 +737,7 @@ export const updateAppointmentDecision = async (req, res) => {
       return res.status(400).json({ message: 'action must be either "confirm" or "decline".' });
     }
 
-    const updatedAppointment = await sequelize.transaction(async (transaction) => {
+    const { updatedAppointment, waitlistAssignment } = await sequelize.transaction(async (transaction) => {
       const doctor = await Doctor.findOne({
         where: { user_id: doctorUserId },
         transaction,
@@ -778,17 +778,27 @@ export const updateAppointmentDecision = async (req, res) => {
 
       await appointment.save({ transaction });
 
+      let waitlistAssignment = { assigned: false };
+      if (action === 'decline') {
+        waitlistAssignment = await waitlistService.fulfillWaitlistForCancelledAppointment({
+          cancelledAppointment: appointment,
+          cancelledByUserId: doctorUserId,
+          transaction,
+        });
+      }
+
       const hydratedAppointment = await Appointment.findByPk(appointment.id, {
         include: appointmentInclude,
         transaction,
       });
 
-      return hydratedAppointment;
+      return { updatedAppointment: hydratedAppointment, waitlistAssignment };
     });
 
     res.json({
       message: action === 'confirm' ? 'Booking confirmed successfully.' : 'Booking declined successfully.',
       appointment: serializeAppointment(updatedAppointment),
+      waitlist_assignment: waitlistAssignment,
     });
   } catch (error) {
     const statusCode = error instanceof HttpError ? error.status : 500;

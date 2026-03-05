@@ -149,6 +149,13 @@ export function JoinWaitlist() {
                         <Clock className="h-4 w-4" />
                         {formatTime24to12(entry.desired_start_time)}
                       </span>
+                      {entry.status === 'active'
+                        && typeof entry.queue_position === 'number'
+                        && typeof entry.queue_count === 'number' && (
+                        <span>
+                          Queue: #{entry.queue_position} of {entry.queue_count}
+                        </span>
+                      )}
                       <span>Notify: {entry.notification_preference}</span>
                     </div>
                   </div>

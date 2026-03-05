@@ -22,6 +22,8 @@ export interface WaitlistEntry {
   appointment_type: WaitlistAppointmentType;
   notification_preference: WaitlistNotificationPreference;
   status: WaitlistStatus;
+  queue_position: number | null;
+  queue_count: number | null;
   last_notified_at: string | null;
   created_at: string;
   updated_at: string;

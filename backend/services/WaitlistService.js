@@ -7,11 +7,13 @@ import {
   Message,
   Appointment,
 } from '../models/index.js';
+import { sendWaitlistAutoBookedEmail } from '../utils/waitlistEmail.js';
 
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_REGEX = /^([01]\d|2[0-3]):([0-5]\d)(:[0-5]\d)?$/;
 const APPOINTMENT_TYPES = new Set(['virtual', 'in-person']);
 const NOTIFICATION_PREFERENCES = new Set(['email', 'sms', 'both', 'in-app']);
+const EMAIL_NOTIFICATION_PREFERENCES = new Set(['email', 'both']);
 const OCCUPIED_SLOT_STATUSES = ['scheduled', 'confirmed'];
 const WAITLIST_AUTO_BOOK_REASON = 'Auto-booked from waitlist after slot cancellation.';
 
@@ -28,7 +30,73 @@ const timeToMinutes = (timeStr) => {
   return (hour * 60) + minute;
 };
 
+const shouldSendEmailNotification = (notificationPreference) =>
+  EMAIL_NOTIFICATION_PREFERENCES.has(String(notificationPreference || '').trim());
+
 class WaitlistService {
+  getQueueSlotCriteria(entry) {
+    return {
+      doctor_id: entry.doctor_id,
+      desired_date: entry.desired_date,
+      desired_start_time: normalizeTime(entry.desired_start_time),
+      desired_end_time: normalizeTime(entry.desired_end_time),
+      appointment_type: entry.appointment_type,
+    };
+  }
+
+  async getQueueMetricsForEntry(entry, transaction) {
+    if (!entry || entry.status !== 'active') {
+      return {
+        queuePosition: null,
+        queueCount: null,
+      };
+    }
+
+    const slotCriteria = this.getQueueSlotCriteria(entry);
+
+    const queueCount = await WaitlistEntry.count({
+      where: {
+        ...slotCriteria,
+        status: 'active',
+      },
+      transaction,
+    });
+
+    const queuePosition = await WaitlistEntry.count({
+      where: {
+        ...slotCriteria,
+        status: 'active',
+        [Op.or]: [
+          { created_at: { [Op.lt]: entry.created_at } },
+          {
+            created_at: entry.created_at,
+            id: { [Op.lte]: entry.id },
+          },
+        ],
+      },
+      transaction,
+    });
+
+    return {
+      queuePosition,
+      queueCount,
+    };
+  }
+
+  async attachQueueMetrics(entry, transaction) {
+    if (!entry) return entry;
+
+    const { queuePosition, queueCount } = await this.getQueueMetricsForEntry(entry, transaction);
+    entry.setDataValue('queue_position', queuePosition);
+    entry.setDataValue('queue_count', queueCount);
+    return entry;
+  }
+
+  async attachQueueMetricsToEntries(entries, transaction) {
+    await Promise.all(entries.map((entry) => this.attachQueueMetrics(entry, transaction)));
+    return entries;
+  }
+
   async getPatientByUserId(userId, transaction) {
     const patient = await Patient.findOne({
       where: { user_id: userId },
@@ -170,10 +238,10 @@ class WaitlistService {
       existing.notification_preference = bookingIntent.notificationPreference;
       existing.status = 'active';
       await existing.save({ transaction });
-      return existing;
+      return this.attachQueueMetrics(existing, transaction);
     }
 
-    return WaitlistEntry.create(
+    const createdEntry = await WaitlistEntry.create(
       {
         patient_id: patient.id,
         doctor_id: doctor.id,
@@ -185,14 +253,16 @@ class WaitlistService {
       },
       { transaction }
     );
+
+    return this.attachQueueMetrics(createdEntry, transaction);
   }
 
   async listMyEntries(patientUserId) {
     const patient = await this.getPatientByUserId(patientUserId);
-    return WaitlistEntry.findAll({
+    const entries = await WaitlistEntry.findAll({
       where: {
         patient_id: patient.id,
-        status: { [Op.ne]: 'removed' },
+        status: { [Op.in]: ['active', 'notified'] },
       },
       include: [
         {
@@ -203,6 +273,8 @@ class WaitlistService {
       ],
       order: [['desired_date', 'ASC'], ['created_at', 'DESC']],
     });
+
+    return this.attachQueueMetricsToEntries(entries);
   }
 
   async removeMyEntry({ patientUserId, waitlistEntryId, transaction }) {
@@ -250,18 +322,6 @@ class WaitlistService {
         appointment_type: appointmentType,
         status: 'active',
       },
-      include: [
-        {
-          model: Patient,
-          as: 'patient',
-          include: [{ model: User, as: 'user', attributes: ['id'] }],
-        },
-        {
-          model: Doctor,
-          as: 'doctor',
-          include: [{ model: User, as: 'user', attributes: ['id'] }],
-        },
-      ],
       order: [['created_at', 'ASC'], ['id', 'ASC']],
       transaction,
       lock: transaction.LOCK.UPDATE,
@@ -309,24 +369,57 @@ class WaitlistService {
       { transaction }
     );
 
+    const [entryPatient, entryDoctor] = await Promise.all([
+      Patient.findByPk(nextEntry.patient_id, {
+        include: [{ model: User, as: 'user', attributes: ['id', 'email', 'username'] }],
+        transaction,
+      }),
+      Doctor.findByPk(nextEntry.doctor_id, {
+        include: [{ model: User, as: 'user', attributes: ['id', 'username'] }],
+        transaction,
+      }),
+    ]);
+
     nextEntry.status = 'booked';
     nextEntry.last_notified_at = new Date();
     await nextEntry.save({ transaction });
 
-    const senderUserId = nextEntry.doctor?.user?.id || cancelledByUserId || null;
-    const receiverUserId = nextEntry.patient?.user?.id || null;
+    const senderUserId = entryDoctor?.user?.id || cancelledByUserId || null;
+    const receiverUserId = entryPatient?.user?.id || null;
 
     if (senderUserId && receiverUserId) {
-      await Message.create(
-        {
-          sender_id: senderUserId,
-          receiver_id: receiverUserId,
-          appointment_id: reassignedAppointment.id,
-          content:
-            'Great news! A cancelled slot was automatically reassigned to you from the waitlist. Please review your new appointment details.',
-        },
-        { transaction }
-      );
+      try {
+        await Message.create(
+          {
+            sender_id: senderUserId,
+            receiver_id: receiverUserId,
+            appointment_id: reassignedAppointment.id,
+            content:
+              'Great news! A cancelled slot was automatically reassigned to you from the waitlist. Please review your new appointment details.',
+          },
+          { transaction }
+        );
+      } catch (error) {
+        console.error('Failed to create waitlist auto-book message:', error);
+      }
+    }
+
+    if (shouldSendEmailNotification(nextEntry.notification_preference) && entryPatient?.user?.email) {
+      const patientDisplayName = entryPatient.full_name || entryPatient.user?.username || 'Patient';
+      const doctorDisplayName = entryDoctor?.full_name || entryDoctor?.user?.username || 'your provider';
+
+      // Keep email side-effect non-blocking for cancellation flow.
+      void sendWaitlistAutoBookedEmail({
+        to: entryPatient.user.email,
+        patientName: patientDisplayName,
+        doctorName: doctorDisplayName,
+        appointmentDate,
+        appointmentStartTime,
+        appointmentEndTime,
+        appointmentType,
+      }).catch((error) => {
+        console.error('Failed to send waitlist auto-book email:', error);
+      });
     }
 
     return {

@@ -270,7 +270,7 @@ export function Booking() {
 
     try {
       setWaitlistSubmitting(true);
-      await joinWaitlist(token, {
+      const waitlistEntry = await joinWaitlist(token, {
         doctor_user_id: doctorUserId,
         desired_date: format(selectedDate, 'yyyy-MM-dd'),
         desired_start_time: selectedBookedSlotDetails.start_time,
@@ -279,7 +279,16 @@ export function Booking() {
         notification_preference: waitlistPreference,
       });
 
-      toast.success('Added to waitlist for this appointment slot.');
+      if (
+        typeof waitlistEntry.queue_position === 'number'
+        && typeof waitlistEntry.queue_count === 'number'
+      ) {
+        toast.success(
+          `Added to waitlist. Queue position #${waitlistEntry.queue_position} of ${waitlistEntry.queue_count}.`
+        );
+      } else {
+        toast.success('Added to waitlist for this appointment slot.');
+      }
       navigate('/patient/waitlist');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to join waitlist.';
