@@ -27,6 +27,12 @@ const timeToMinutes = (timeStr) => {
   return (hour * 60) + minute;
 };
 
+const isFutureDateTime = (dateStr, timeStr) => {
+  const dateTime = new Date(`${dateStr}T${timeStr}`);
+  if (Number.isNaN(dateTime.getTime())) return false;
+  return dateTime.getTime() > Date.now();
+};
+
 class WaitlistService {
   getQueueSlotCriteria(entry) {
     return {
@@ -166,6 +172,12 @@ class WaitlistService {
     today.setHours(0, 0, 0, 0);
     if (Number.isNaN(requestedDate.getTime()) || requestedDate < today) {
       const error = new Error('desired_date must be today or in the future.');
+      error.status = 400;
+      throw error;
+    }
+
+    if (!isFutureDateTime(desiredDate, desiredStartTime)) {
+      const error = new Error('Waitlist time must be in the future.');
       error.status = 400;
       throw error;
     }

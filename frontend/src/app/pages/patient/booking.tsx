@@ -38,6 +38,14 @@ import {
   Video,
 } from 'lucide-react';
 
+const isFutureSlotForDate = (selectedDate: Date | undefined, startTime: string) => {
+  if (!selectedDate) return false;
+  const dateOnly = format(selectedDate, 'yyyy-MM-dd');
+  const slotDateTime = new Date(`${dateOnly}T${startTime}`);
+  if (Number.isNaN(slotDateTime.getTime())) return false;
+  return slotDateTime.getTime() > Date.now();
+};
+
 export function Booking() {
   const { doctorId } = useParams();
   const navigate = useNavigate();
@@ -140,8 +148,14 @@ export function Booking() {
   const virtualUnavailable = !doctor?.virtualAvailable;
   const inPersonUnavailable = !doctor?.inPersonAvailable;
   const appointmentTypeLocked = !selectedTime;
-  const selectedSlot = availableSlots.find((slot) => slot.start_time === selectedTime);
-  const selectedBookedSlotDetails = bookedSlots.find((slot) => slot.start_time === selectedBookedSlot);
+  const visibleAvailableSlots = availableSlots.filter(
+    (slot) => isFutureSlotForDate(selectedDate, slot.start_time)
+  );
+  const visibleBookedSlots = bookedSlots.filter(
+    (slot) => isFutureSlotForDate(selectedDate, slot.start_time)
+  );
+  const selectedSlot = visibleAvailableSlots.find((slot) => slot.start_time === selectedTime);
+  const selectedBookedSlotDetails = visibleBookedSlots.find((slot) => slot.start_time === selectedBookedSlot);
   const waitlistMode = Boolean(selectedBookedSlotDetails && !selectedTime);
   const slotSupportsType = (slot: TimeSlot, type: 'virtual' | 'in-person') =>
     Array.isArray(slot.appointment_types) && slot.appointment_types.includes(type);
@@ -180,6 +194,15 @@ export function Booking() {
       setDuration(String(minutes));
     }
   }, [selectedSlot]);
+
+  useEffect(() => {
+    if (selectedTime && !visibleAvailableSlots.some((slot) => slot.start_time === selectedTime)) {
+      setSelectedTime('');
+    }
+    if (selectedBookedSlot && !visibleBookedSlots.some((slot) => slot.start_time === selectedBookedSlot)) {
+      setSelectedBookedSlot('');
+    }
+  }, [selectedTime, selectedBookedSlot, visibleAvailableSlots, visibleBookedSlots]);
 
   if (doctorLoading) {
     return (
@@ -351,7 +374,11 @@ export function Booking() {
               mode="single"
               selected={selectedDate}
               onSelect={setSelectedDate}
-              disabled={(date) => date < new Date()}
+              disabled={(date) => {
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                return date < today;
+              }}
               className="rounded-md border"
             />
             {selectedDate && (
@@ -373,10 +400,10 @@ export function Booking() {
               {!slotsLoading && !slotsError && (
                 <div className="flex items-center gap-2">
                   <Badge variant="secondary">
-                    {availableSlots.length} available
+                    {visibleAvailableSlots.length} available
                   </Badge>
                   <Badge variant="outline" className="border-amber-300 text-amber-700">
-                    {bookedSlots.length} booked
+                    {visibleBookedSlots.length} booked
                   </Badge>
                 </div>
               )}
@@ -394,7 +421,7 @@ export function Booking() {
                 <p className="font-semibold mb-1">Unable to load times</p>
                 <p className="text-sm text-muted-foreground">{slotsError}</p>
               </div>
-            ) : availableSlots.length === 0 && bookedSlots.length === 0 ? (
+            ) : visibleAvailableSlots.length === 0 && visibleBookedSlots.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12">
                 <Clock className="h-12 w-12 mb-4 text-muted-foreground" />
                 <p className="font-semibold mb-1">No time slots found</p>
@@ -407,11 +434,11 @@ export function Booking() {
                     <p className="text-sm font-medium">Available Now</p>
                     <p className="text-xs text-muted-foreground">Book immediately</p>
                   </div>
-                  {availableSlots.length === 0 ? (
+                  {visibleAvailableSlots.length === 0 ? (
                     <p className="text-sm text-muted-foreground">No open slots on this date.</p>
                   ) : (
                     <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto">
-                      {availableSlots.map((slot) => (
+                      {visibleAvailableSlots.map((slot) => (
                         <Button
                           key={slot.start_time}
                           variant={selectedTime === slot.start_time ? 'default' : 'outline'}
@@ -459,11 +486,11 @@ export function Booking() {
                     <p className="text-sm font-medium text-amber-900">Booked Slots</p>
                     <p className="text-xs text-amber-700">Join waitlist for these times</p>
                   </div>
-                  {bookedSlots.length === 0 ? (
+                  {visibleBookedSlots.length === 0 ? (
                     <p className="text-sm text-amber-800">No booked slots to waitlist on this date.</p>
                   ) : (
                     <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto">
-                      {bookedSlots.map((slot) => (
+                      {visibleBookedSlots.map((slot) => (
                         <Button
                           key={`booked-${slot.start_time}`}
                           variant={selectedBookedSlot === slot.start_time ? 'secondary' : 'outline'}

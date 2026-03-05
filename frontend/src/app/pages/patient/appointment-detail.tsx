@@ -39,6 +39,13 @@ const mapAppointmentStatus = (appointment: AppointmentRecord) => {
 };
 
 const parseDateOnlyLocal = (value: string) => new Date(`${value}T00:00:00`);
+const isFutureSlotForDate = (selectedDate: Date | undefined, startTime: string) => {
+  if (!selectedDate) return false;
+  const dateOnly = format(selectedDate, 'yyyy-MM-dd');
+  const slotDateTime = new Date(`${dateOnly}T${startTime}`);
+  if (Number.isNaN(slotDateTime.getTime())) return false;
+  return slotDateTime.getTime() > Date.now();
+};
 
 export function AppointmentDetail() {
   const { id } = useParams();
@@ -86,7 +93,10 @@ export function AppointmentDetail() {
     [appointment]
   );
 
-  const selectedSlot = availableSlots.find((slot) => slot.start_time === rescheduleTime);
+  const visibleAvailableSlots = availableSlots.filter(
+    (slot) => isFutureSlotForDate(rescheduleDate, slot.start_time)
+  );
+  const selectedSlot = visibleAvailableSlots.find((slot) => slot.start_time === rescheduleTime);
   const slotSupportsType = (slot: TimeSlot, type: 'virtual' | 'in-person') =>
     Array.isArray(slot.appointment_types) && slot.appointment_types.includes(type);
   const canRescheduleOrCancel = appointment
@@ -116,6 +126,12 @@ export function AppointmentDetail() {
     if (!rescheduleMode || !doctorUserId || !rescheduleDate) return;
     loadSlots(rescheduleDate, doctorUserId);
   }, [rescheduleMode, appointment?.doctor?.user_id, rescheduleDate]);
+
+  useEffect(() => {
+    if (rescheduleTime && !visibleAvailableSlots.some((slot) => slot.start_time === rescheduleTime)) {
+      setRescheduleTime('');
+    }
+  }, [rescheduleTime, visibleAvailableSlots]);
 
   if (loading) {
     return <div className="container mx-auto px-4 py-12 text-center">Loading appointment details...</div>;
@@ -356,7 +372,11 @@ export function AppointmentDetail() {
                     mode="single"
                     selected={rescheduleDate}
                     onSelect={setRescheduleDate}
-                    disabled={(date) => date < new Date()}
+                    disabled={(date) => {
+                      const today = new Date();
+                      today.setHours(0, 0, 0, 0);
+                      return date < today;
+                    }}
                     className="rounded-md border mt-2"
                   />
                 </div>
@@ -371,11 +391,11 @@ export function AppointmentDetail() {
                       </div>
                     ) : slotsError ? (
                       <p className="text-sm text-destructive">{slotsError}</p>
-                    ) : availableSlots.length === 0 ? (
+                    ) : visibleAvailableSlots.length === 0 ? (
                       <p className="text-sm text-muted-foreground">No available slots for this date.</p>
                     ) : (
                       <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
-                        {availableSlots.map((slot) => (
+                        {visibleAvailableSlots.map((slot) => (
                           <Button
                             key={`${slot.start_time}-${slot.end_time}`}
                             variant={rescheduleTime === slot.start_time ? 'default' : 'outline'}

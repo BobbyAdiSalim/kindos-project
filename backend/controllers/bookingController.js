@@ -44,6 +44,12 @@ const timeToMinutes = (timeStr) => {
   return (hour * 60) + minute;
 };
 
+const isFutureDateTime = (dateStr, timeStr) => {
+  const dateTime = new Date(`${dateStr}T${timeStr}`);
+  if (Number.isNaN(dateTime.getTime())) return false;
+  return dateTime.getTime() > Date.now();
+};
+
 const minutesToTime = (minutes) => {
   const h = Math.floor(minutes / 60).toString().padStart(2, '0');
   const m = (minutes % 60).toString().padStart(2, '0');
@@ -233,6 +239,10 @@ const validateBookingPayload = (payload) => {
 
   const duration = timeToMinutes(endTime) - timeToMinutes(startTime);
 
+  if (!isFutureDateTime(appointmentDate, startTime)) {
+    throw new HttpError(400, 'Appointment time must be in the future.');
+  }
+
   return {
     doctorUserId,
     appointmentDate,
@@ -270,6 +280,11 @@ const validateSlotSelectionPayload = (payload) => {
   }
 
   const duration = timeToMinutes(endTime) - timeToMinutes(startTime);
+
+  if (!isFutureDateTime(appointmentDate, startTime)) {
+    throw new HttpError(400, 'Appointment time must be in the future.');
+  }
+
   return {
     appointmentDate,
     startTime,
@@ -297,6 +312,10 @@ const ensureSlotIsBookable = async ({
   today.setHours(0, 0, 0, 0);
   if (requestedDate < today) {
     throw new HttpError(400, 'Cannot book appointments in the past.');
+  }
+
+  if (!isFutureDateTime(appointmentDate, startTime)) {
+    throw new HttpError(400, 'Appointment time must be in the future.');
   }
 
   if (appointmentType === 'virtual' && !doctorProfile.virtual_available) {

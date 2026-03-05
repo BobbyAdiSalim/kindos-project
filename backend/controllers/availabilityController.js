@@ -36,6 +36,12 @@ function timeToMinutes(timeStr) {
   return parseInt(parts[0]) * 60 + parseInt(parts[1]);
 }
 
+function isFutureDateTime(dateStr, timeStr) {
+  const dateTime = new Date(`${dateStr}T${timeStr}`);
+  if (Number.isNaN(dateTime.getTime())) return false;
+  return dateTime.getTime() > Date.now();
+}
+
 /**
  * Convert minutes since midnight to "HH:MM" string.
  */
@@ -581,6 +587,10 @@ export const getBookableSlots = async (req, res) => {
         bookedAppointmentType: overlappingAppointment.appointment_type,
       });
     }
+
+    // Exclude slots that are already in the past at request time.
+    availableSlots = availableSlots.filter((slot) => isFutureDateTime(date, slot.startTime));
+    bookedSlots = bookedSlots.filter((slot) => isFutureDateTime(date, slot.startTime));
 
     // 7. Optionally filter by appointment type
     if (appointmentType) {
