@@ -9,19 +9,24 @@ import { Op } from 'sequelize';
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { sequelize, User, Patient, Doctor, AdminLog } from '../models/index.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-key';
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '1h';
+const cleanEnv = (value, fallback = '') => {
+  if (value === undefined || value === null || value === '') return fallback;
+  return String(value).replace(/\r/g, '').trim();
+};
+
+const JWT_SECRET = cleanEnv(process.env.JWT_SECRET, 'dev-secret-key');
+const JWT_EXPIRES_IN = cleanEnv(process.env.JWT_EXPIRES_IN, '1h');
 const MIN_PASSWORD_LENGTH = 8;
-const RESET_TOKEN_EXPIRES_MINUTES = Number(process.env.RESET_TOKEN_EXPIRES_MINUTES || 60);
-const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+const RESET_TOKEN_EXPIRES_MINUTES = Number(cleanEnv(process.env.RESET_TOKEN_EXPIRES_MINUTES, '60'));
+const FRONTEND_URL = cleanEnv(process.env.FRONTEND_URL, 'http://localhost:5173');
 const REGISTRABLE_ROLES = new Set(['patient', 'doctor']);
 const MAX_VERIFICATION_DOCUMENT_BYTES = 5 * 1024 * 1024;
-const R2_BUCKET_NAME = process.env.R2_BUCKET_NAME || '';
-const R2_ENDPOINT = process.env.R2_ENDPOINT || '';
-const R2_REGION = process.env.R2_REGION || 'auto';
-const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID || '';
-const R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY || '';
-const R2_VERIFICATION_PREFIX = process.env.R2_VERIFICATION_PREFIX || 'verification-docs';
+const R2_BUCKET_NAME = cleanEnv(process.env.R2_BUCKET_NAME);
+const R2_ENDPOINT = cleanEnv(process.env.R2_ENDPOINT);
+const R2_REGION = cleanEnv(process.env.R2_REGION, 'auto');
+const R2_ACCESS_KEY_ID = cleanEnv(process.env.R2_ACCESS_KEY_ID);
+const R2_SECRET_ACCESS_KEY = cleanEnv(process.env.R2_SECRET_ACCESS_KEY);
+const R2_VERIFICATION_PREFIX = cleanEnv(process.env.R2_VERIFICATION_PREFIX, 'verification-docs');
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const UPLOADS_DIR = path.join(__dirname, '..', 'uploads', 'verification-docs');
@@ -119,7 +124,7 @@ const buildResetPasswordEmailHtml = ({ resetLink }) => {
 };
 
 const sendPasswordResetEmail = async ({ to, resetLink }) => {
-  const mailProvider = process.env.EMAIL_PROVIDER || 'console';
+  const mailProvider = cleanEnv(process.env.EMAIL_PROVIDER, 'console');
   const text = `You requested a password reset. Use this link to reset your password: ${resetLink}. This link expires in ${RESET_TOKEN_EXPIRES_MINUTES} minutes.`;
   const html = buildResetPasswordEmailHtml({ resetLink });
 
@@ -133,17 +138,17 @@ const sendPasswordResetEmail = async ({ to, resetLink }) => {
 
   const { default: nodemailer } = await import('nodemailer');
   const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: Number(process.env.SMTP_PORT || 587),
-    secure: String(process.env.SMTP_SECURE || 'false') === 'true',
+    host: cleanEnv(process.env.SMTP_HOST),
+    port: Number(cleanEnv(process.env.SMTP_PORT, '587')),
+    secure: cleanEnv(process.env.SMTP_SECURE, 'false') === 'true',
     auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
+      user: cleanEnv(process.env.SMTP_USER),
+      pass: cleanEnv(process.env.SMTP_PASS),
     },
   });
 
   await transporter.sendMail({
-    from: process.env.EMAIL_FROM || process.env.SMTP_USER,
+    from: cleanEnv(process.env.EMAIL_FROM) || cleanEnv(process.env.SMTP_USER),
     to,
     subject: 'Reset your password',
     text,

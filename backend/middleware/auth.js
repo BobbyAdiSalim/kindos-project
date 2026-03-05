@@ -1,7 +1,12 @@
 import jwt from 'jsonwebtoken';
 import { User } from '../models/index.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-key';
+const cleanEnv = (value, fallback = undefined) => {
+  if (value === undefined || value === null || value === '') return fallback;
+  return String(value).replace(/\r/g, '').trim();
+};
+
+const JWT_SECRET = cleanEnv(process.env.JWT_SECRET, 'dev-secret-key');
 
 export const requireAuth = async (req, res, next) => {
   try {

@@ -61,13 +61,6 @@ interface AuthApiResponse {
   };
 }
 
-const normalizeToken = (value: unknown): string | null => {
-  if (typeof value !== 'string') return null;
-  const cleaned = value.replace(/[\r\n]/g, '').trim();
-  if (!cleaned) return null;
-  return cleaned.startsWith('Bearer ') ? cleaned.slice(7).trim() : cleaned;
-};
-
 const mapApiUserToUser = (apiUser: AuthApiResponse['user']): User => ({
   id: String(apiUser.id),
   username: apiUser.username,
@@ -101,13 +94,10 @@ const parseTokenExpiry = (token: string): number | null => {
 };
 
 const saveAuthState = (user: User, token: string) => {
-  const normalizedToken = normalizeToken(token);
-  if (!normalizedToken) return;
-
-  const tokenExpiry = parseTokenExpiry(normalizedToken);
+  const tokenExpiry = parseTokenExpiry(token);
   const expiresAt = tokenExpiry && tokenExpiry > Date.now() ? tokenExpiry : Date.now() + SESSION_DURATION_MS;
 
-  const payload: StoredAuthState = { user, token: normalizedToken, expiresAt };
+  const payload: StoredAuthState = { user, token, expiresAt };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
 };
 
@@ -122,15 +112,9 @@ const loadAuthState = (): { user: User | null; token: string | null } => {
       return { user: null, token: null };
     }
 
-    const normalizedToken = normalizeToken(parsed.token);
-    if (!normalizedToken) {
-      localStorage.removeItem(STORAGE_KEY);
-      return { user: null, token: null };
-    }
-
     return {
       user: parsed.user || null,
-      token: normalizedToken,
+      token: parsed.token || null,
     };
   } catch {
     localStorage.removeItem(STORAGE_KEY);
@@ -194,10 +178,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
 
     const nextUser = mapApiUserToUser((data as AuthApiResponse).user);
-    const nextToken = normalizeToken((data as AuthApiResponse).token);
-    if (!nextToken) {
-      throw new Error('Login failed');
-    }
+    const nextToken = (data as AuthApiResponse).token;
 
     saveAuthState(nextUser, nextToken);
     setAuthState({ user: nextUser, token: nextToken });
@@ -233,10 +214,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
 
     const nextUser = mapApiUserToUser((data as AuthApiResponse).user);
-    const nextToken = normalizeToken((data as AuthApiResponse).token);
-    if (!nextToken) {
-      throw new Error('Registration failed');
-    }
+    const nextToken = (data as AuthApiResponse).token;
 
     saveAuthState(nextUser, nextToken);
     setAuthState({ user: nextUser, token: nextToken });
@@ -244,13 +222,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const logout = async () => {
     try {
-      const safeToken = normalizeToken(token);
-      if (safeToken) {
+      if (token) {
         await fetch(`${API_BASE}/auth/logout`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${safeToken}`,
+            Authorization: `Bearer ${token}`,
           },
         });
       }
