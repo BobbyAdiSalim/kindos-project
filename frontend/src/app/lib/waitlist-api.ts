@@ -1,7 +1,6 @@
 const API_BASE = '/api';
 
 export type WaitlistAppointmentType = 'virtual' | 'in-person';
-export type WaitlistNotificationPreference = 'email' | 'sms' | 'both' | 'in-app';
 export type WaitlistStatus = 'active' | 'notified' | 'booked' | 'removed';
 
 export interface WaitlistDoctor {
@@ -20,7 +19,6 @@ export interface WaitlistEntry {
   desired_start_time: string;
   desired_end_time: string;
   appointment_type: WaitlistAppointmentType;
-  notification_preference: WaitlistNotificationPreference;
   status: WaitlistStatus;
   queue_position: number | null;
   queue_count: number | null;
@@ -36,7 +34,6 @@ export interface JoinWaitlistPayload {
   desired_start_time: string;
   desired_end_time: string;
   appointment_type: WaitlistAppointmentType;
-  notification_preference?: WaitlistNotificationPreference;
 }
 
 interface WaitlistSingleResponse {

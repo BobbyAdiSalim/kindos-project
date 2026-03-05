@@ -156,7 +156,6 @@ export function JoinWaitlist() {
                           Queue: #{entry.queue_position} of {entry.queue_count}
                         </span>
                       )}
-                      <span>Notify: {entry.notification_preference}</span>
                     </div>
                   </div>
 

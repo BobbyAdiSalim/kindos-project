@@ -33,6 +33,7 @@ export interface AppointmentRecord {
   cancelled_at: string | null;
   cancelled_by: number | null;
   cancellation_reason: string | null;
+  notify_on_doctor_approval: boolean;
   declined_by_doctor: boolean;
   doctor: AppointmentDoctor | null;
   patient: AppointmentPerson | null;
@@ -49,6 +50,7 @@ export interface BookAppointmentPayload {
   reason: string;
   notes?: string;
   accessibility_needs?: string[];
+  notify_on_doctor_approval?: boolean;
 }
 
 export interface RescheduleAppointmentPayload {

@@ -23,7 +23,6 @@ import {
 } from '@/app/lib/appointment-api';
 import {
   joinWaitlist,
-  type WaitlistNotificationPreference,
 } from '@/app/lib/waitlist-api';
 import { useAuth } from '@/app/lib/auth-context';
 import { cn } from '@/app/components/ui/utils';
@@ -62,7 +61,7 @@ export function Booking() {
   const [bookingSubmitting, setBookingSubmitting] = useState(false);
   const [selectedBookedSlot, setSelectedBookedSlot] = useState('');
   const [waitlistSubmitting, setWaitlistSubmitting] = useState(false);
-  const [waitlistPreference, setWaitlistPreference] = useState<WaitlistNotificationPreference>('in-app');
+  const [notifyOnDoctorApproval, setNotifyOnDoctorApproval] = useState(true);
 
   const loadSlots = async (date: Date, userId: string) => {
     setSlotsLoading(true);
@@ -238,6 +237,7 @@ export function Booking() {
         reason: reason.trim(),
         notes: notes.trim() || undefined,
         accessibility_needs: accessibility,
+        notify_on_doctor_approval: notifyOnDoctorApproval,
       });
 
       toast.success('Appointment request submitted.');
@@ -276,7 +276,6 @@ export function Booking() {
         desired_start_time: selectedBookedSlotDetails.start_time,
         desired_end_time: selectedBookedSlotDetails.end_time,
         appointment_type: selectedBookedSlotDetails.booked_appointment_type,
-        notification_preference: waitlistPreference,
       });
 
       if (
@@ -678,20 +677,29 @@ export function Booking() {
               </Badge>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="waitlist-preference">Notification Preference</Label>
-              <Select
-                value={waitlistPreference}
-                onValueChange={(value) => setWaitlistPreference(value as WaitlistNotificationPreference)}
-              >
-                <SelectTrigger id="waitlist-preference" className="max-w-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="in-app">In-app only</SelectItem>
-                  <SelectItem value="email">Email only</SelectItem>
-                </SelectContent>
-              </Select>
+          </CardContent>
+        </Card>
+      )}
+
+      {!waitlistMode && (
+        <Card className="mt-6">
+          <CardContent className="p-6">
+            <div className="flex items-start space-x-3">
+              <input
+                type="checkbox"
+                id="notify-doctor-approval"
+                checked={notifyOnDoctorApproval}
+                onChange={(e) => setNotifyOnDoctorApproval(e.target.checked)}
+                className="h-4 w-4 rounded border-input mt-1"
+              />
+              <div className="space-y-1">
+                <Label htmlFor="notify-doctor-approval" className="cursor-pointer">
+                  Email me when doctor approves this appointment
+                </Label>
+                <p className="text-sm text-muted-foreground">
+                  You will only receive an appointment email if the doctor confirms your request.
+                </p>
+              </div>
             </div>
           </CardContent>
         </Card>

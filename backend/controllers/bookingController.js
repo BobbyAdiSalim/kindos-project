@@ -10,6 +10,12 @@ import {
   AvailabilitySlot,
 } from '../models/index.js';
 import waitlistService from '../services/WaitlistService.js';
+import {
+  sendDoctorApprovalEmail,
+  sendDoctorCancellationEmail,
+  sendPatientCancellationEmailToDoctor,
+  sendPatientRescheduleEmailToDoctor,
+} from '../utils/appointmentEmail.js';
 
 const ACTIVE_APPOINTMENT_STATUSES = ['scheduled', 'confirmed'];
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
@@ -137,6 +143,7 @@ const serializeAppointment = (appointment) => {
     cancelled_at: appointment.cancelled_at,
     cancelled_by: appointment.cancelled_by,
     cancellation_reason: appointment.cancellation_reason,
+    notify_on_doctor_approval: appointment.notify_on_doctor_approval,
     declined_by_doctor: isDeclinedByDoctor(appointment),
     doctor: doctorProfile
       ? {
@@ -167,12 +174,12 @@ const appointmentInclude = [
   {
     model: Doctor,
     as: 'doctor',
-    include: [{ model: User, as: 'user', attributes: ['id', 'username'] }],
+    include: [{ model: User, as: 'user', attributes: ['id', 'username', 'email'] }],
   },
   {
     model: Patient,
     as: 'patient',
-    include: [{ model: User, as: 'user', attributes: ['id', 'username'] }],
+    include: [{ model: User, as: 'user', attributes: ['id', 'username', 'email'] }],
   },
 ];
 
@@ -184,6 +191,9 @@ const validateBookingPayload = (payload) => {
   const appointmentType = String(payload.appointment_type || '').trim();
   const reason = String(payload.reason || '').trim();
   const notes = payload.notes ? String(payload.notes).trim() : null;
+  const notifyOnDoctorApproval = payload.notify_on_doctor_approval === undefined
+    ? true
+    : payload.notify_on_doctor_approval;
 
   if (!Number.isInteger(doctorUserId) || doctorUserId <= 0) {
     throw new HttpError(400, 'Valid doctor_user_id is required.');
@@ -209,6 +219,10 @@ const validateBookingPayload = (payload) => {
     throw new HttpError(400, 'reason is required.');
   }
 
+  if (typeof notifyOnDoctorApproval !== 'boolean') {
+    throw new HttpError(400, 'notify_on_doctor_approval must be a boolean.');
+  }
+
   const rawAccessibility = Array.isArray(payload.accessibility_needs)
     ? payload.accessibility_needs
     : [];
@@ -229,6 +243,7 @@ const validateBookingPayload = (payload) => {
     notes,
     accessibilityNeeds,
     duration,
+    notifyOnDoctorApproval,
   };
 };
 
@@ -441,6 +456,7 @@ export const createAppointmentBooking = async (req, res) => {
           reason: booking.reason,
           notes: booking.notes,
           accessibility_needs: booking.accessibilityNeeds,
+          notify_on_doctor_approval: booking.notifyOnDoctorApproval,
         },
         { transaction }
       );
@@ -545,6 +561,23 @@ export const cancelAppointmentByPatient = async (req, res) => {
       appointment: serializeAppointment(updatedAppointment),
       waitlist_assignment: waitlistAssignment,
     });
+
+    const doctorEmail = updatedAppointment?.doctor?.user?.email;
+    if (doctorEmail) {
+      const doctorName = updatedAppointment.doctor?.full_name || updatedAppointment.doctor?.user?.username || 'Doctor';
+      const patientName = updatedAppointment.patient?.full_name || updatedAppointment.patient?.user?.username || 'Patient';
+
+      void sendPatientCancellationEmailToDoctor({
+        to: doctorEmail,
+        doctorName,
+        patientName,
+        appointmentDate: updatedAppointment.appointment_date,
+        appointmentTime: updatedAppointment.start_time,
+        appointmentType: updatedAppointment.appointment_type,
+      }).catch((emailError) => {
+        console.error('Failed to send patient cancellation email to doctor:', emailError);
+      });
+    }
   } catch (error) {
     const statusCode = error instanceof HttpError ? error.status : 500;
     const message = error instanceof HttpError
@@ -640,6 +673,23 @@ export const rescheduleAppointmentByPatient = async (req, res) => {
       message: 'Appointment rescheduled. Waiting for doctor reconfirmation.',
       appointment: serializeAppointment(updatedAppointment),
     });
+
+    const doctorEmail = updatedAppointment?.doctor?.user?.email;
+    if (doctorEmail) {
+      const doctorName = updatedAppointment.doctor?.full_name || updatedAppointment.doctor?.user?.username || 'Doctor';
+      const patientName = updatedAppointment.patient?.full_name || updatedAppointment.patient?.user?.username || 'Patient';
+
+      void sendPatientRescheduleEmailToDoctor({
+        to: doctorEmail,
+        doctorName,
+        patientName,
+        appointmentDate: updatedAppointment.appointment_date,
+        appointmentTime: updatedAppointment.start_time,
+        appointmentType: updatedAppointment.appointment_type,
+      }).catch((emailError) => {
+        console.error('Failed to send patient reschedule email to doctor:', emailError);
+      });
+    }
   } catch (error) {
     const statusCode = error instanceof HttpError ? error.status : 500;
     const message = error instanceof HttpError
@@ -817,6 +867,42 @@ export const updateAppointmentDecision = async (req, res) => {
       appointment: serializeAppointment(updatedAppointment),
       waitlist_assignment: waitlistAssignment,
     });
+
+    const patientEmail = updatedAppointment?.patient?.user?.email;
+    const patientName =
+      updatedAppointment?.patient?.full_name
+      || updatedAppointment?.patient?.user?.username
+      || 'Patient';
+    const doctorName =
+      updatedAppointment?.doctor?.full_name
+      || updatedAppointment?.doctor?.user?.username
+      || 'your provider';
+
+    if (action === 'confirm' && updatedAppointment?.notify_on_doctor_approval && patientEmail) {
+      void sendDoctorApprovalEmail({
+        to: patientEmail,
+        patientName,
+        doctorName,
+        appointmentDate: updatedAppointment.appointment_date,
+        appointmentTime: updatedAppointment.start_time,
+        appointmentType: updatedAppointment.appointment_type,
+      }).catch((emailError) => {
+        console.error('Failed to send doctor approval email:', emailError);
+      });
+    }
+
+    if (action === 'decline' && patientEmail) {
+      void sendDoctorCancellationEmail({
+        to: patientEmail,
+        patientName,
+        doctorName,
+        appointmentDate: updatedAppointment.appointment_date,
+        appointmentTime: updatedAppointment.start_time,
+        appointmentType: updatedAppointment.appointment_type,
+      }).catch((emailError) => {
+        console.error('Failed to send doctor decline email:', emailError);
+      });
+    }
   } catch (error) {
     const statusCode = error instanceof HttpError ? error.status : 500;
     const message = error instanceof HttpError

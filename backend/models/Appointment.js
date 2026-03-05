@@ -103,6 +103,12 @@ const Appointment = sequelize.define(
       type: DataTypes.TEXT,
       allowNull: true,
     },
+    notify_on_doctor_approval: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: true,
+      comment: 'Whether patient should receive an email when doctor confirms appointment',
+    },
   },
   {
     tableName: 'appointments',

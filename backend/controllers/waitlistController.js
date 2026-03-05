@@ -9,7 +9,6 @@ const serializeWaitlistEntry = (entry) => ({
   desired_start_time: entry.desired_start_time,
   desired_end_time: entry.desired_end_time,
   appointment_type: entry.appointment_type,
-  notification_preference: entry.notification_preference,
   status: entry.status,
   queue_position: entry.getDataValue('queue_position') ?? null,
   queue_count: entry.getDataValue('queue_count') ?? null,

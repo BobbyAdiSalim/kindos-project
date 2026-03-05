@@ -7,13 +7,10 @@ import {
   Message,
   Appointment,
 } from '../models/index.js';
-import { sendWaitlistAutoBookedEmail, sendWaitlistSlotOpenedEmail } from '../utils/waitlistEmail.js';
 
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_REGEX = /^([01]\d|2[0-3]):([0-5]\d)(:[0-5]\d)?$/;
 const APPOINTMENT_TYPES = new Set(['virtual', 'in-person']);
-const NOTIFICATION_PREFERENCES = new Set(['email', 'sms', 'both', 'in-app']);
-const EMAIL_NOTIFICATION_PREFERENCES = new Set(['email', 'both']);
 const OCCUPIED_SLOT_STATUSES = ['scheduled', 'confirmed'];
 const WAITLIST_AUTO_BOOK_REASON = 'Auto-booked from waitlist after slot cancellation.';
 
@@ -29,9 +26,6 @@ const timeToMinutes = (timeStr) => {
   const [hour, minute] = String(timeStr).split(':').map((part) => parseInt(part, 10));
   return (hour * 60) + minute;
 };
-
-const shouldSendEmailNotification = (notificationPreference) =>
-  EMAIL_NOTIFICATION_PREFERENCES.has(String(notificationPreference || '').trim());
 
 class WaitlistService {
   getQueueSlotCriteria(entry) {
@@ -136,7 +130,6 @@ class WaitlistService {
     const desiredStartTime = normalizeTime(payload.desired_start_time);
     const desiredEndTime = normalizeTime(payload.desired_end_time);
     const appointmentType = String(payload.appointment_type || '').trim();
-    const notificationPreference = String(payload.notification_preference || 'in-app').trim();
 
     if (!Number.isInteger(doctorUserId) || doctorUserId <= 0) {
       const error = new Error('Valid doctor_user_id is required.');
@@ -168,12 +161,6 @@ class WaitlistService {
       throw error;
     }
 
-    if (!NOTIFICATION_PREFERENCES.has(notificationPreference)) {
-      const error = new Error('Invalid notification_preference.');
-      error.status = 400;
-      throw error;
-    }
-
     const requestedDate = new Date(`${desiredDate}T00:00:00`);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -189,7 +176,6 @@ class WaitlistService {
       desiredStartTime,
       desiredEndTime,
       appointmentType,
-      notificationPreference,
     };
   }
 
@@ -235,7 +221,6 @@ class WaitlistService {
     });
 
     if (existing) {
-      existing.notification_preference = bookingIntent.notificationPreference;
       existing.status = 'active';
       await existing.save({ transaction });
       return this.attachQueueMetrics(existing, transaction);
@@ -249,7 +234,6 @@ class WaitlistService {
         desired_start_time: bookingIntent.desiredStartTime,
         desired_end_time: bookingIntent.desiredEndTime,
         appointment_type: bookingIntent.appointmentType,
-        notification_preference: bookingIntent.notificationPreference,
       },
       { transaction }
     );
@@ -404,24 +388,6 @@ class WaitlistService {
       }
     }
 
-    if (entryPatient?.user?.email) {
-      const patientDisplayName = entryPatient.full_name || entryPatient.user?.username || 'Patient';
-      const doctorDisplayName = entryDoctor?.full_name || entryDoctor?.user?.username || 'your provider';
-
-      // Auto-booking removes the patient from active waitlist; always attempt email notification.
-      void sendWaitlistAutoBookedEmail({
-        to: entryPatient.user.email,
-        patientName: patientDisplayName,
-        doctorName: doctorDisplayName,
-        appointmentDate,
-        appointmentStartTime,
-        appointmentEndTime,
-        appointmentType,
-      }).catch((error) => {
-        console.error('Failed to send waitlist auto-book email:', error);
-      });
-    }
-
     return {
       assigned: true,
       waitlistEntryId: nextEntry.id,
@@ -489,23 +455,6 @@ class WaitlistService {
       entry.status = 'notified';
       entry.last_notified_at = now;
       await entry.save({ transaction });
-
-      if (shouldSendEmailNotification(entry.notification_preference) && entry.patient?.user?.email) {
-        const patientDisplayName = entry.patient.full_name || entry.patient.user?.username || 'Patient';
-        const doctorDisplayName = entry.doctor?.full_name || entry.doctor?.user?.username || 'your provider';
-
-        void sendWaitlistSlotOpenedEmail({
-          to: entry.patient.user.email,
-          patientName: patientDisplayName,
-          doctorName: doctorDisplayName,
-          appointmentDate,
-          appointmentStartTime,
-          appointmentEndTime,
-          appointmentType,
-        }).catch((error) => {
-          console.error('Failed to send waitlist slot-opened email:', error);
-        });
-      }
     }
 
     return { notifiedCount: entries.length };

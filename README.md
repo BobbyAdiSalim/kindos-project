@@ -24,6 +24,9 @@ Project/
 ├── backend/
 │   ├── config/
 │   │   └── database.js          # Sequelize database connection
+│   ├── db/
+│   │   ├── migrations/          # Sequelize migration files
+│   │   └── seeders/             # Sequelize seeder files
 │   ├── models/
 │   │   ├── User.js              # User authentication model
 │   │   ├── Patient.js           # Patient profile model
@@ -37,7 +40,7 @@ Project/
 │   │   ├── index.js             # Model aggregator with associations
 │   │   └── README.md            # Models documentation
 │   ├── server.js                # Main Express server
-│   ├── db-init.js               # Database initialization script
+│   ├── db-init.js               # Legacy sync-based DB initialization script
 │   ├── .env                     # Environment variables (not in git)
 │   ├── .env.example             # Environment template
 │   ├── SETUP.md                 # Backend setup guide
@@ -171,17 +174,23 @@ cd backend
 npm install
 ```
 
-**Step 4: Initialize Database Tables**
+**Step 4: Run Database Migrations**
 
-Run the database initialization script to create all tables:
+Create/update schema using migrations:
 
 ```bash
-npm run db:init
+npm run migrate
 ```
 
-This creates 10 tables: users, patients, doctors, appointments, availability_patterns, availability_slots, messages, reviews, questionnaires, and admin_logs.
+This applies migration files in `backend/db/migrations` and records history in `SequelizeMeta`.
 
-**Step 5: Start the Server**
+**Step 5 (Optional): Seed Development Data**
+
+```bash
+npm run seed
+```
+
+**Step 6: Start the Server**
 
 ```bash
 npm run dev  # Development mode (runs on http://localhost:4000)
@@ -213,8 +222,68 @@ The backend uses Sequelize ORM with the following models:
 | **Review** | reviews | Patient ratings and reviews of doctors |
 | **Questionnaire** | questionnaires | Patient needs assessment |
 | **AdminLog** | admin_logs | Admin verification audit trail |
+| **WaitlistEntry** | waitlist_entries | Waitlist requests for booked slots |
+| **Connection** | connections | Patient-doctor connection requests |
 
 For detailed model documentation and usage examples, see [backend/models/README.md](backend/models/README.md).
+
+## Database Migrations & Seeders
+
+This project uses **Sequelize migrations** as the source of truth for schema changes.
+
+### Apply Migrations
+```bash
+cd backend
+npm run migrate
+```
+
+### Check Migration Status
+```bash
+npm run migrate:status
+```
+
+### Create a New Migration (for every schema change)
+When updating table structure (new column, constraint, index, table), create a new migration file:
+
+```bash
+npm run migration:create -- add_age_to_users
+```
+
+Then edit the generated file in `backend/db/migrations`:
+- implement `up` to apply the change
+- implement `down` to rollback the change
+
+After editing:
+```bash
+npm run migrate
+```
+
+### Rollback Migrations
+```bash
+npm run migrate:undo       # undo latest migration
+npm run migrate:undo:all   # undo all migrations
+```
+
+### Seed Data
+```bash
+npm run seed                           # run all seeders
+npm run seed:create -- dev-users       # create new seeder file
+npm run seed:one -- <seeder-file.js>   # run one seeder
+npm run seed:undo                      # undo last seeder
+npm run seed:undo:all                  # undo all seeders
+```
+
+### Reset Local DB and Rebuild Schema
+```bash
+npm run db:fresh        # clean all tables in current DB + migrate
+npm run db:fresh:seed   # clean + migrate + seed
+```
+
+### Team Rules
+- Always create a **new migration file** for schema changes. Do not edit old applied migrations.
+- Keep model updates and migration changes in the same PR.
+- Use migration scripts (`migrate`, `migrate:undo`) instead of `sequelize.sync` in normal workflow.
+- Use `db:fresh` only for local/dev reset (never in production).
 
 ## Available Scripts
 
@@ -222,8 +291,13 @@ For detailed model documentation and usage examples, see [backend/models/README.
 ```bash
 npm start           # Start production server
 npm run dev         # Start development server with auto-reload
-npm run db:init     # Initialize database tables (safe)
-npm run db:reset    # Reset database (DANGER: deletes all data)
+npm run migrate          # Apply migrations
+npm run migrate:status   # Show applied/pending migrations
+npm run migration:create -- <name>   # Create a migration file
+npm run seed             # Run all seeders
+npm run seed:create -- <name>        # Create a seeder file
+npm run db:fresh         # Clean all tables + migrate
+npm run db:fresh:seed    # Clean all tables + migrate + seed
 ```
 
 ### Frontend Scripts
@@ -238,8 +312,8 @@ npm run preview     # Preview production build
 - User registration with password hashing
 - User login with JWT authentication
 - Sequelize ORM with PostgreSQL
-- 10 database models with proper relationships
-- Database initialization scripts
+- Sequelize models with proper relationships
+- Database migrations and seeders
 
 ## Contribution Guidelines
 

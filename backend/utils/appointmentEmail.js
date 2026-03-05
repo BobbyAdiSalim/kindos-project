@@ -1,5 +1,10 @@
-const EMAIL_PROVIDER = process.env.EMAIL_PROVIDER || 'console';
-const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+const cleanEnv = (value, fallback = '') => {
+  if (value === undefined || value === null || value === '') return fallback;
+  return String(value).replace(/\r/g, '').trim();
+};
+
+const EMAIL_PROVIDER = cleanEnv(process.env.EMAIL_PROVIDER, 'console');
+const FRONTEND_URL = cleanEnv(process.env.FRONTEND_URL, 'http://localhost:5173');
 
 const escapeHtml = (value) =>
   String(value)
@@ -105,6 +110,117 @@ const buildCancellationEmailText = ({
 }) =>
   `Hi ${patientName || 'Patient'}, your appointment with ${doctorName || 'your provider'} on ${appointmentDate} at ${appointmentTime} (${appointmentType}) has been cancelled. Please book a new appointment here: ${rebookLink}`;
 
+const buildApprovalEmailHtml = ({
+  patientName,
+  doctorName,
+  appointmentDate,
+  appointmentTime,
+  appointmentType,
+  appointmentsLink,
+}) => {
+  const safePatientName = escapeHtml(patientName || 'Patient');
+  const safeDoctorName = escapeHtml(doctorName || 'your provider');
+  const safeDate = escapeHtml(appointmentDate);
+  const safeTime = escapeHtml(appointmentTime);
+  const safeType = escapeHtml(appointmentType);
+  const safeAppointmentsLink = escapeHtml(appointmentsLink);
+
+  return `
+  <div style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,Helvetica,sans-serif;color:#111827;">
+    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="padding:24px 0;">
+      <tr>
+        <td align="center">
+          <table role="presentation" cellpadding="0" cellspacing="0" width="600" style="max-width:600px;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">
+            <tr>
+              <td style="padding:24px 28px;background:#15803d;color:#ffffff;">
+                <h1 style="margin:0;font-size:22px;line-height:1.3;">Appointment Confirmed</h1>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:28px;">
+                <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#374151;">
+                  Hi ${safePatientName},
+                </p>
+                <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#374151;">
+                  Your appointment with <strong>${safeDoctorName}</strong> has been confirmed.
+                </p>
+                <div style="margin:0 0 20px;padding:14px;border-radius:8px;background:#f9fafb;border:1px solid #e5e7eb;">
+                  <p style="margin:0 0 6px;font-size:14px;color:#111827;"><strong>Date:</strong> ${safeDate}</p>
+                  <p style="margin:0 0 6px;font-size:14px;color:#111827;"><strong>Time:</strong> ${safeTime}</p>
+                  <p style="margin:0;font-size:14px;color:#111827;"><strong>Type:</strong> ${safeType}</p>
+                </div>
+                <p style="margin:0 0 24px;">
+                  <a
+                    href="${safeAppointmentsLink}"
+                    style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;font-weight:600;font-size:14px;padding:12px 18px;border-radius:8px;"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    View Appointment
+                  </a>
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </div>
+  `;
+};
+
+const buildApprovalEmailText = ({
+  patientName,
+  doctorName,
+  appointmentDate,
+  appointmentTime,
+  appointmentType,
+  appointmentsLink,
+}) =>
+  `Hi ${patientName || 'Patient'}, your appointment with ${doctorName || 'your provider'} on ${appointmentDate} at ${appointmentTime} (${appointmentType}) has been confirmed. View details: ${appointmentsLink}`;
+
+const buildDoctorNoticeEmailHtml = ({
+  title,
+  intro,
+  doctorName,
+  patientName,
+  appointmentDate,
+  appointmentTime,
+  appointmentType,
+}) => `
+  <div style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,Helvetica,sans-serif;color:#111827;">
+    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="padding:24px 0;">
+      <tr>
+        <td align="center">
+          <table role="presentation" cellpadding="0" cellspacing="0" width="600" style="max-width:600px;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">
+            <tr>
+              <td style="padding:24px 28px;background:#1d4ed8;color:#ffffff;">
+                <h1 style="margin:0;font-size:22px;line-height:1.3;">${escapeHtml(title)}</h1>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:28px;">
+                <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#374151;">
+                  Hi ${escapeHtml(doctorName || 'Doctor')},
+                </p>
+                <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#374151;">
+                  ${escapeHtml(intro)}
+                </p>
+                <div style="margin:0;padding:14px;border-radius:8px;background:#f9fafb;border:1px solid #e5e7eb;">
+                  <p style="margin:0 0 6px;font-size:14px;color:#111827;"><strong>Patient:</strong> ${escapeHtml(patientName || 'Patient')}</p>
+                  <p style="margin:0 0 6px;font-size:14px;color:#111827;"><strong>Date:</strong> ${escapeHtml(appointmentDate)}</p>
+                  <p style="margin:0 0 6px;font-size:14px;color:#111827;"><strong>Time:</strong> ${escapeHtml(appointmentTime)}</p>
+                  <p style="margin:0;font-size:14px;color:#111827;"><strong>Type:</strong> ${escapeHtml(appointmentType)}</p>
+                </div>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </div>
+`;
+
 export const sendDoctorCancellationEmail = async ({
   to,
   patientName,
@@ -138,17 +254,17 @@ export const sendDoctorCancellationEmail = async ({
 
   const { default: nodemailer } = await import('nodemailer');
   const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: Number(process.env.SMTP_PORT || 587),
-    secure: String(process.env.SMTP_SECURE || 'false') === 'true',
+    host: cleanEnv(process.env.SMTP_HOST),
+    port: Number(cleanEnv(process.env.SMTP_PORT, '587')),
+    secure: cleanEnv(process.env.SMTP_SECURE, 'false') === 'true',
     auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
+      user: cleanEnv(process.env.SMTP_USER),
+      pass: cleanEnv(process.env.SMTP_PASS),
     },
   });
 
   await transporter.sendMail({
-    from: process.env.EMAIL_FROM || process.env.SMTP_USER,
+    from: cleanEnv(process.env.EMAIL_FROM) || cleanEnv(process.env.SMTP_USER),
     to,
     subject: 'Your appointment has been cancelled',
     text: buildCancellationEmailText(payload),
@@ -156,3 +272,157 @@ export const sendDoctorCancellationEmail = async ({
   });
 };
 
+export const sendDoctorApprovalEmail = async ({
+  to,
+  patientName,
+  doctorName,
+  appointmentDate,
+  appointmentTime,
+  appointmentType,
+}) => {
+  if (!to) return;
+
+  const prettyDate = toPrettyDate(appointmentDate);
+  const prettyTime = toPrettyTime(appointmentTime);
+  const normalizedType = appointmentType === 'in-person' ? 'In-Person' : 'Virtual';
+  const appointmentsLink = `${FRONTEND_URL.replace(/\/$/, '')}/patient/dashboard`;
+
+  const payload = {
+    patientName,
+    doctorName,
+    appointmentDate: prettyDate || String(appointmentDate || ''),
+    appointmentTime: prettyTime || String(appointmentTime || ''),
+    appointmentType: normalizedType,
+    appointmentsLink,
+  };
+
+  if (EMAIL_PROVIDER === 'console') {
+    console.log('[Appointment Approval Email]');
+    console.log(`To: ${to}`);
+    console.log(buildApprovalEmailText(payload));
+    return;
+  }
+
+  const { default: nodemailer } = await import('nodemailer');
+  const transporter = nodemailer.createTransport({
+    host: cleanEnv(process.env.SMTP_HOST),
+    port: Number(cleanEnv(process.env.SMTP_PORT, '587')),
+    secure: cleanEnv(process.env.SMTP_SECURE, 'false') === 'true',
+    auth: {
+      user: cleanEnv(process.env.SMTP_USER),
+      pass: cleanEnv(process.env.SMTP_PASS),
+    },
+  });
+
+  await transporter.sendMail({
+    from: cleanEnv(process.env.EMAIL_FROM) || cleanEnv(process.env.SMTP_USER),
+    to,
+    subject: 'Your appointment has been confirmed',
+    text: buildApprovalEmailText(payload),
+    html: buildApprovalEmailHtml(payload),
+  });
+};
+
+export const sendPatientCancellationEmailToDoctor = async ({
+  to,
+  doctorName,
+  patientName,
+  appointmentDate,
+  appointmentTime,
+  appointmentType,
+}) => {
+  if (!to) return;
+
+  const prettyDate = toPrettyDate(appointmentDate) || String(appointmentDate || '');
+  const prettyTime = toPrettyTime(appointmentTime) || String(appointmentTime || '');
+  const normalizedType = appointmentType === 'in-person' ? 'In-Person' : 'Virtual';
+  const intro = `${patientName || 'A patient'} cancelled their appointment.`;
+  const subject = 'Patient cancelled an appointment';
+  const text = `Hi ${doctorName || 'Doctor'}, ${patientName || 'a patient'} cancelled their ${normalizedType} appointment on ${prettyDate} at ${prettyTime}.`;
+
+  if (EMAIL_PROVIDER === 'console') {
+    console.log('[Patient Cancellation Email To Doctor]');
+    console.log(`To: ${to}`);
+    console.log(text);
+    return;
+  }
+
+  const { default: nodemailer } = await import('nodemailer');
+  const transporter = nodemailer.createTransport({
+    host: cleanEnv(process.env.SMTP_HOST),
+    port: Number(cleanEnv(process.env.SMTP_PORT, '587')),
+    secure: cleanEnv(process.env.SMTP_SECURE, 'false') === 'true',
+    auth: {
+      user: cleanEnv(process.env.SMTP_USER),
+      pass: cleanEnv(process.env.SMTP_PASS),
+    },
+  });
+
+  await transporter.sendMail({
+    from: cleanEnv(process.env.EMAIL_FROM) || cleanEnv(process.env.SMTP_USER),
+    to,
+    subject,
+    text,
+    html: buildDoctorNoticeEmailHtml({
+      title: 'Appointment Cancelled by Patient',
+      intro,
+      doctorName,
+      patientName,
+      appointmentDate: prettyDate,
+      appointmentTime: prettyTime,
+      appointmentType: normalizedType,
+    }),
+  });
+};
+
+export const sendPatientRescheduleEmailToDoctor = async ({
+  to,
+  doctorName,
+  patientName,
+  appointmentDate,
+  appointmentTime,
+  appointmentType,
+}) => {
+  if (!to) return;
+
+  const prettyDate = toPrettyDate(appointmentDate) || String(appointmentDate || '');
+  const prettyTime = toPrettyTime(appointmentTime) || String(appointmentTime || '');
+  const normalizedType = appointmentType === 'in-person' ? 'In-Person' : 'Virtual';
+  const intro = `${patientName || 'A patient'} rescheduled an appointment. Please review and reconfirm.`;
+  const subject = 'Patient rescheduled an appointment';
+  const text = `Hi ${doctorName || 'Doctor'}, ${patientName || 'a patient'} rescheduled to ${prettyDate} at ${prettyTime} (${normalizedType}). Please review and reconfirm.`;
+
+  if (EMAIL_PROVIDER === 'console') {
+    console.log('[Patient Reschedule Email To Doctor]');
+    console.log(`To: ${to}`);
+    console.log(text);
+    return;
+  }
+
+  const { default: nodemailer } = await import('nodemailer');
+  const transporter = nodemailer.createTransport({
+    host: cleanEnv(process.env.SMTP_HOST),
+    port: Number(cleanEnv(process.env.SMTP_PORT, '587')),
+    secure: cleanEnv(process.env.SMTP_SECURE, 'false') === 'true',
+    auth: {
+      user: cleanEnv(process.env.SMTP_USER),
+      pass: cleanEnv(process.env.SMTP_PASS),
+    },
+  });
+
+  await transporter.sendMail({
+    from: cleanEnv(process.env.EMAIL_FROM) || cleanEnv(process.env.SMTP_USER),
+    to,
+    subject,
+    text,
+    html: buildDoctorNoticeEmailHtml({
+      title: 'Appointment Rescheduled by Patient',
+      intro,
+      doctorName,
+      patientName,
+      appointmentDate: prettyDate,
+      appointmentTime: prettyTime,
+      appointmentType: normalizedType,
+    }),
+  });
+};
