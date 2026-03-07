@@ -26,6 +26,7 @@ const toAppointmentCardData = (appointment: AppointmentRecord) => ({
   type: appointment.appointment_type,
   status: mapAppointmentStatus(appointment),
   reason: appointment.reason,
+  hasReview: Boolean(appointment.review),
 });
 
 export function PatientDashboard() {

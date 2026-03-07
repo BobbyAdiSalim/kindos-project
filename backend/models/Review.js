@@ -14,16 +14,6 @@ const Review = sequelize.define(
       primaryKey: true,
       autoIncrement: true,
     },
-    appointment_id: {
-      type: DataTypes.INTEGER,
-      allowNull: false,
-      unique: true,
-      references: {
-        model: 'appointments',
-        key: 'id',
-      },
-      onDelete: 'CASCADE',
-    },
     patient_id: {
       type: DataTypes.INTEGER,
       allowNull: false,
@@ -71,6 +61,10 @@ const Review = sequelize.define(
       },
       {
         fields: ['doctor_id', 'rating'],
+      },
+      {
+        unique: true,
+        fields: ['patient_id', 'doctor_id'],
       },
     ],
   }

@@ -187,6 +187,7 @@ const appointmentInclude = [
     as: 'patient',
     include: [{ model: User, as: 'user', attributes: ['id', 'username', 'email'] }],
   },
+
 ];
 
 const validateBookingPayload = (payload) => {

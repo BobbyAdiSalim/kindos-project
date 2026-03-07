@@ -14,6 +14,7 @@ import {
   rescheduleAppointment,
   type AppointmentRecord,
 } from '@/app/lib/appointment-api';
+import { getMyReviewForDoctor } from '@/app/lib/review-api';
 import { toast } from 'sonner';
 import { Calendar } from '@/app/components/ui/calendar';
 import { Label } from '@/app/components/ui/label';
@@ -63,6 +64,7 @@ export function AppointmentDetail() {
   const [slotsError, setSlotsError] = useState('');
   const [rescheduleSubmitting, setRescheduleSubmitting] = useState(false);
   const [cancelSubmitting, setCancelSubmitting] = useState(false);
+  const [hasDoctorReview, setHasDoctorReview] = useState(false);
 
   useEffect(() => {
     const loadAppointment = async () => {
@@ -76,10 +78,21 @@ export function AppointmentDetail() {
         setLoading(true);
         const data = await getAppointmentById(token, id);
         setAppointment(data);
+        if (data.status === 'completed' && data.doctor?.id) {
+          try {
+            const reviewData = await getMyReviewForDoctor(token, data.doctor.id);
+            setHasDoctorReview(Boolean(reviewData.review));
+          } catch {
+            setHasDoctorReview(false);
+          }
+        } else {
+          setHasDoctorReview(false);
+        }
         setError('');
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load appointment.');
         setAppointment(null);
+        setHasDoctorReview(false);
       } finally {
         setLoading(false);
       }
@@ -365,6 +378,16 @@ export function AppointmentDetail() {
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
+          </div>
+        )}
+
+        {appointment.status === 'completed' && (
+          <div className="flex">
+            <Link to={`/patient/review/${appointment.id}`} className="w-full sm:w-auto">
+              <Button size="lg" className="w-full sm:w-auto">
+                {hasDoctorReview ? `Edit Review for ${appointment.doctor?.full_name || 'Doctor'}` : `Leave a Review for ${appointment.doctor?.full_name || 'Doctor'}`}
+              </Button>
+            </Link>
           </div>
         )}
 

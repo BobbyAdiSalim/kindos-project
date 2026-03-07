@@ -7,7 +7,7 @@ import { fileURLToPath } from 'url';
 import { Readable } from 'stream';
 import { Op } from 'sequelize';
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
-import { sequelize, User, Patient, Doctor, AdminLog } from '../models/index.js';
+import { sequelize, User, Patient, Doctor, Review, AdminLog } from '../models/index.js';
 
 const cleanEnv = (value, fallback = '') => {
   if (value === undefined || value === null || value === '') return fallback;
@@ -1225,6 +1225,34 @@ export const getDoctors = async (req, res) => {
       offset: parseInt(offset),
     });
 
+    const doctorIds = doctors.rows.map((doctor) => doctor.id);
+    const ratingRows = doctorIds.length > 0
+      ? await Review.findAll({
+          attributes: [
+            'doctor_id',
+            [sequelize.fn('AVG', sequelize.col('rating')), 'average_rating'],
+            [sequelize.fn('COUNT', sequelize.col('id')), 'review_count'],
+          ],
+          where: {
+            doctor_id: {
+              [Op.in]: doctorIds,
+            },
+          },
+          group: ['doctor_id'],
+          raw: true,
+        })
+      : [];
+
+    const ratingByDoctorId = new Map(
+      ratingRows.map((row) => [
+        Number(row.doctor_id),
+        {
+          rating: row.average_rating ? Number(Number(row.average_rating).toFixed(1)) : 0,
+          review_count: Number(row.review_count || 0),
+        },
+      ])
+    );
+
     // Transform for frontend
     const transformedDoctors = doctors.rows.map((doctor) => ({
       id: doctor.id,
@@ -1242,6 +1270,8 @@ export const getDoctors = async (req, res) => {
       verification_status: doctor.verification_status,
       verified_at: doctor.verified_at,
       profile_complete: doctor.profile_complete,
+      rating: ratingByDoctorId.get(doctor.id)?.rating || 0,
+      review_count: ratingByDoctorId.get(doctor.id)?.review_count || 0,
       created_at: doctor.created_at,
       updated_at: doctor.updated_at,
       user: doctor.user,
@@ -1293,6 +1323,22 @@ export const getDoctorById = async (req, res) => {
       });
     }
 
+    const ratingStats = await Review.findOne({
+      attributes: [
+        [sequelize.fn('AVG', sequelize.col('rating')), 'average_rating'],
+        [sequelize.fn('COUNT', sequelize.col('id')), 'review_count'],
+      ],
+      where: {
+        doctor_id: doctor.id,
+      },
+      raw: true,
+    });
+
+    const averageRating = ratingStats?.average_rating
+      ? Number(Number(ratingStats.average_rating).toFixed(1))
+      : 0;
+    const reviewCount = Number(ratingStats?.review_count || 0);
+
     // Transform for frontend
     const transformedDoctor = {
       id: doctor.id,
@@ -1310,6 +1356,8 @@ export const getDoctorById = async (req, res) => {
       verification_status: doctor.verification_status,
       verified_at: doctor.verified_at,
       profile_complete: doctor.profile_complete,
+      rating: averageRating,
+      review_count: reviewCount,
       created_at: doctor.created_at,
       updated_at: doctor.updated_at,
       user: doctor.user,

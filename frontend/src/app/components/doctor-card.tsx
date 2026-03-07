@@ -94,7 +94,7 @@ export function DoctorCard({ doctor, showBookButton = true, matchScore }: Doctor
               <div className="flex items-center gap-2 text-sm">
                 <Star className="h-4 w-4 fill-primary text-primary" />
                 <span className="font-medium">{doctor.rating}</span>
-                <span className="text-muted-foreground">({doctor.reviewCount} reviews)</span>
+                <span className="text-muted-foreground">({doctor.reviewCount} {doctor.reviewCount === 1 ? 'review' : 'reviews'})</span>
               </div>
               
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
