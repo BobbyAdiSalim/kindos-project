@@ -29,6 +29,7 @@ export interface UpsertReviewPayload {
   appointment_id: number;
   rating: number;
   comment?: string;
+  is_anonymous?: boolean;
 }
 
 const withAuth = (token: string | null) => {

@@ -138,7 +138,7 @@ export function DoctorProfile() {
   const doctorReviews = doctorReviewsData
     ? doctorReviewsData.reviews.map((review) => ({
         id: String(review.id),
-        patientName: review.patient_name || 'Patient',
+        patientName: review.patient_name || 'Anonymous',
         rating: review.rating,
         comment: review.comment || '',
         date: review.updated_at,

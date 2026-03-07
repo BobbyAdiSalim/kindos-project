@@ -20,7 +20,7 @@ const serializeReview = (review) => ({
   rating: review.rating,
   comment: review.comment,
   is_anonymous: review.is_anonymous,
-  patient_name: review.patient?.full_name || review.patient?.user?.username || null,
+  patient_name: review.is_anonymous ? null : (review.patient?.full_name || review.patient?.user?.username || null),
   created_at: review.created_at,
   updated_at: review.updated_at,
 });
@@ -72,6 +72,7 @@ export const upsertReview = async (req, res) => {
     const appointmentId = Number(req.body?.appointment_id);
     const rating = Number(req.body?.rating);
     const comment = toOptionalTrimmedText(req.body?.comment);
+    const isAnonymous = Boolean(req.body?.is_anonymous);
 
     if (!Number.isInteger(appointmentId) || appointmentId <= 0) {
       return res.status(400).json({ message: 'Valid appointment_id is required.' });
@@ -105,6 +106,7 @@ export const upsertReview = async (req, res) => {
       if (existing) {
         existing.rating = rating;
         existing.comment = comment;
+        existing.is_anonymous = isAnonymous;
         await existing.save({ transaction });
 
         const hydrated = await Review.findByPk(existing.id, {
@@ -124,7 +126,7 @@ export const upsertReview = async (req, res) => {
           doctor_id: appointment.doctor_id,
           rating,
           comment,
-          is_anonymous: false,
+          is_anonymous: isAnonymous,
         },
         { transaction }
       );

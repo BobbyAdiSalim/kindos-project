@@ -4,6 +4,7 @@ import { Button } from '@/app/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { Label } from '@/app/components/ui/label';
 import { Textarea } from '@/app/components/ui/textarea';
+import { Checkbox } from '@/app/components/ui/checkbox';
 import { Loader2, Star } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/app/lib/auth-context';
@@ -16,6 +17,7 @@ export function WriteReview() {
   const { token } = useAuth();
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState('');
+  const [isAnonymous, setIsAnonymous] = useState(false);
   const [appointment, setAppointment] = useState<AppointmentRecord | null>(null);
   const [reviewExists, setReviewExists] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -49,6 +51,7 @@ export function WriteReview() {
         if (reviewData.review) {
           setRating(reviewData.review.rating);
           setComment(reviewData.review.comment || '');
+          setIsAnonymous(reviewData.review.is_anonymous);
           setReviewExists(true);
         }
       } catch (err) {
@@ -78,6 +81,7 @@ export function WriteReview() {
         appointment_id: Number(appointmentId),
         rating,
         comment,
+        is_anonymous: isAnonymous,
       });
 
       toast.success(reviewExists ? 'Review updated successfully' : 'Review submitted successfully');
@@ -147,6 +151,17 @@ export function WriteReview() {
               onChange={(e) => setComment(e.target.value)}
               rows={5}
             />
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="anonymous"
+              checked={isAnonymous}
+              onCheckedChange={(checked) => setIsAnonymous(!!checked)}
+            />
+            <Label htmlFor="anonymous" className="text-sm font-normal cursor-pointer">
+              Post this review anonymously
+            </Label>
           </div>
 
           <Button onClick={handleSubmit} className="w-full" disabled={submitting}>
