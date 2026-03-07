@@ -6,6 +6,7 @@
 import { AvailabilityPattern, AvailabilitySlot } from '../models/Availability.js';
 import Doctor from '../models/Doctor.js';
 import Appointment from '../models/Appointment.js';
+import Review from '../models/Review.js';
 import sequelize from '../config/database.js';
 import { Op } from 'sequelize';
 
@@ -741,6 +742,35 @@ export const getDoctorsWithAvailability = async (req, res) => {
 
     console.log(`Found ${filtered.length} doctors with availability`);
 
+    // Get ratings for all filtered doctors
+    const doctorIds = filtered.map(d => d.id);
+    const ratingRows = doctorIds.length > 0
+      ? await Review.findAll({
+          attributes: [
+            'doctor_id',
+            [sequelize.fn('AVG', sequelize.col('rating')), 'average_rating'],
+            [sequelize.fn('COUNT', sequelize.col('id')), 'review_count'],
+          ],
+          where: {
+            doctor_id: {
+              [Op.in]: doctorIds,
+            },
+          },
+          group: ['doctor_id'],
+          raw: true,
+        })
+      : [];
+
+    const ratingByDoctorId = new Map(
+      ratingRows.map((row) => [
+        Number(row.doctor_id),
+        {
+          rating: row.average_rating ? Number(Number(row.average_rating).toFixed(1)) : 0,
+          review_count: Number(row.review_count || 0),
+        },
+      ])
+    );
+
     const doctors = filtered.map(doctor => ({
       id: doctor.id,
       user_id: doctor.user_id,
@@ -757,6 +787,8 @@ export const getDoctorsWithAvailability = async (req, res) => {
       verification_status: doctor.verification_status,
       verified_at: doctor.verified_at,
       profile_complete: doctor.profile_complete,
+      rating: ratingByDoctorId.get(doctor.id)?.rating || 0,
+      review_count: ratingByDoctorId.get(doctor.id)?.review_count || 0,
       created_at: doctor.created_at,
       updated_at: doctor.updated_at,
       availability_slots: doctor.availabilitySlots.map(s => ({

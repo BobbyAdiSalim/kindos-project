@@ -10,6 +10,7 @@ import { mockDoctors, mockReviews } from '@/app/lib/mock-data';
 import { DoctorProfile as DoctorProfileApi, getPublicProfile } from '@/app/lib/profile-api';
 import { useAuth } from '@/app/lib/auth-context';
 import { getMyConnections, sendConnectRequest, type ConnectionInfo } from '@/app/lib/chat-api';
+import { getDoctorReviews, type DoctorReviewsResponse } from '@/app/lib/review-api';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 
@@ -20,6 +21,7 @@ export function DoctorProfile() {
   const [loading, setLoading] = useState(true);
   const [doctorFromApi, setDoctorFromApi] = useState<DoctorProfileApi | null>(null);
   const [doctorUsername, setDoctorUsername] = useState('');
+  const [doctorReviewsData, setDoctorReviewsData] = useState<DoctorReviewsResponse | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<'none' | 'pending' | 'accepted' | 'rejected'>('none');
   const [connectLoading, setConnectLoading] = useState(false);
   const mockDoctor = mockDoctors.find((d) => d.id === id);
@@ -67,6 +69,21 @@ export function DoctorProfile() {
     loadConnectionStatus();
   }, [token, doctorFromApi]);
 
+  useEffect(() => {
+    const loadDoctorReviews = async () => {
+      if (!doctorFromApi?.id) return;
+
+      try {
+        const data = await getDoctorReviews(doctorFromApi.id);
+        setDoctorReviewsData(data);
+      } catch {
+        setDoctorReviewsData(null);
+      }
+    };
+
+    void loadDoctorReviews();
+  }, [doctorFromApi?.id]);
+
   const handleConnect = async () => {
     if (!doctorFromApi || !token) return;
     setConnectLoading(true);
@@ -96,8 +113,8 @@ export function DoctorProfile() {
         specialty: doctorFromApi.specialty || 'General Practice',
         photo: '',
         languages: doctorFromApi.languages || [],
-        rating: mockDoctor?.rating || 0,
-        reviewCount: mockDoctor?.reviewCount || 0,
+        rating: doctorReviewsData?.average_rating ?? mockDoctor?.rating ?? 0,
+        reviewCount: doctorReviewsData?.review_count ?? mockDoctor?.reviewCount ?? 0,
         bio: doctorFromApi.bio || 'No bio provided.',
         clinicLocation: doctorFromApi.clinic_location || 'Location not provided.',
         virtualAvailable: doctorFromApi.virtual_available ?? true,
@@ -118,7 +135,15 @@ export function DoctorProfile() {
     );
   }
 
-  const doctorReviews = mockReviews.filter((r) => r.doctorId === doctor.id);
+  const doctorReviews = doctorReviewsData
+    ? doctorReviewsData.reviews.map((review) => ({
+        id: String(review.id),
+        patientName: review.patient_name || 'Anonymous',
+        rating: review.rating,
+        comment: review.comment || '',
+        date: review.updated_at,
+      }))
+    : mockReviews.filter((r) => r.doctorId === doctor.id);
   const nextAvailableDate = doctor.nextAvailable ? new Date(doctor.nextAvailable) : null;
   const hasNextAvailableDate = Boolean(
     nextAvailableDate && !Number.isNaN(nextAvailableDate.getTime())
@@ -156,7 +181,7 @@ export function DoctorProfile() {
                 <Star className="h-5 w-5 fill-primary text-primary" />
                 <span className="font-semibold">{doctor.rating}</span>
                 <span className="text-muted-foreground">
-                  ({doctor.reviewCount} reviews)
+                  ({doctor.reviewCount} {doctor.reviewCount === 1 ? 'review' : 'reviews'})
                 </span>
               </div>
 

@@ -549,17 +549,6 @@ module.exports = {
             primaryKey: true,
             autoIncrement: true,
           },
-          appointment_id: {
-            type: Sequelize.INTEGER,
-            allowNull: false,
-            unique: true,
-            references: {
-              model: 'appointments',
-              key: 'id',
-            },
-            onDelete: 'CASCADE',
-            onUpdate: 'CASCADE',
-          },
           patient_id: {
             type: Sequelize.INTEGER,
             allowNull: false,

@@ -52,6 +52,11 @@ import {
   markComplete,
 } from "../controllers/bookingController.js";
 import {
+  upsertReview,
+  getMyReviewForDoctor,
+  getDoctorReviews,
+} from "../controllers/reviewController.js";
+import {
   joinWaitlist,
   getMyWaitlistEntries,
   removeMyWaitlistEntry,
@@ -306,6 +311,21 @@ router.patch("/appointments/:appointmentId/summary", requireAuth, requireRole("d
 
 router.patch("/appointments/:appointmentId/complete", requireAuth, requireRole("doctor"), (req, res) => {
   markComplete(req, res);
+});
+
+/**
+ * Review Routes
+ */
+router.post("/reviews", requireAuth, requireRole("patient"), (req, res) => {
+  upsertReview(req, res);
+});
+
+router.get("/reviews/my/:doctorId", requireAuth, requireRole("patient"), (req, res) => {
+  getMyReviewForDoctor(req, res);
+});
+
+router.get("/reviews/doctor/:doctorId", (req, res) => {
+  getDoctorReviews(req, res);
 });
 
 /**

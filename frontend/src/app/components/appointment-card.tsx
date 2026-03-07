@@ -23,6 +23,7 @@ interface AppointmentCardProps {
       | 'no-show'
       | 'upcoming';
     reason: string;
+    hasReview?: boolean;
   };
   userRole: 'patient' | 'doctor';
   onConfirm?: (appointmentId: string) => void;

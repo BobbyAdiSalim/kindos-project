@@ -56,10 +56,6 @@ Message.belongsTo(User, { foreignKey: 'receiver_id', as: 'receiver' });
 Appointment.hasMany(Message, { foreignKey: 'appointment_id', as: 'messages' });
 Message.belongsTo(Appointment, { foreignKey: 'appointment_id', as: 'appointment' });
 
-// Appointment <-> Review (One-to-One)
-Appointment.hasOne(Review, { foreignKey: 'appointment_id', as: 'review' });
-Review.belongsTo(Appointment, { foreignKey: 'appointment_id', as: 'appointment' });
-
 // Patient <-> Review (One-to-Many)
 Patient.hasMany(Review, { foreignKey: 'patient_id', as: 'reviews' });
 Review.belongsTo(Patient, { foreignKey: 'patient_id', as: 'patient' });

@@ -543,7 +543,7 @@ export function ProviderDiscovery() {
     specialty: doctor.specialty,
     photo: doctor.photo || '',
     languages: doctor.languages || [],
-    rating: doctor.rating || 4.5,
+    rating: doctor.rating ?? 4.5,
     reviewCount: doctor.review_count || 0,
     clinicLocation: doctor.clinic_location || 'Location not specified',
     virtualAvailable: doctor.virtual_available,
