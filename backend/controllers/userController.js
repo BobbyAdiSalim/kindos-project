@@ -8,6 +8,7 @@ import { Readable } from 'stream';
 import { Op } from 'sequelize';
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { sequelize, User, Patient, Doctor, Review, AdminLog } from '../models/index.js';
+import { getRoleStrategy } from '../services/role-strategy/index.js';
 
 const cleanEnv = (value, fallback = '') => {
   if (value === undefined || value === null || value === '') return fallback;
@@ -409,69 +410,6 @@ const normalizeBoolean = (value) => {
   return undefined;
 };
 
-const buildPatientProfileResponse = (profile, includePrivateFields = false) => {
-  if (!profile) return null;
-
-  const base = {
-    id: profile.id,
-    full_name: profile.full_name,
-    profile_complete: profile.profile_complete,
-  };
-
-  if (!includePrivateFields) {
-    return base;
-  }
-
-  return {
-    ...base,
-    date_of_birth: profile.date_of_birth,
-    phone: profile.phone,
-    address: profile.address,
-    emergency_contact_name: profile.emergency_contact_name,
-    emergency_contact_phone: profile.emergency_contact_phone,
-    accessibility_preferences: profile.accessibility_preferences || [],
-  };
-};
-
-const buildDoctorProfileResponse = (profile, includePrivateFields = false) => {
-  if (!profile) return null;
-
-  const base = {
-    id: profile.id,
-    full_name: profile.full_name,
-    specialty: profile.specialty,
-    verification_status: profile.verification_status,
-    profile_complete: profile.profile_complete,
-  };
-
-  if (!includePrivateFields) {
-    return {
-      ...base,
-      bio: profile.bio,
-      languages: profile.languages || [],
-      clinic_location: profile.clinic_location,
-      virtual_available: profile.virtual_available,
-      in_person_available: profile.in_person_available,
-    };
-  }
-
-  return {
-    ...base,
-    phone: profile.phone,
-    license_number: profile.license_number,
-    bio: profile.bio,
-    languages: profile.languages || [],
-    clinic_location: profile.clinic_location,
-    latitude: profile.latitude,
-    longitude: profile.longitude,
-    virtual_available: profile.virtual_available,
-    in_person_available: profile.in_person_available,
-    verification_documents: profile.verification_documents || [],
-    verified_at: profile.verified_at,
-    verified_by: profile.verified_by,
-  };
-};
-
 export const registerUser = async (req, res) => {
   const transaction = await sequelize.transaction();
   let persistedVerificationDocuments = [];
@@ -760,30 +698,8 @@ export const getMyProfile = async (req, res) => {
       return res.status(404).json({ error: 'User not found.' });
     }
 
-    let profile = null;
-
-    if (user.role === 'patient') {
-      const patient = await Patient.findOne({ where: { user_id: user.id } });
-      profile = buildPatientProfileResponse(patient, true);
-    } else if (user.role === 'doctor') {
-      const doctor = await Doctor.findOne({ where: { user_id: user.id } });
-      profile = buildDoctorProfileResponse(doctor, true);
-
-      if (doctor && doctor.verification_status === 'denied') {
-        const latestDenial = await AdminLog.findOne({
-          where: {
-            action_type: 'doctor_denied',
-            target_doctor_id: doctor.id,
-          },
-          order: [['created_at', 'DESC']],
-        });
-
-        profile = {
-          ...(profile || {}),
-          rejection_reason: latestDenial?.details?.reason || null,
-        };
-      }
-    }
+    const roleStrategy = getRoleStrategy(user.role);
+    const profile = await roleStrategy.buildPrivateProfile(user.id);
 
     return res.status(200).json({
       user: {
@@ -917,15 +833,8 @@ export const updateMyProfile = async (req, res) => {
     await transaction.commit();
 
     const refreshedUser = await User.findByPk(user.id);
-    let refreshedProfile = null;
-
-    if (refreshedUser.role === 'patient') {
-      const patient = await Patient.findOne({ where: { user_id: refreshedUser.id } });
-      refreshedProfile = buildPatientProfileResponse(patient, true);
-    } else if (refreshedUser.role === 'doctor') {
-      const doctor = await Doctor.findOne({ where: { user_id: refreshedUser.id } });
-      refreshedProfile = buildDoctorProfileResponse(doctor, true);
-    }
+    const roleStrategy = getRoleStrategy(refreshedUser.role);
+    const refreshedProfile = await roleStrategy.buildPrivateProfile(refreshedUser.id);
 
     return res.status(200).json({
       message: 'Profile updated successfully.',
@@ -962,14 +871,8 @@ export const getPublicProfile = async (req, res) => {
       return res.status(404).json({ error: 'User not found.' });
     }
 
-    let profile = null;
-    if (user.role === 'patient') {
-      const patient = await Patient.findOne({ where: { user_id: user.id } });
-      profile = buildPatientProfileResponse(patient, false);
-    } else if (user.role === 'doctor') {
-      const doctor = await Doctor.findOne({ where: { user_id: user.id } });
-      profile = buildDoctorProfileResponse(doctor, false);
-    }
+    const roleStrategy = getRoleStrategy(user.role);
+    const profile = await roleStrategy.buildPublicProfile(user.id);
 
     return res.status(200).json({
       user: {
@@ -980,6 +883,10 @@ export const getPublicProfile = async (req, res) => {
       profile,
     });
   } catch (error) {
+    if (error?.status) {
+      return res.status(error.status).json({ error: error.message });
+    }
+
     return res.status(500).json({ error: error.message });
   }
 };

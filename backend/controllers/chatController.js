@@ -1,5 +1,6 @@
 import { Op } from 'sequelize';
 import { User, Patient, Doctor, Connection, Message } from '../models/index.js';
+import { getRoleStrategy } from '../services/role-strategy/index.js';
 
 /**
  * Send a connect request from a patient to a doctor.
@@ -63,40 +64,9 @@ export const sendConnectRequest = async (req, res) => {
  */
 export const getMyConnections = async (req, res) => {
   try {
-    const { userId, role } = req.auth;
-
-    let where;
-    let include;
-
-    if (role === 'patient') {
-      const patient = await Patient.findOne({ where: { user_id: userId } });
-      if (!patient) return res.status(404).json({ error: 'Patient profile not found.' });
-
-      where = { patient_id: patient.id };
-      include = [
-        {
-          model: Doctor,
-          as: 'doctor',
-          attributes: ['id', 'full_name', 'specialty', 'user_id'],
-          include: [{ model: User, as: 'user', attributes: ['id', 'username'] }],
-        },
-      ];
-    } else if (role === 'doctor') {
-      const doctor = await Doctor.findOne({ where: { user_id: userId } });
-      if (!doctor) return res.status(404).json({ error: 'Doctor profile not found.' });
-
-      where = { doctor_id: doctor.id };
-      include = [
-        {
-          model: Patient,
-          as: 'patient',
-          attributes: ['id', 'full_name', 'user_id'],
-          include: [{ model: User, as: 'user', attributes: ['id', 'username'] }],
-        },
-      ];
-    } else {
-      return res.status(403).json({ error: 'Admins do not have chat connections.' });
-    }
+    const { userId } = req.auth;
+    const roleStrategy = getRoleStrategy(req.auth.role);
+    const { where, include } = await roleStrategy.getConnectionScope(userId);
 
     const connections = await Connection.findAll({
       where,
@@ -108,9 +78,7 @@ export const getMyConnections = async (req, res) => {
     const connectionsWithMeta = await Promise.all(
       connections.map(async (conn) => {
         const connJson = conn.toJSON();
-
-        const otherUserId =
-          role === 'patient' ? conn.doctor?.user_id : conn.patient?.user_id;
+        const otherUserId = roleStrategy.getOtherConnectionUserId(connJson);
 
         if (conn.status === 'accepted' && otherUserId) {
           const lastMessage = await Message.findOne({
@@ -141,6 +109,10 @@ export const getMyConnections = async (req, res) => {
 
     return res.status(200).json({ connections: connectionsWithMeta });
   } catch (error) {
+    if (error?.status) {
+      return res.status(error.status).json({ error: error.message });
+    }
+
     console.error(error);
     return res.status(500).json({ error: 'Internal server error.' });
   }

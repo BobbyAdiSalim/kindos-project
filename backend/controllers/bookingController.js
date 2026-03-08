@@ -17,6 +17,7 @@ import {
   sendPatientCancellationEmailToDoctor,
   sendPatientRescheduleEmailToDoctor,
 } from '../utils/appointmentEmail.js';
+import { getRoleStrategy } from '../services/role-strategy/index.js';
 
 const ACTIVE_APPOINTMENT_STATUSES = ['scheduled', 'confirmed'];
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
@@ -1039,24 +1040,8 @@ export const rescheduleAppointment = async (req, res) => {
 export const getMyAppointments = async (req, res) => {
   try {
     const userId = req.auth.userId;
-    const role = req.auth.role;
-
-    let whereClause = {};
-    if (role === 'patient') {
-      const patient = await Patient.findOne({ where: { user_id: userId } });
-      if (!patient) {
-        return res.status(404).json({ message: 'Patient profile not found.' });
-      }
-      whereClause = { patient_id: patient.id };
-    } else if (role === 'doctor') {
-      const doctor = await Doctor.findOne({ where: { user_id: userId } });
-      if (!doctor) {
-        return res.status(404).json({ message: 'Doctor profile not found.' });
-      }
-      whereClause = { doctor_id: doctor.id };
-    } else {
-      return res.status(403).json({ message: 'Unsupported role for appointment listing.' });
-    }
+    const roleStrategy = getRoleStrategy(req.auth.role);
+    const whereClause = await roleStrategy.getAppointmentScope(userId);
 
     const appointments = await Appointment.findAll({
       where: whereClause,
@@ -1068,6 +1053,10 @@ export const getMyAppointments = async (req, res) => {
       appointments: appointments.map(serializeAppointment),
     });
   } catch (error) {
+    if (error?.status) {
+      return res.status(error.status).json({ message: error.message });
+    }
+
     console.error('Error fetching my appointments:', error);
     res.status(500).json({ message: 'Failed to fetch appointments.' });
   }
@@ -1076,29 +1065,14 @@ export const getMyAppointments = async (req, res) => {
 export const getAppointmentById = async (req, res) => {
   try {
     const userId = req.auth.userId;
-    const role = req.auth.role;
     const appointmentId = Number(req.params.appointmentId);
 
     if (!Number.isInteger(appointmentId) || appointmentId <= 0) {
       return res.status(400).json({ message: 'Invalid appointment ID.' });
     }
 
-    let roleWhere = {};
-    if (role === 'patient') {
-      const patient = await Patient.findOne({ where: { user_id: userId } });
-      if (!patient) {
-        return res.status(404).json({ message: 'Patient profile not found.' });
-      }
-      roleWhere = { patient_id: patient.id };
-    } else if (role === 'doctor') {
-      const doctor = await Doctor.findOne({ where: { user_id: userId } });
-      if (!doctor) {
-        return res.status(404).json({ message: 'Doctor profile not found.' });
-      }
-      roleWhere = { doctor_id: doctor.id };
-    } else {
-      return res.status(403).json({ message: 'Unsupported role for appointment details.' });
-    }
+    const roleStrategy = getRoleStrategy(req.auth.role);
+    const roleWhere = await roleStrategy.getAppointmentScope(userId);
 
     const appointment = await Appointment.findOne({
       where: {
@@ -1116,6 +1090,10 @@ export const getAppointmentById = async (req, res) => {
       appointment: serializeAppointment(appointment),
     });
   } catch (error) {
+    if (error?.status) {
+      return res.status(error.status).json({ message: error.message });
+    }
+
     console.error('Error fetching appointment details:', error);
     res.status(500).json({ message: 'Failed to fetch appointment details.' });
   }
