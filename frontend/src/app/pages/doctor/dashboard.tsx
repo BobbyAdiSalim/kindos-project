@@ -44,6 +44,7 @@ const toAppointmentCardData = (appointment: AppointmentRecord) => ({
   type: appointment.appointment_type,
   status: mapAppointmentStatus(appointment),
   reason: appointment.reason,
+  pendingRescheduleRequestedByDoctor: appointment.pending_reschedule?.requested_by_role === 'doctor',
 });
 
 export function DoctorDashboard() {

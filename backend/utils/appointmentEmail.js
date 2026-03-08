@@ -179,6 +179,78 @@ const buildApprovalEmailText = ({
 }) =>
   `Hi ${patientName || 'Patient'}, your appointment with ${doctorName || 'your provider'} on ${appointmentDate} at ${appointmentTime} (${appointmentType}) has been confirmed. View details: ${appointmentsLink}`;
 
+const buildRescheduleEmailHtml = ({
+  patientName,
+  doctorName,
+  appointmentDate,
+  appointmentTime,
+  appointmentType,
+  confirmLink,
+}) => {
+  const safePatientName = escapeHtml(patientName || 'Patient');
+  const safeDoctorName = escapeHtml(doctorName || 'your provider');
+  const safeDate = escapeHtml(appointmentDate);
+  const safeTime = escapeHtml(appointmentTime);
+  const safeType = escapeHtml(appointmentType);
+  const safeConfirmLink = escapeHtml(confirmLink);
+
+  return `
+  <div style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,Helvetica,sans-serif;color:#111827;">
+    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="padding:24px 0;">
+      <tr>
+        <td align="center">
+          <table role="presentation" cellpadding="0" cellspacing="0" width="600" style="max-width:600px;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">
+            <tr>
+              <td style="padding:24px 28px;background:#1d4ed8;color:#ffffff;">
+                <h1 style="margin:0;font-size:22px;line-height:1.3;">Appointment Rescheduled</h1>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:28px;">
+                <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#374151;">
+                  Hi ${safePatientName},
+                </p>
+                <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#374151;">
+                  <strong>${safeDoctorName}</strong> updated your appointment to a new time slot.
+                </p>
+                <div style="margin:0 0 20px;padding:14px;border-radius:8px;background:#f9fafb;border:1px solid #e5e7eb;">
+                  <p style="margin:0 0 6px;font-size:14px;color:#111827;"><strong>Date:</strong> ${safeDate}</p>
+                  <p style="margin:0 0 6px;font-size:14px;color:#111827;"><strong>Time:</strong> ${safeTime}</p>
+                  <p style="margin:0;font-size:14px;color:#111827;"><strong>Type:</strong> ${safeType}</p>
+                </div>
+                <p style="margin:0 0 20px;font-size:15px;line-height:1.6;color:#374151;">
+                  Please review and confirm this new time slot.
+                </p>
+                <p style="margin:0 0 24px;">
+                  <a
+                    href="${safeConfirmLink}"
+                    style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;font-weight:600;font-size:14px;padding:12px 18px;border-radius:8px;"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Review & Confirm
+                  </a>
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </div>
+  `;
+};
+
+const buildRescheduleEmailText = ({
+  patientName,
+  doctorName,
+  appointmentDate,
+  appointmentTime,
+  appointmentType,
+  confirmLink,
+}) =>
+  `Hi ${patientName || 'Patient'}, ${doctorName || 'your provider'} proposed a new appointment time: ${appointmentDate} at ${appointmentTime} (${appointmentType}). Review and confirm here: ${confirmLink}`;
+
 const buildDoctorNoticeEmailHtml = ({
   title,
   intro,
@@ -320,6 +392,60 @@ export const sendDoctorApprovalEmail = async ({
     subject: 'Your appointment has been confirmed',
     text: buildApprovalEmailText(payload),
     html: buildApprovalEmailHtml(payload),
+  });
+};
+
+export const sendDoctorRescheduleEmailToPatient = async ({
+  to,
+  patientName,
+  doctorName,
+  appointmentId,
+  appointmentDate,
+  appointmentTime,
+  appointmentType,
+}) => {
+  if (!to) return;
+
+  const prettyDate = toPrettyDate(appointmentDate);
+  const prettyTime = toPrettyTime(appointmentTime);
+  const normalizedType = appointmentType === 'in-person' ? 'In-Person' : 'Virtual';
+  const confirmLink = Number.isInteger(Number(appointmentId))
+    ? `${FRONTEND_URL.replace(/\/$/, '')}/patient/appointment/${appointmentId}?reschedule=confirm`
+    : `${FRONTEND_URL.replace(/\/$/, '')}/patient/dashboard`;
+
+  const payload = {
+    patientName,
+    doctorName,
+    appointmentDate: prettyDate || String(appointmentDate || ''),
+    appointmentTime: prettyTime || String(appointmentTime || ''),
+    appointmentType: normalizedType,
+    confirmLink,
+  };
+
+  if (EMAIL_PROVIDER === 'console') {
+    console.log('[Doctor Reschedule Email To Patient]');
+    console.log(`To: ${to}`);
+    console.log(buildRescheduleEmailText(payload));
+    return;
+  }
+
+  const { default: nodemailer } = await import('nodemailer');
+  const transporter = nodemailer.createTransport({
+    host: cleanEnv(process.env.SMTP_HOST),
+    port: Number(cleanEnv(process.env.SMTP_PORT, '587')),
+    secure: cleanEnv(process.env.SMTP_SECURE, 'false') === 'true',
+    auth: {
+      user: cleanEnv(process.env.SMTP_USER),
+      pass: cleanEnv(process.env.SMTP_PASS),
+    },
+  });
+
+  await transporter.sendMail({
+    from: cleanEnv(process.env.EMAIL_FROM) || cleanEnv(process.env.SMTP_USER),
+    to,
+    subject: 'Your appointment was rescheduled',
+    text: buildRescheduleEmailText(payload),
+    html: buildRescheduleEmailHtml(payload),
   });
 };
 

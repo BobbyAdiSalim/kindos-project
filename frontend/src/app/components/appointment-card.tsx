@@ -24,6 +24,7 @@ interface AppointmentCardProps {
       | 'upcoming';
     reason: string;
     hasReview?: boolean;
+    pendingRescheduleRequestedByDoctor?: boolean;
   };
   userRole: 'patient' | 'doctor';
   onConfirm?: (appointmentId: string) => void;
@@ -49,6 +50,7 @@ export function AppointmentCard({
   const canReviewBooking =
     userRole === 'doctor'
       && appointment.status === 'scheduled'
+      && !appointment.pendingRescheduleRequestedByDoctor
       && typeof onConfirm === 'function'
       && typeof onDecline === 'function';
   const showJoinCall =
