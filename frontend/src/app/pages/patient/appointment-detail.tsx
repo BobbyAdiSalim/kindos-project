@@ -11,6 +11,7 @@ import {
   ApiError,
   cancelAppointment,
   getAppointmentById,
+  respondToDoctorReschedule,
   rescheduleAppointment,
   type AppointmentRecord,
 } from '@/app/lib/appointment-api';
@@ -64,6 +65,7 @@ export function AppointmentDetail() {
   const [slotsError, setSlotsError] = useState('');
   const [rescheduleSubmitting, setRescheduleSubmitting] = useState(false);
   const [cancelSubmitting, setCancelSubmitting] = useState(false);
+  const [proposalDecisionSubmitting, setProposalDecisionSubmitting] = useState(false);
   const [hasDoctorReview, setHasDoctorReview] = useState(false);
 
   useEffect(() => {
@@ -112,8 +114,11 @@ export function AppointmentDetail() {
   const selectedSlot = visibleAvailableSlots.find((slot) => slot.start_time === rescheduleTime);
   const slotSupportsType = (slot: TimeSlot, type: 'virtual' | 'in-person') =>
     Array.isArray(slot.appointment_types) && slot.appointment_types.includes(type);
+  const pendingDoctorReschedule = appointment?.pending_reschedule?.requested_by_role === 'doctor'
+    ? appointment.pending_reschedule
+    : null;
   const canRescheduleOrCancel = appointment
-    ? ['scheduled', 'confirmed'].includes(appointment.status)
+    ? ['scheduled', 'confirmed'].includes(appointment.status) && !pendingDoctorReschedule
     : false;
 
   const loadSlots = async (date: Date, doctorUserId: number) => {
@@ -225,6 +230,25 @@ export function AppointmentDetail() {
     }
   };
 
+  const handleDoctorProposalResponse = async (action: 'accept' | 'decline') => {
+    if (!token || !id) return;
+
+    try {
+      setProposalDecisionSubmitting(true);
+      const updated = await respondToDoctorReschedule(token, id, action);
+      setAppointment(updated);
+      toast.success(
+        action === 'accept'
+          ? 'New time accepted. Appointment updated.'
+          : 'Reschedule proposal declined. Your current appointment time is unchanged.'
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to respond to reschedule proposal.');
+    } finally {
+      setProposalDecisionSubmitting(false);
+    }
+  };
+
   return (
     <div className="container mx-auto px-4 py-8 max-w-3xl">
       <Button variant="ghost" onClick={() => navigate(-1)} className="mb-6">
@@ -331,7 +355,7 @@ export function AppointmentDetail() {
               </div>
             )}
 
-            {status === 'scheduled' && (
+            {status === 'scheduled' && !pendingDoctorReschedule && (
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm">
                 <p className="text-amber-900">
                   Waiting for doctor confirmation.
@@ -348,6 +372,47 @@ export function AppointmentDetail() {
             )}
           </CardContent>
         </Card>
+
+        {pendingDoctorReschedule && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Doctor Proposed a New Time</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Please accept or decline this new schedule.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm">
+                <p className="text-amber-900">
+                  Proposed Date: {format(new Date(`${pendingDoctorReschedule.appointment_date}T00:00:00`), 'MMMM d, yyyy')}
+                </p>
+                <p className="text-amber-900">
+                  Proposed Time: {formatTime24to12(pendingDoctorReschedule.start_time)} ({pendingDoctorReschedule.duration} minutes)
+                </p>
+                <p className="text-amber-900">
+                  Proposed Type: {pendingDoctorReschedule.appointment_type === 'in-person' ? 'In-Person' : 'Virtual'}
+                </p>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => handleDoctorProposalResponse('decline')}
+                  disabled={proposalDecisionSubmitting}
+                >
+                  Keep Current Time
+                </Button>
+                <Button
+                  className="flex-1"
+                  onClick={() => handleDoctorProposalResponse('accept')}
+                  disabled={proposalDecisionSubmitting}
+                >
+                  {proposalDecisionSubmitting ? 'Submitting...' : 'Accept New Time'}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {canRescheduleOrCancel && (
           <div className="flex flex-col sm:flex-row gap-3">

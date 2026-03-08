@@ -35,6 +35,16 @@ export interface AppointmentRecord {
   cancellation_reason: string | null;
   notify_on_doctor_approval: boolean;
   declined_by_doctor: boolean;
+  pending_reschedule: {
+    appointment_date: string;
+    start_time: string;
+    end_time: string;
+    appointment_type: AppointmentType;
+    duration: number;
+    requested_by_role: 'patient' | 'doctor';
+    previous_status: AppointmentStatus | null;
+    requested_at: string | null;
+  } | null;
   doctor: AppointmentDoctor | null;
   patient: AppointmentPerson | null;
   created_at: string;
@@ -184,6 +194,21 @@ export const rescheduleAppointment = async (
     method: 'PATCH',
     headers: withAuth(token),
     body: JSON.stringify(payload),
+  });
+
+  const data = await parseJsonResponse(response);
+  return (data as AppointmentSingleResponse).appointment;
+};
+
+export const respondToDoctorReschedule = async (
+  token: string | null,
+  appointmentId: string,
+  action: 'accept' | 'decline'
+): Promise<AppointmentRecord> => {
+  const response = await fetch(`${API_BASE}/appointments/${appointmentId}/reschedule/response`, {
+    method: 'PATCH',
+    headers: withAuth(token),
+    body: JSON.stringify({ action }),
   });
 
   const data = await parseJsonResponse(response);

@@ -109,6 +109,42 @@ const Appointment = sequelize.define(
       defaultValue: true,
       comment: 'Whether patient should receive an email when doctor confirms appointment',
     },
+    pending_reschedule_date: {
+      type: DataTypes.DATEONLY,
+      allowNull: true,
+    },
+    pending_reschedule_start_time: {
+      type: DataTypes.TIME,
+      allowNull: true,
+    },
+    pending_reschedule_end_time: {
+      type: DataTypes.TIME,
+      allowNull: true,
+    },
+    pending_reschedule_type: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      comment: 'Proposed appointment type for pending reschedule requests',
+    },
+    pending_reschedule_duration: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      comment: 'Proposed duration in minutes for pending reschedule requests',
+    },
+    pending_reschedule_requested_by_role: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      comment: 'Role that initiated pending reschedule (patient or doctor)',
+    },
+    pending_reschedule_previous_status: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      comment: 'Status before pending reschedule was requested',
+    },
+    pending_reschedule_requested_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
   },
   {
     tableName: 'appointments',

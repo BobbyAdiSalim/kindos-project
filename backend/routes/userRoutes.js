@@ -46,7 +46,8 @@ import {
   getAppointmentById,
   updateAppointmentDecision,
   cancelAppointmentByPatient,
-  rescheduleAppointmentByPatient,
+  rescheduleAppointment,
+  respondToDoctorReschedule,
   getPatientHistory,
   saveSummary,
   markComplete,
@@ -301,8 +302,12 @@ router.patch("/appointments/:appointmentId/cancel", requireAuth, requireRole("pa
   cancelAppointmentByPatient(req, res);
 });
 
-router.patch("/appointments/:appointmentId/reschedule", requireAuth, requireRole("patient"), (req, res) => {
-  rescheduleAppointmentByPatient(req, res);
+router.patch("/appointments/:appointmentId/reschedule", requireAuth, requireRole("patient", "doctor"), (req, res) => {
+  rescheduleAppointment(req, res);
+});
+
+router.patch("/appointments/:appointmentId/reschedule/response", requireAuth, requireRole("patient"), (req, res) => {
+  respondToDoctorReschedule(req, res);
 });
 
 router.patch("/appointments/:appointmentId/summary", requireAuth, requireRole("doctor"), (req, res) => {
