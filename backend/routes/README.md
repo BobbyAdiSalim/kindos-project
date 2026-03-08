@@ -15,7 +15,7 @@ Each route file should:
 
 ```javascript
 import express from "express";
-import { createUser, getUser, updateUser, deleteUser } from "../controllers/userController.js";
+import { createUser, getUser, updateUser, deleteUser } from "../controllers/roles/userController.js";
 
 const router = express.Router();
 

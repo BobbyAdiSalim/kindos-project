@@ -3,13 +3,13 @@
  * Handles doctor availability management - both recurring patterns and specific slots
  */
 
-import { AvailabilityPattern, AvailabilitySlot } from '../models/Availability.js';
-import Doctor from '../models/Doctor.js';
-import Appointment from '../models/Appointment.js';
-import Review from '../models/Review.js';
-import sequelize from '../config/database.js';
+import { AvailabilityPattern, AvailabilitySlot } from '../../models/Availability.js';
+import Doctor from '../../models/Doctor.js';
+import Appointment from '../../models/Appointment.js';
+import Review from '../../models/Review.js';
+import sequelize from '../../config/database.js';
 import { Op } from 'sequelize';
-import { buildAvailabilityFilterClauses } from '../services/availability-builder/index.js';
+import { buildAvailabilityFilterClauses } from '../../services/availability-builder/index.js';
 
 const ALLOWED_DURATIONS = [30, 60];
 const ALLOWED_APPOINTMENT_TYPES = ['virtual', 'in-person'];

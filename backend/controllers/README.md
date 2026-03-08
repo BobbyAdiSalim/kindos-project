@@ -10,6 +10,11 @@ Each controller should:
 - Handle errors appropriately
 - Return appropriate HTTP status codes
 
+Controllers are organized by domain:
+- `roles/`: role and profile related controllers (`userController.js`, `adminController.js`)
+- `booking/`: booking, cancel, reschedule, waitlist, and shared booking helpers
+- `other/`: non-booking features like availability, chat, and reviews
+
 ## Example: userController.js
 
 ```javascript
@@ -56,3 +61,11 @@ export const getUser = async (req, res, pool) => {
 2. Import necessary dependencies (bcrypt, jwt, etc.)
 3. Export functions that handle your business logic
 4. Each function should receive (req, res, pool) parameters
+
+## Booking Controller Split
+
+Booking-related logic is split by responsibility:
+- `booking/bookingController.js`: initial booking flow and shared appointment retrieval endpoints.
+- `booking/cancelController.js`: cancellation and doctor booking decision endpoints.
+- `booking/rescheduleController.js`: patient/doctor reschedule flows and reschedule response handling.
+- `booking/bookingShared.js`: shared booking validation, slot checks, serialization, and helper utilities.

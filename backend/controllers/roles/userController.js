@@ -7,9 +7,9 @@ import { fileURLToPath } from 'url';
 import { Readable } from 'stream';
 import { Op } from 'sequelize';
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
-import { sequelize, User, Patient, Doctor, Review, AdminLog } from '../models/index.js';
-import { getRoleStrategy } from '../services/role-strategy/index.js';
-import { sendEmailByType } from '../services/email-strategy/index.js';
+import { sequelize, User, Patient, Doctor, Review, AdminLog } from '../../models/index.js';
+import { getRoleStrategy } from '../../services/role-strategy/index.js';
+import { sendEmailByType } from '../../services/email-strategy/index.js';
 
 const cleanEnv = (value, fallback = '') => {
   if (value === undefined || value === null || value === '') return fallback;

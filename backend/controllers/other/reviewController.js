@@ -1,4 +1,4 @@
-import { sequelize, Appointment, Doctor, Patient, Review, User } from '../models/index.js';
+import { sequelize, Appointment, Doctor, Patient, Review, User } from '../../models/index.js';
 
 class HttpError extends Error {
   constructor(status, message) {

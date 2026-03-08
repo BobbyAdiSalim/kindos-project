@@ -1,5 +1,5 @@
-import { sequelize } from '../models/index.js';
-import waitlistService from '../services/WaitlistService.js';
+import { sequelize } from '../../models/index.js';
+import waitlistService from '../../services/WaitlistService.js';
 
 const serializeWaitlistEntry = (entry) => ({
   id: entry.id,

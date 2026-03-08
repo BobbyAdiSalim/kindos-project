@@ -1,6 +1,6 @@
 import { Op } from 'sequelize';
-import { AdminLog, Doctor, User } from '../models/index.js';
-import { sendEmailByType } from '../services/email-strategy/index.js';
+import { AdminLog, Doctor, User } from '../../models/index.js';
+import { sendEmailByType } from '../../services/email-strategy/index.js';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 

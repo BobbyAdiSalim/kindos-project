@@ -13,12 +13,12 @@ import {
   resubmitDoctorVerification,
   getDoctors,
   getDoctorById,
-} from "../controllers/userController.js";
+} from "../controllers/roles/userController.js";
 import {
   getUnverifiedDoctors,
   updateDoctorVerificationStatus,
   getDoctorVerificationHistory,
-} from "../controllers/adminController.js";
+} from "../controllers/roles/adminController.js";
 import {
   getAvailabilityPatterns,
   setAvailabilityPatterns,
@@ -30,7 +30,7 @@ import {
   getDoctorAvailability,
   getDoctorsWithAvailability,
   getBookableSlots,
-} from "../controllers/availabilityController.js";
+} from "../controllers/other/availabilityController.js";
 import {
   sendConnectRequest,
   getMyConnections,
@@ -39,29 +39,33 @@ import {
   getConversation,
   sendMessage,
   markMessagesRead,
-} from "../controllers/chatController.js";
+} from "../controllers/other/chatController.js";
 import {
   createAppointmentBooking,
   getMyAppointments,
   getAppointmentById,
-  updateAppointmentDecision,
-  cancelAppointmentByPatient,
-  rescheduleAppointment,
-  respondToDoctorReschedule,
   getPatientHistory,
   saveSummary,
   markComplete,
-} from "../controllers/bookingController.js";
+} from "../controllers/booking/bookingController.js";
+import {
+  updateAppointmentDecision,
+  cancelAppointmentByPatient,
+} from "../controllers/booking/cancelController.js";
+import {
+  rescheduleAppointment,
+  respondToDoctorReschedule,
+} from "../controllers/booking/rescheduleController.js";
 import {
   upsertReview,
   getMyReviewForDoctor,
   getDoctorReviews,
-} from "../controllers/reviewController.js";
+} from "../controllers/other/reviewController.js";
 import {
   joinWaitlist,
   getMyWaitlistEntries,
   removeMyWaitlistEntry,
-} from "../controllers/waitlistController.js";
+} from "../controllers/booking/waitlistController.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 
 /**

@@ -1,6 +1,6 @@
 import { Op } from 'sequelize';
-import { User, Patient, Doctor, Connection, Message } from '../models/index.js';
-import { getRoleStrategy } from '../services/role-strategy/index.js';
+import { User, Patient, Doctor, Connection, Message } from '../../models/index.js';
+import { getRoleStrategy } from '../../services/role-strategy/index.js';
 
 /**
  * Send a connect request from a patient to a doctor.
