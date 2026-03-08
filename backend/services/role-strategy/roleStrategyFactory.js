@@ -12,6 +12,9 @@ functionalities.
 Extensibility and Maintainability:
 - Adding new roles can be done simply by adding new Strategy on role-strategy/strategies
   folder, following the given interface. Don't forget to import it here and modify STRATEGIES.
+It improves extensibility and maintainability by letting you add or change role behavior in 
+one place instead of updating many files.
+
 */
 
 import adminRoleStrategy from './strategies/adminRoleStrategy.js';

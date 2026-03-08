@@ -9,6 +9,7 @@ import Appointment from '../models/Appointment.js';
 import Review from '../models/Review.js';
 import sequelize from '../config/database.js';
 import { Op } from 'sequelize';
+import { buildAvailabilityFilterClauses } from '../services/availability-builder/index.js';
 
 const ALLOWED_DURATIONS = [30, 60];
 const ALLOWED_APPOINTMENT_TYPES = ['virtual', 'in-person'];
@@ -650,63 +651,11 @@ export const getDoctorsWithAvailability = async (req, res) => {
 
     console.log('Fetching doctors with availability filters:', { appointmentType, specialty, date, timeOfDay, language });
 
-    const timeRanges = {
-      morning: { start: '08:00:00', end: '12:00:00' },
-      afternoon: { start: '12:00:00', end: '17:00:00' },
-      evening: { start: '17:00:00', end: '21:00:00' }
-    };
-
-    // Build slot where clause
-    const slotWhereClause = {
-      is_available: true,
-    };
-
-    if (date) {
-      slotWhereClause.slot_date = date;
-    }
-
-    if (appointmentType && appointmentType !== 'no-preference' && appointmentType !== 'any') {
-      slotWhereClause.appointment_type = { [Op.contains]: [appointmentType] };
-    }
-
-    if (timeOfDay && timeOfDay !== 'any') {
-      const range = timeRanges[timeOfDay];
-      if (range) {
-        slotWhereClause.start_time = { [Op.lt]: range.end };
-        slotWhereClause.end_time = { [Op.gt]: range.start };
-      }
-    }
-
-    // Build pattern where clause
-    const patternWhereClause = {
-      is_active: true,
-    };
-
-    if (appointmentType && appointmentType !== 'no-preference' && appointmentType !== 'any') {
-      patternWhereClause.appointment_type = { [Op.contains]: [appointmentType] };
-    }
-
-    if (timeOfDay && timeOfDay !== 'any') {
-      const range = timeRanges[timeOfDay];
-      if (range) {
-        patternWhereClause.start_time = { [Op.lt]: range.end };
-        patternWhereClause.end_time = { [Op.gt]: range.start };
-      }
-    }
-
-    if (date) {
-      const dayOfWeek = new Date(date + 'T00:00:00').getDay();
-      patternWhereClause.day_of_week = dayOfWeek;
-    }
-
-    // Build doctor where clause
-    const doctorWhereClause = {
-      verification_status: "approved",
-    };
-
-    if (language && language !== "all" && language !== 'any') {
-      doctorWhereClause.languages = { [Op.contains]: [language] };
-    }
+    const {
+      slotWhereClause,
+      patternWhereClause,
+      doctorWhereClause,
+    } = buildAvailabilityFilterClauses({ date, appointmentType, timeOfDay, language });
 
     console.log('Slot where clause:', JSON.stringify(slotWhereClause, null, 2));
     console.log('Pattern where clause:', JSON.stringify(patternWhereClause, null, 2));
