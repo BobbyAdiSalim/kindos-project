@@ -37,6 +37,23 @@ export function DoctorMessaging() {
 
   const currentUserId = user ? Number(user.id) : 0;
 
+  const updateConnectionPreview = useCallback(
+    (connectionId: number, message: MessageInfo, markRead: boolean) => {
+      setConnections((prev) =>
+        prev.map((c) => {
+          if (c.id !== connectionId) return c;
+          const unread = markRead ? 0 : (c.unreadCount ?? 0) + 1;
+          return {
+            ...c,
+            lastMessage: message,
+            unreadCount: unread,
+          };
+        })
+      );
+    },
+    []
+  );
+
   // Load connections
   useEffect(() => {
     const loadData = async () => {
@@ -88,6 +105,10 @@ export function DoctorMessaging() {
       try {
         const data = await getConversation(token, activeConnection.id);
         setMessages(data.messages);
+        const latestMessage = data.messages[data.messages.length - 1];
+        if (latestMessage) {
+          updateConnectionPreview(activeConnection.id, latestMessage, true);
+        }
         await markMessagesRead(token, activeConnection.id);
 
         setConnections((prev) =>
@@ -110,7 +131,7 @@ export function DoctorMessaging() {
     return () => {
       s.off('connect', handleReconnect);
     };
-  }, [activeConnection, token]);
+  }, [activeConnection, token, updateConnectionPreview]);
 
   // Listen for real-time messages
   useEffect(() => {
@@ -118,11 +139,13 @@ export function DoctorMessaging() {
 
     const cleanup = onNewMessage((message: MessageInfo) => {
       setMessages((prev) => [...prev, message]);
+      const isIncoming = message.sender_id !== currentUserId;
+      updateConnectionPreview(activeConnection.id, message, !isIncoming);
       markMessagesRead(token, activeConnection.id).catch(() => {});
     });
 
     return cleanup;
-  }, [activeConnection, token]);
+  }, [activeConnection, token, currentUserId, updateConnectionPreview]);
 
   const handleSend = useCallback(async () => {
     if (!messageInput.trim() || !activeConnection || sending) return;
@@ -131,6 +154,7 @@ export function DoctorMessaging() {
     try {
       const data = await sendMessageApi(token, activeConnection.id, messageInput.trim());
       setMessages((prev) => [...prev, data.message]);
+      updateConnectionPreview(activeConnection.id, data.message, true);
       emitMessage(activeConnection.id, data.message);
       setMessageInput('');
     } catch (err: any) {
@@ -138,7 +162,7 @@ export function DoctorMessaging() {
     } finally {
       setSending(false);
     }
-  }, [messageInput, activeConnection, token, sending]);
+  }, [messageInput, activeConnection, token, sending, updateConnectionPreview]);
 
   const acceptedConnections = connections.filter((c) => c.status === 'accepted');
 

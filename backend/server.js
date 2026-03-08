@@ -1,10 +1,8 @@
 import express from "express";
 import { createServer } from "http";
-import { Server as SocketIOServer } from "socket.io";
-import jwt from "jsonwebtoken";
 import pg from "pg";
 import { shouldSeedDevelopmentData, seedDevelopmentData } from "./seed-dev-data.js";
-import { User, Connection, Patient, Doctor } from "./models/index.js";
+import { initMessagingIO } from "./services/messaging-singleton/index.js";
 const { Pool } = pg;
 
 // Import routes
@@ -20,96 +18,9 @@ const cleanEnv = (value, fallback = undefined) => {
 };
 const JWT_SECRET = cleanEnv(process.env.JWT_SECRET, "dev-secret-key");
 const FRONTEND_URL = cleanEnv(process.env.FRONTEND_URL, "http://localhost:5173");
-// Socket.io setup with CORS
-const io = new SocketIOServer(httpServer, {
-  cors: {
-    origin: FRONTEND_URL,
-    methods: ["GET", "POST"],
-  },
-});
-
-// Socket.io JWT authentication middleware
-io.use(async (socket, next) => {
-  try {
-    const token = socket.handshake.auth.token;
-    if (!token) {
-      return next(new Error("Authentication required."));
-    }
-
-    const payload = jwt.verify(token, JWT_SECRET);
-    const user = await User.findByPk(payload.userId);
-    if (!user) {
-      return next(new Error("Authentication failed."));
-    }
-
-    socket.auth = { userId: user.id, role: user.role };
-    next();
-  } catch (_error) {
-    next(new Error("Invalid or expired token."));
-  }
-});
-
-// Verify the socket user is a participant of the given connection
-const verifyConnectionMembership = async (userId, connectionId) => {
-  const id = Number(connectionId);
-  if (!Number.isInteger(id) || id <= 0) return false;
-
-  const connection = await Connection.findByPk(id, {
-    include: [
-      { model: Patient, as: "patient", attributes: ["user_id"] },
-      { model: Doctor, as: "doctor", attributes: ["user_id"] },
-    ],
-  });
-
-  if (!connection || connection.status !== "accepted") return false;
-  return connection.patient?.user_id === userId || connection.doctor?.user_id === userId;
-};
-
-// Socket.io connection handler
-io.on("connection", (socket) => {
-  const { userId } = socket.auth;
-
-  // Join a personal room for receiving direct notifications
-  socket.join(`user_${userId}`);
-
-  // Join a conversation room (with auth check)
-  socket.on("join_conversation", async (connectionId) => {
-    if (await verifyConnectionMembership(userId, connectionId)) {
-      socket.join(`connection_${connectionId}`);
-    }
-  });
-
-  // Leave a conversation room
-  socket.on("leave_conversation", (connectionId) => {
-    socket.leave(`connection_${connectionId}`);
-  });
-
-  // Handle real-time message sending (with auth check)
-  socket.on("send_message", async (data) => {
-    const { connectionId, message } = data;
-    if (await verifyConnectionMembership(userId, connectionId)) {
-      socket.to(`connection_${connectionId}`).emit("new_message", message);
-    }
-  });
-
-  // Notify when typing (only if in the room already)
-  socket.on("typing", (data) => {
-    const { connectionId } = data;
-    if (socket.rooms.has(`connection_${connectionId}`)) {
-      socket.to(`connection_${connectionId}`).emit("user_typing", { userId });
-    }
-  });
-
-  socket.on("stop_typing", (data) => {
-    const { connectionId } = data;
-    if (socket.rooms.has(`connection_${connectionId}`)) {
-      socket.to(`connection_${connectionId}`).emit("user_stop_typing", { userId });
-    }
-  });
-
-  socket.on("disconnect", () => {
-    // Cleanup handled automatically by Socket.io
-  });
+const io = initMessagingIO(httpServer, {
+  frontendUrl: FRONTEND_URL,
+  jwtSecret: JWT_SECRET,
 });
 
 // Make io accessible to controllers if needed
