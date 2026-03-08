@@ -1,83 +1,15 @@
 import { Op } from 'sequelize';
 import { AdminLog, Doctor, User } from '../models/index.js';
+import { sendEmailByType } from '../services/email-strategy/index.js';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 
 const sendVerificationStatusUpdatedEmail = async ({ to }) => {
-  const mailProvider = process.env.EMAIL_PROVIDER || 'console';
   const dashboardLink = `${FRONTEND_URL}/doctor/dashboard`;
-  const subject = 'Your verification status has been updated';
-  const text = `Hello, your verification status has been updated. Please sign in and check your dashboard for details: ${dashboardLink}`;
-  const html = `
-    <div style="margin:0;padding:0;background:#f6f8fb;font-family:Arial,Helvetica,sans-serif;color:#102a43;">
-      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="padding:28px 12px;">
-        <tr>
-          <td align="center">
-            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:620px;background:#ffffff;border:1px solid #e4e7eb;border-radius:14px;overflow:hidden;">
-              <tr>
-                <td style="padding:24px 28px;background:linear-gradient(135deg,#0f4c81,#3f92d2);color:#ffffff;">
-                  <p style="margin:0;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;opacity:0.9;">UTLWA</p>
-                  <h1 style="margin:10px 0 0;font-size:24px;line-height:1.2;font-weight:700;">Verification Update</h1>
-                </td>
-              </tr>
-              <tr>
-                <td style="padding:26px 28px;">
-                  <p style="margin:0 0 14px;font-size:16px;line-height:1.6;">Hello,</p>
-                  <p style="margin:0 0 20px;font-size:16px;line-height:1.6;">
-                    Your verification status has been updated. Please sign in and check your dashboard for the latest details.
-                  </p>
-                  <table role="presentation" cellspacing="0" cellpadding="0" style="margin:0 0 20px;">
-                    <tr>
-                      <td style="border-radius:8px;background:#1366d6;">
-                        <a href="${dashboardLink}" style="display:inline-block;padding:12px 20px;color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;">
-                          Open Doctor Dashboard
-                        </a>
-                      </td>
-                    </tr>
-                  </table>
-                  <p style="margin:0;font-size:13px;line-height:1.6;color:#52606d;">
-                    If the button does not work, use this link:<br />
-                    <a href="${dashboardLink}" style="color:#1366d6;text-decoration:none;">${dashboardLink}</a>
-                  </p>
-                </td>
-              </tr>
-              <tr>
-                <td style="padding:16px 28px;background:#f0f4f8;color:#627d98;font-size:12px;line-height:1.6;">
-                  This is an automated message from UTLWA. Please do not reply to this email.
-                </td>
-              </tr>
-            </table>
-          </td>
-        </tr>
-      </table>
-    </div>
-  `;
-
-  if (mailProvider === 'console') {
-    console.log('[Doctor Verification Status Updated Email]');
-    console.log(`To: ${to}`);
-    console.log(`Subject: ${subject}`);
-    console.log(`Message: ${text}`);
-    return;
-  }
-
-  const { default: nodemailer } = await import('nodemailer');
-  const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: Number(process.env.SMTP_PORT || 587),
-    secure: String(process.env.SMTP_SECURE || 'false') === 'true',
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
-  });
-
-  await transporter.sendMail({
-    from: process.env.EMAIL_FROM || process.env.SMTP_USER,
+  await sendEmailByType({
+    type: 'doctor-verification-status-updated',
     to,
-    subject,
-    text,
-    html,
+    data: { dashboardLink },
   });
 };
 
