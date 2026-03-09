@@ -22,22 +22,49 @@ Designed with a strong focus on **clarity and accessibility**, the booking flow 
 Project/
 │
 ├── backend/
-│   ├── server.js           # Server file that handles sign ups and logins.
+│   ├── config/
+│   │   └── database.js          # Sequelize database connection
+│   ├── db/
+│   │   ├── migrations/          # Sequelize migration files
+│   │   └── seeders/             # Sequelize seeder files
+│   ├── models/
+│   │   ├── User.js              # User authentication model
+│   │   ├── Patient.js           # Patient profile model
+│   │   ├── Doctor.js            # Doctor profile model
+│   │   ├── Appointment.js       # Appointment model
+│   │   ├── Availability.js      # Doctor availability models
+│   │   ├── Message.js           # Messaging model
+│   │   ├── Review.js            # Review model
+│   │   ├── Questionnaire.js     # Questionnaire model
+│   │   ├── AdminLog.js          # Admin log model
+│   │   ├── index.js             # Model aggregator with associations
+│   │   └── README.md            # Models documentation
+│   ├── server.js                # Main Express server
+│   ├── db-init.js               # Legacy sync-based DB initialization script
+│   ├── .env                     # Environment variables (not in git)
+│   ├── .env.example             # Environment template
+│   ├── SETUP.md                 # Backend setup guide
 │   ├── package.json
 │   └── package-lock.json
 │
 ├── frontend/
 │   ├── public/
 │   ├── src/
-│   │   ├── main.jsx        # React entry point
-│   │   ├── App.jsx         # Main sign up / login application
+│   │   ├── main.jsx             # React entry point
+│   │   ├── App.jsx              # Main sign up / login application
 │   │   ├── App.css
 │   │   ├── index.css
 │   │   └── assets/
 │   ├── index.html
-│   ├── vite.config.js      # Vite configuration with proxy setup to connect to backend
+│   ├── vite.config.js           # Vite configuration with proxy setup
 │   ├── package.json
 │   └── package-lock.json
+│
+├── doc/
+│   └── sprint0/
+│       ├── product.md           # Product description
+│       ├── product_backlog.md   # User stories
+│       └── README.md
 │
 ├── .gitignore
 └── README.md
@@ -48,6 +75,7 @@ Project/
 ### Backend
 - **Express.js** - Web server framework
 - **PostgreSQL** - Database
+- **Sequelize** - ORM (Object-Relational Mapping)
 - **bcrypt** - Password hashing
 - **jsonwebtoken** - JWT authentication
 - **nodemon** - Development auto-reload
@@ -73,21 +101,103 @@ Login existing user
 
 ### Backend
 
-Create a `.env` file in the `backend/` directory with your PostgreSQL credentials:
-```env
-PG_HOST="localhost"
-PG_PORT=5432
-PG_USER="postgres"
-PG_PWD=your_password
-PG_DATABASE="your_database_name"
+**Step 1: Configure Environment Variables**
+
+Create a `.env` file in the `backend/` directory (or copy from `.env.example`):
+
+```bash
+cd backend
+cp .env.example .env
 ```
 
-Install dependencies and run:
+Edit the `.env` file with your configuration:
+
+```env
+# PostgreSQL Database Configuration
+PG_HOST=localhost
+PG_PORT=5432
+PG_USER=postgres
+PG_PWD=your_password_here
+PG_DATABASE=utlwa_db
+
+# JWT Authentication
+JWT_SECRET=your_super_secret_jwt_key_change_this_in_production
+
+# Server Configuration
+PORT=4000
+NODE_ENV=development
+
+# Optional: Session Configuration
+SESSION_SECRET=your_session_secret_here
+
+# Optional: Email Service (for password reset)
+RESET_TOKEN_EXPIRES_MINUTES=60
+# Email provider options:
+# EMAIL_PROVIDER=console
+EMAIL_PROVIDER=smtp
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=your_email@gmail.com
+SMTP_PASS=your_email_app_password
+EMAIL_FROM=your_email@gmail.com
+
+# Frontend URL (used in reset links / CORS)
+FRONTEND_URL=http://localhost:5173
+
+# Cloudflare R2 (doctor verification document storage)
+# Required for doctor verification document uploads
+R2_BUCKET_NAME=kindos-verification-docs
+R2_ENDPOINT=https://<ACCOUNT_ID>.r2.cloudflarestorage.com
+R2_ACCESS_KEY_ID=your_r2_access_key_id
+R2_SECRET_ACCESS_KEY=your_r2_secret_access_key
+R2_PUBLIC_BASE_URL=
+```
+
+**Step 2: Create PostgreSQL Database**
+
+```bash
+# Connect to PostgreSQL
+psql -U postgres
+
+# Create database
+CREATE DATABASE utlwa_db;
+
+# Exit
+\q
+```
+
+**Step 3: Install Dependencies**
+
 ```bash
 cd backend
 npm install
-npm run dev  # Runs on http://localhost:4000
 ```
+
+**Step 4: Run Database Migrations**
+
+Create/update schema using migrations:
+
+```bash
+npm run migrate
+```
+
+This applies migration files in `backend/db/migrations` and records history in `SequelizeMeta`.
+
+**Step 5 (Optional): Seed Development Data**
+
+```bash
+npm run seed
+```
+
+**Step 6: Start the Server**
+
+```bash
+npm run dev  # Development mode (runs on http://localhost:4000)
+```
+
+For more detailed setup instructions, see [backend/SETUP.md](backend/SETUP.md).
+For database models documentation, see [backend/models/README.md](backend/models/README.md).
 
 ### Frontend
 ```bash
@@ -96,14 +206,118 @@ npm install
 npm run dev  # Runs with Vite dev server
 ```
 
+## Database Models
+
+The backend uses Sequelize ORM with the following models:
+
+| Model | Table | Description |
+|-------|-------|-------------|
+| **User** | users | Base authentication (username, email, password, role) |
+| **Patient** | patients | Patient profiles and accessibility preferences |
+| **Doctor** | doctors | Doctor profiles, credentials, and verification status |
+| **Appointment** | appointments | Booking between patients and doctors |
+| **AvailabilityPattern** | availability_patterns | Recurring weekly schedules for doctors |
+| **AvailabilitySlot** | availability_slots | Specific date/time slots for appointments |
+| **Message** | messages | Patient-doctor communication |
+| **Review** | reviews | Patient ratings and reviews of doctors |
+| **Questionnaire** | questionnaires | Patient needs assessment |
+| **AdminLog** | admin_logs | Admin verification audit trail |
+| **WaitlistEntry** | waitlist_entries | Waitlist requests for booked slots |
+| **Connection** | connections | Patient-doctor connection requests |
+
+For detailed model documentation and usage examples, see [backend/models/README.md](backend/models/README.md).
+
+## Database Migrations & Seeders
+
+This project uses **Sequelize migrations** as the source of truth for schema changes.
+
+### Apply Migrations
+```bash
+cd backend
+npm run migrate
+```
+
+### Check Migration Status
+```bash
+npm run migrate:status
+```
+
+### Create a New Migration (for every schema change)
+When updating table structure (new column, constraint, index, table), create a new migration file:
+
+```bash
+npm run migration:create -- add_age_to_users
+```
+
+Then edit the generated file in `backend/db/migrations`:
+- implement `up` to apply the change
+- implement `down` to rollback the change
+
+After editing:
+```bash
+npm run migrate
+```
+
+### Rollback Migrations
+```bash
+npm run migrate:undo       # undo latest migration
+npm run migrate:undo:all   # undo all migrations
+```
+
+### Seed Data
+```bash
+npm run seed                           # run all seeders
+npm run seed:create -- dev-users       # create new seeder file
+npm run seed:one -- <seeder-file.js>   # run one seeder
+npm run seed:undo                      # undo last seeder
+npm run seed:undo:all                  # undo all seeders
+```
+
+### Reset Local DB and Rebuild Schema
+```bash
+npm run db:fresh        # clean all tables in current DB + migrate
+npm run db:fresh:seed   # clean + migrate + seed
+```
+
+### Team Rules
+- Always create a **new migration file** for schema changes. Do not edit old applied migrations.
+- Keep model updates and migration changes in the same PR.
+- Use migration scripts (`migrate`, `migrate:undo`) instead of `sequelize.sync` in normal workflow.
+- Use `db:fresh` only for local/dev reset (never in production).
+
+## Available Scripts
+
+### Backend Scripts
+```bash
+npm start           # Start production server
+npm run dev         # Start development server with auto-reload
+npm run migrate          # Apply migrations
+npm run migrate:status   # Show applied/pending migrations
+npm run migration:create -- <name>   # Create a migration file
+npm run seed             # Run all seeders
+npm run seed:create -- <name>        # Create a seeder file
+npm run db:fresh         # Clean all tables + migrate
+npm run db:fresh:seed    # Clean all tables + migrate + seed
+```
+
+### Frontend Scripts
+```bash
+npm run dev         # Start Vite development server
+npm run build       # Build for production
+npm run preview     # Preview production build
+```
+
 ## Features
 
 - User registration with password hashing
 - User login with JWT authentication
+- Sequelize ORM with PostgreSQL
+- Sequelize models with proper relationships
+- Database migrations and seeders
 
 ## Contribution Guidelines
 
-Thanks for your interest in contributing to **UTLWA**! This repository is maintained by **The Kindos**.  
+Thanks for your interest in contributing to **UTLWA**! This repository is maintained by **The Kindos**.
 To keep development organized, we use **Git Flow**, **GitHub Issues** for ticketing, and PR reviews.
 
 ---
@@ -132,15 +346,15 @@ We use **GitHub Issues** to track work.
 **Yes.** We follow **Git Flow** with long-lived branches and structured releases.
 
 ### Branch Types
-- `main`  
+- `main`
   **Production-ready** code only. Tagged releases live here.
-- `develop`  
+- `develop`
   Integration branch for completed features heading into the next release.
-- `feature/*`  
+- `feature/*`
   New features branched from `develop` and merged back into `develop`.
-- `release/*`  
+- `release/*`
   Release preparation (final testing, version bumps, small fixes). Merged into both `main` and `develop`.
-- `hotfix/*`  
+- `hotfix/*`
   Urgent production fixes branched from `main`. Merged into both `main` and `develop`.
 
 ### Naming Conventions

@@ -1,11 +1,30 @@
 import express from "express";
+import { createServer } from "http";
 import pg from "pg";
+import { shouldSeedDevelopmentData, seedDevelopmentData } from "./seed-dev-data.js";
+import { initMessagingIO } from "./services/messaging-singleton/index.js";
 const { Pool } = pg;
-import bcrypt from "bcrypt";
-import jwt from "jsonwebtoken";
+
+// Import routes
+import userRoutes from "./routes/userRoutes.js";
 
 const app = express();
-const PORT = 4000;
+const httpServer = createServer(app);
+const PORT = Number(process.env.PORT) || 4000;
+const SHOULD_SEED = shouldSeedDevelopmentData(process.argv, process.env);
+const cleanEnv = (value, fallback = undefined) => {
+  if (value === undefined || value === null || value === "") return fallback;
+  return String(value).replace(/\r/g, "").trim();
+};
+const JWT_SECRET = cleanEnv(process.env.JWT_SECRET, "dev-secret-key");
+const FRONTEND_URL = cleanEnv(process.env.FRONTEND_URL, "http://localhost:5173");
+const io = initMessagingIO(httpServer, {
+  frontendUrl: FRONTEND_URL,
+  jwtSecret: JWT_SECRET,
+});
+
+// Make io accessible to controllers if needed
+app.set("io", io);
 
 // Connect to PostgreSQL
 let pool;
@@ -13,78 +32,81 @@ let pool;
 async function connectToPG() {
   try {
     pool = new Pool({
-      user: process.env.PG_USER,
-      host: process.env.PG_HOST,
-      database: process.env.PG_DATABASE,
-      password: process.env.PG_PWD,
-      port: process.env.PG_PORT,
+      user: cleanEnv(process.env.PG_USER),
+      host: cleanEnv(process.env.PG_HOST, "localhost"),
+      database: cleanEnv(process.env.PG_DATABASE),
+      password: cleanEnv(process.env.PG_PWD),
+      port: Number(cleanEnv(process.env.PG_PORT, "5432")),
     });
+
+    // Store pool in app.locals to make it accessible in routes
+    app.locals.pool = pool;
+
+    console.log("Connected to PostgreSQL successfully");
   } catch (error) {
     console.error("Error connecting to PostgreSQL:", error);
   }
 }
 
-connectToPG();
+// Middleware
+app.use(express.json({ limit: "8mb" }));
 
-// Open Port
-app.listen(PORT, () => {
+// API Routes
+// All routes defined in userRoutes will be prefixed with /api
+app.use("/api", userRoutes);
+
+// Health check endpoint
+app.get("/", (req, res) => {
+  res.json({ message: "Server is running!" });
+});
+
+let server;
+
+const shutdown = async () => {
+  try {
+    if (server) {
+      await new Promise((resolve) => server.close(resolve));
+    }
+
+    if (pool) {
+      await pool.end();
+    }
+
+    process.exit(0);
+  } catch (error) {
+    console.error("Error during shutdown:", error);
+    process.exit(1);
+  }
+};
+
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);
+
+const startServer = async () => {
+  await connectToPG();
+
+  if (SHOULD_SEED) {
+    await seedDevelopmentData();
+  }
+
+  server = httpServer.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);
   });
 
-// Register a new user
-app.post("/users", express.json(), async (req, res) => {
-    try {
-      const { username, password } = req.body;
-  
-      // Basic body request check
-      if (!username || !password) {
-        return res
-          .status(400)
-          .json({ error: "Username and password both needed to register." });
-      }
-  
-      // Creating hashed password (search up bcrypt online for more info)
-      // and storing user info in database
-      const hashedPassword = await bcrypt.hash(password, 10);
-      const result = await pool.query(
-        "INSERT INTO users (username, password) VALUES ($1, $2) RETURNING id",
-        [username, hashedPassword]
-      );
-  
-      // Returning JSON Web Token (search JWT for more explanation)
-      const token = jwt.sign({ userId: result.rows[0].id }, "secret-key", { expiresIn: "1h" });
-      res.status(201).json({ response: "User registered successfully.", token });
-    } catch (error) {
-      res.status(500).json({ error: error.message });
+  server.on("error", (error) => {
+    if (error.code === "EADDRINUSE") {
+      console.error(`Port ${PORT} is already in use.`);
+      console.error("Stop the other process using this port or run this server on a different PORT.");
+      console.error("Example (PowerShell): $env:PORT=4001; npm run dev");
+      process.exit(1);
     }
-  });
 
-// Log in an existing user
-app.post("/users/token", express.json(), async (req, res) => {
-    try {
-      const { username, password } = req.body;
-  
-      // Basic body request check
-      if (!username || !password) {
-        return res
-          .status(400)
-          .json({ error: "Username and password both needed to login." });
-      }
-  
-      // Find username in database
-      const result = await pool.query("SELECT * FROM users WHERE username = $1", [username]);
-      const user = result.rows[0];
-  
-      // Validate user against hashed password in database
-      if (user && (await bcrypt.compare(password, user.password))) {
-        const token = jwt.sign({ userId: user.id }, "secret-key", { expiresIn: "1h" });
-  
-        // Send JSON Web Token to valid user
-        res.json({ response: "User logged in succesfully.", token: token }); //Implicitly status 200
-      } else {
-        res.status(401).json({ error: "Authentication failed." });
-      }
-    } catch (error) {
-      res.status(500).json({ error: error.message });
-    }
+    console.error("Server failed to start:", error);
+    process.exit(1);
   });
+};
+
+startServer().catch((error) => {
+  console.error("Server startup failed:", error);
+  process.exit(1);
+});

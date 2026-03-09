@@ -1,9 +1,11 @@
 import { createBrowserRouter } from 'react-router';
 import { RootLayout } from '@/app/components/layout/root-layout';
+import { RequireAdminRoute, RequireDoctorRoute, RequirePatientRoute } from '@/app/components/auth/protected-route';
 import { Landing } from '@/app/pages/landing';
 import { Login } from '@/app/pages/auth/login';
 import { Register } from '@/app/pages/auth/register';
 import { ForgotPassword } from '@/app/pages/auth/forgot-password';
+import { ResetPassword } from '@/app/pages/auth/reset-password';
 
 // Patient pages
 import { PatientDashboard } from '@/app/pages/patient/dashboard';
@@ -28,6 +30,7 @@ import { DoctorAppointmentDetail } from '@/app/pages/doctor/appointment-detail';
 import { PatientHistory } from '@/app/pages/doctor/patient-history';
 import { AppointmentSummary } from '@/app/pages/doctor/appointment-summary';
 import { VerificationStatus } from '@/app/pages/doctor/verification-status';
+import { DoctorMessaging } from '@/app/pages/doctor/messaging';
 
 // Admin pages
 import { AdminDashboard } from '@/app/pages/admin/dashboard';
@@ -49,11 +52,13 @@ export const router = createBrowserRouter([
       { path: 'login', Component: Login },
       { path: 'register', Component: Register },
       { path: 'forgot-password', Component: ForgotPassword },
+      { path: 'reset-password/:token', Component: ResetPassword },
       { path: 'components', Component: ComponentLibrary },
-      
+
       // Patient routes
       {
         path: 'patient',
+        Component: RequirePatientRoute,
         children: [
           { path: 'dashboard', Component: PatientDashboard },
           { path: 'profile', Component: PatientProfile },
@@ -66,13 +71,14 @@ export const router = createBrowserRouter([
           { path: 'appointment/:id', Component: AppointmentDetail },
           { path: 'messages', Component: Messaging },
           { path: 'review/:appointmentId', Component: WriteReview },
-          { path: 'waitlist/:doctorId', Component: JoinWaitlist },
+          { path: 'waitlist', Component: JoinWaitlist },
         ],
       },
-      
+
       // Doctor routes
       {
         path: 'doctor',
+        Component: RequireDoctorRoute,
         children: [
           { path: 'dashboard', Component: DoctorDashboard },
           { path: 'profile', Component: DoctorProfileEdit },
@@ -82,19 +88,21 @@ export const router = createBrowserRouter([
           { path: 'patient/:patientId/history', Component: PatientHistory },
           { path: 'appointment/:id/summary', Component: AppointmentSummary },
           { path: 'verification', Component: VerificationStatus },
+          { path: 'messages', Component: DoctorMessaging },
         ],
       },
-      
+
       // Admin routes
       {
         path: 'admin',
+        Component: RequireAdminRoute,
         children: [
           { path: 'dashboard', Component: AdminDashboard },
           { path: 'verification', Component: VerificationQueue },
           { path: 'analytics', Component: Analytics },
         ],
       },
-      
+
       { path: '*', Component: NotFound },
     ],
   },

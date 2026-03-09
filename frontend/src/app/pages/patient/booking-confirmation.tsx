@@ -1,11 +1,28 @@
 import React from 'react';
-import { Link, useNavigate } from 'react-router';
+import { Link, useLocation } from 'react-router';
 import { Button } from '@/app/components/ui/button';
 import { Card, CardContent } from '@/app/components/ui/card';
 import { Check, Calendar, MapPin, Video } from 'lucide-react';
+import { format } from 'date-fns';
+import { formatTime24to12 } from '@/app/lib/availability-api';
+import { type AppointmentRecord } from '@/app/lib/appointment-api';
 
 export function BookingConfirmation() {
-  const navigate = useNavigate();
+  const location = useLocation();
+  const appointment = (location.state as { appointment?: AppointmentRecord } | null)?.appointment;
+
+  const appointmentDateLabel = appointment
+    ? format(new Date(`${appointment.appointment_date}T00:00:00`), 'MMMM d, yyyy')
+    : 'Appointment date';
+  const appointmentTimeLabel = appointment
+    ? formatTime24to12(appointment.start_time)
+    : 'Appointment time';
+  const durationLabel = appointment?.duration ? `${appointment.duration} minutes` : 'Duration not available';
+  const doctorName = appointment?.doctor?.full_name || 'Assigned Doctor';
+  const doctorSpecialty = appointment?.doctor?.specialty || 'Specialty not provided';
+  const appointmentType = appointment?.appointment_type === 'in-person' ? 'In-Person' : 'Virtual';
+  const isInPerson = appointment?.appointment_type === 'in-person';
+  const locationText = appointment?.doctor?.clinic_location || 'Clinic location will be shared by provider';
 
   return (
     <div className="container mx-auto px-4 py-12 max-w-2xl">
@@ -17,10 +34,10 @@ export function BookingConfirmation() {
 
           <div>
             <h1 className="text-2xl md:text-3xl font-semibold mb-2">
-              Appointment Confirmed!
+              Booking Request Submitted
             </h1>
             <p className="text-muted-foreground text-lg">
-              Your appointment has been successfully booked
+              Your provider will confirm or decline this request soon.
             </p>
           </div>
 
@@ -29,24 +46,30 @@ export function BookingConfirmation() {
               <div className="flex items-start gap-3">
                 <Calendar className="h-5 w-5 text-muted-foreground flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="font-medium">February 10, 2026 at 10:00 AM</p>
-                  <p className="text-sm text-muted-foreground">30 minutes</p>
+                  <p className="font-medium">{appointmentDateLabel} at {appointmentTimeLabel}</p>
+                  <p className="text-sm text-muted-foreground">{durationLabel}</p>
                 </div>
               </div>
 
               <div className="flex items-start gap-3">
-                <Video className="h-5 w-5 text-muted-foreground flex-shrink-0 mt-0.5" />
+                {isInPerson ? (
+                  <MapPin className="h-5 w-5 text-muted-foreground flex-shrink-0 mt-0.5" />
+                ) : (
+                  <Video className="h-5 w-5 text-muted-foreground flex-shrink-0 mt-0.5" />
+                )}
                 <div>
-                  <p className="font-medium">Virtual Appointment</p>
-                  <p className="text-sm text-muted-foreground">Video call link will be sent via email</p>
+                  <p className="font-medium">{appointmentType} Appointment</p>
+                  <p className="text-sm text-muted-foreground">
+                    {isInPerson ? locationText : 'Video call details will be provided after confirmation'}
+                  </p>
                 </div>
               </div>
 
               <div className="flex items-start gap-3">
                 <MapPin className="h-5 w-5 text-muted-foreground flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="font-medium">Dr. Sarah Chen</p>
-                  <p className="text-sm text-muted-foreground">Family Medicine</p>
+                  <p className="font-medium">{doctorName}</p>
+                  <p className="text-sm text-muted-foreground">{doctorSpecialty}</p>
                 </div>
               </div>
             </CardContent>
@@ -54,8 +77,7 @@ export function BookingConfirmation() {
 
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
             <p className="text-sm text-blue-900">
-              <strong>Confirmation email sent</strong> — Check your inbox for appointment details 
-              and a calendar invite. You'll receive a reminder 24 hours before your appointment.
+              <strong>Status:</strong> Pending provider decision. You can track updates from your dashboard.
             </p>
           </div>
 

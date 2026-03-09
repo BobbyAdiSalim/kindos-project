@@ -1,11 +1,18 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { Button } from '@/app/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { Calendar, Heart, Shield, Users, ArrowRight } from 'lucide-react';
+import { getDashboardPath, useAuth } from '@/app/lib/auth-context';
 
 export function Landing() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+
+  useEffect(() => {
+    if (!user) return;
+    navigate(getDashboardPath(user.role), { replace: true });
+  }, [navigate, user]);
 
   return (
     <div className="w-full">
@@ -130,15 +137,15 @@ export function Landing() {
               <h3 className="text-xl font-semibold mb-4">Important Information</h3>
               <div className="space-y-3 text-muted-foreground leading-relaxed">
                 <p>
-                  <strong className="text-foreground">This is a referral routing service</strong> — 
+                  <strong className="text-foreground">This is a referral routing service</strong> —
                   UTLWA helps connect you with appropriate healthcare providers based on your needs.
                 </p>
                 <p>
-                  We do not provide diagnosis, treatment, or emergency services. For medical emergencies, 
+                  We do not provide diagnosis, treatment, or emergency services. For medical emergencies,
                   please call 911 or visit your nearest emergency room.
                 </p>
                 <p>
-                  All appointments are subject to provider availability and approval. Virtual care options 
+                  All appointments are subject to provider availability and approval. Virtual care options
                   may vary by provider and location.
                 </p>
               </div>

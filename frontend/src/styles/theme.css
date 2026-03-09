@@ -2,7 +2,7 @@
 
 :root {
   --font-size: 16px;
-  
+
   /* UTLWA Brand Colors */
   --utlwa-teal: #4A7C7E;
   --utlwa-gold: #E8B84D;
@@ -11,7 +11,7 @@
   --utlwa-text-secondary: #2F2521;
   --utlwa-border: #CCC9C8;
   --utlwa-background: #FFFFFF;
-  
+
   /* Theme tokens mapped to UTLWA brand */
   --background: #F5F5F0;
   --foreground: #191312;
@@ -188,5 +188,26 @@
     font-size: var(--text-base);
     font-weight: var(--font-weight-normal);
     line-height: 1.5;
+  }
+
+  /* Hide browser-native password reveal controls so only our custom eye is shown */
+  input[type='password']::-ms-reveal,
+  input[type='password']::-ms-clear,
+  input[type='password']::-webkit-credentials-auto-fill-button,
+  input[type='password']::-webkit-strong-password-auto-fill-button,
+  input[type='password']::-webkit-password-toggle-button,
+  input[type='password']::-webkit-caps-lock-indicator,
+  input[type='password']::-webkit-textfield-decoration-container {
+    display: none !important;
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
+    width: 0;
+    height: 0;
+  }
+
+  input[type='password'] {
+    -webkit-appearance: none;
+    appearance: none;
   }
 }
