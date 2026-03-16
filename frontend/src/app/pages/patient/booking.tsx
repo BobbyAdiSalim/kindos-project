@@ -8,6 +8,7 @@ import { RadioGroup, RadioGroupItem } from '@/app/components/ui/radio-group';
 import { Textarea } from '@/app/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
 import { Badge } from '@/app/components/ui/badge';
+import { TimeZoneSelector } from '@/app/components/time-zone-selector';
 import { mockDoctors } from '@/app/lib/mock-data';
 import { getPublicProfile, type DoctorProfile } from '@/app/lib/profile-api';
 import {
@@ -26,6 +27,14 @@ import {
 } from '@/app/lib/waitlist-api';
 import { useAuth } from '@/app/lib/auth-context';
 import { cn } from '@/app/components/ui/utils';
+import {
+  formatZonedDateTime,
+  getDefaultPreferredTimeZone,
+  getTimeZoneShortName,
+  isFutureZonedDateTime,
+  resolveTimeZone,
+} from '@/app/lib/timezone';
+import { usePreferredTimeZone } from '@/app/lib/use-preferred-timezone';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import {
@@ -38,18 +47,21 @@ import {
   Video,
 } from 'lucide-react';
 
-const isFutureSlotForDate = (selectedDate: Date | undefined, startTime: string) => {
+const isFutureSlotForDate = (
+  selectedDate: Date | undefined,
+  startTime: string,
+  sourceTimeZone: string
+) => {
   if (!selectedDate) return false;
   const dateOnly = format(selectedDate, 'yyyy-MM-dd');
-  const slotDateTime = new Date(`${dateOnly}T${startTime}`);
-  if (Number.isNaN(slotDateTime.getTime())) return false;
-  return slotDateTime.getTime() > Date.now();
+  return isFutureZonedDateTime(dateOnly, startTime, sourceTimeZone);
 };
 
 export function Booking() {
   const { doctorId } = useParams();
   const navigate = useNavigate();
   const { token } = useAuth();
+  const { timeZone, timeZoneOptions, setTimeZone, systemTimeZone } = usePreferredTimeZone();
 
   const [doctor, setDoctor] = useState<any>(null);
   const [doctorLoading, setDoctorLoading] = useState(true);
@@ -64,6 +76,7 @@ export function Booking() {
 
   const [availableSlots, setAvailableSlots] = useState<TimeSlot[]>([]);
   const [bookedSlots, setBookedSlots] = useState<BookedTimeSlot[]>([]);
+  const [slotSourceTimeZone, setSlotSourceTimeZone] = useState<string | null>(null);
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [slotsError, setSlotsError] = useState('');
   const [bookingSubmitting, setBookingSubmitting] = useState(false);
@@ -82,6 +95,7 @@ export function Booking() {
       const data = await getBookableSlots(userId, dateStr, undefined, { includeBooked: true });
       setAvailableSlots(data.slots);
       setBookedSlots(data.booked_slots);
+      setSlotSourceTimeZone(data.doctor_time_zone || null);
     } catch (err: any) {
       console.error('Failed to load time slots:', err);
       setSlotsError(err.message || 'Could not load available times');
@@ -108,6 +122,7 @@ export function Booking() {
             virtualAvailable: p.virtual_available ?? true,
             inPersonAvailable: p.in_person_available ?? true,
             clinicLocation: p.clinic_location || '',
+            timeZone: p.time_zone || null,
           });
           setDoctorLoading(false);
           return;
@@ -119,6 +134,10 @@ export function Booking() {
       setDoctorLoading(false);
     };
     loadDoctor();
+  }, [doctorId]);
+
+  useEffect(() => {
+    setSlotSourceTimeZone(null);
   }, [doctorId]);
 
   useEffect(() => {
@@ -148,15 +167,49 @@ export function Booking() {
   const virtualUnavailable = !doctor?.virtualAvailable;
   const inPersonUnavailable = !doctor?.inPersonAvailable;
   const appointmentTypeLocked = !selectedTime;
+  const sourceTimeZone = resolveTimeZone(
+    doctor?.timeZone || slotSourceTimeZone,
+    getDefaultPreferredTimeZone()
+  );
+  const targetTimeZone = resolveTimeZone(timeZone, systemTimeZone);
+  const targetTimeZoneShort = getTimeZoneShortName(targetTimeZone, systemTimeZone);
+  const selectedDateKey = selectedDate ? format(selectedDate, 'yyyy-MM-dd') : '';
   const visibleAvailableSlots = availableSlots.filter(
-    (slot) => isFutureSlotForDate(selectedDate, slot.start_time)
+    (slot) => isFutureSlotForDate(selectedDate, slot.start_time, sourceTimeZone)
   );
   const visibleBookedSlots = bookedSlots.filter(
-    (slot) => isFutureSlotForDate(selectedDate, slot.start_time)
+    (slot) => isFutureSlotForDate(selectedDate, slot.start_time, sourceTimeZone)
   );
   const selectedSlot = visibleAvailableSlots.find((slot) => slot.start_time === selectedTime);
   const selectedBookedSlotDetails = visibleBookedSlots.find((slot) => slot.start_time === selectedBookedSlot);
   const waitlistMode = Boolean(selectedBookedSlotDetails && !selectedTime);
+  const formatSlotValue = (
+    slotTime: string,
+    options: Intl.DateTimeFormatOptions,
+    fallback: string
+  ) => {
+    if (!selectedDateKey) return fallback;
+    return formatZonedDateTime(
+      selectedDateKey,
+      slotTime,
+      sourceTimeZone,
+      targetTimeZone,
+      options,
+      fallback
+    );
+  };
+  const formatSlotTimeWithZone = (slotTime: string) =>
+    formatSlotValue(
+      slotTime,
+      { hour: 'numeric', minute: '2-digit', hour12: true, timeZoneName: 'short' },
+      formatTime24to12(slotTime)
+    );
+  const formatSlotTime = (slotTime: string) =>
+    formatSlotValue(
+      slotTime,
+      { hour: 'numeric', minute: '2-digit', hour12: true },
+      formatTime24to12(slotTime)
+    );
   const slotSupportsType = (slot: TimeSlot, type: 'virtual' | 'in-person') =>
     Array.isArray(slot.appointment_types) && slot.appointment_types.includes(type);
   const virtualAvailableForSelection =
@@ -359,6 +412,16 @@ export function Booking() {
           </div>
         </CardContent>
       </Card>
+      <Card className="mb-6">
+        <CardContent className="p-4">
+          <TimeZoneSelector
+            value={timeZone}
+            options={timeZoneOptions}
+            onChange={setTimeZone}
+            label="Show Booking Times In"
+          />
+        </CardContent>
+      </Card>
 
       <div className="grid md:grid-cols-2 gap-6">
         {/* Calendar */}
@@ -410,6 +473,7 @@ export function Booking() {
             </div>
           </CardHeader>
           <CardContent className="space-y-5">
+            <p className="text-xs text-muted-foreground">Times shown in {targetTimeZoneShort}.</p>
             {slotsLoading ? (
               <div className="flex flex-col items-center justify-center py-12">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -451,7 +515,7 @@ export function Booking() {
                           <div className="flex items-center justify-between w-full gap-2">
                             <span className="inline-flex items-center min-w-0">
                               <Clock className="h-4 w-4 mr-2 shrink-0" />
-                              {formatTime24to12(slot.start_time)}
+                              {formatSlotTime(slot.start_time)}
                             </span>
 
                             <span className="inline-flex items-center gap-1 shrink-0">
@@ -505,7 +569,7 @@ export function Booking() {
                         >
                           <span className="inline-flex items-center gap-2">
                             <Bell className="h-4 w-4" />
-                            {formatTime24to12(slot.start_time)}
+                            {formatSlotTime(slot.start_time)}
                           </span>
                         </Button>
                       ))}
@@ -697,7 +761,7 @@ export function Booking() {
               </span>
               <span className="inline-flex items-center gap-1">
                 <Clock className="h-4 w-4" />
-                {formatTime24to12(selectedBookedSlotDetails.start_time)}
+                {formatSlotTimeWithZone(selectedBookedSlotDetails.start_time)}
               </span>
               <Badge variant="outline" className="border-amber-300 text-amber-800">
                 {selectedBookedSlotDetails.booked_appointment_type === 'virtual' ? 'Virtual' : 'In-Person'}
@@ -747,7 +811,7 @@ export function Booking() {
                     </span>
                     <span className="flex items-center gap-1">
                       <Bell className="h-4 w-4" />
-                      {formatTime24to12(selectedBookedSlotDetails.start_time)}
+                      {formatSlotTimeWithZone(selectedBookedSlotDetails.start_time)}
                     </span>
                   </div>
                 </>
@@ -761,7 +825,7 @@ export function Booking() {
                     </span>
                     <span className="flex items-center gap-1">
                       <Clock className="h-4 w-4" />
-                      {formatTime24to12(selectedTime)}
+                      {formatSlotTimeWithZone(selectedTime)}
                     </span>
                   </div>
                 </>

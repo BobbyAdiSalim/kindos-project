@@ -8,7 +8,14 @@ import { useAuth } from '@/app/lib/auth-context';
 import { useNavigate } from 'react-router';
 import { getMyProfile, updateMyProfile } from '@/app/lib/profile-api';
 import type { PatientProfile as PatientProfileData } from '@/app/lib/profile-api';
+import {
+  getStoredPreferredTimeZone,
+  getTimeZoneOptions,
+  setStoredPreferredTimeZone,
+} from '@/app/lib/timezone';
 import { toast } from 'sonner';
+
+const timeZoneOptions = getTimeZoneOptions();
 
 export function PatientProfile() {
   const { token, updateUser } = useAuth();
@@ -25,6 +32,7 @@ export function PatientProfile() {
     emergencyContactName: '',
     emergencyContactPhone: '',
     accessibilityPreferences: '',
+    timeZone: getStoredPreferredTimeZone(),
   });
 
   useEffect(() => {
@@ -39,10 +47,14 @@ export function PatientProfile() {
           phone: profile.phone || '',
           dateOfBirth: profile.date_of_birth || '',
           address: profile.address || '',
+          timeZone: profile.time_zone || getStoredPreferredTimeZone(),
           emergencyContactName: profile.emergency_contact_name || '',
           emergencyContactPhone: profile.emergency_contact_phone || '',
           accessibilityPreferences: (profile.accessibility_preferences || []).join(', '),
         });
+        if (profile.time_zone) {
+          setStoredPreferredTimeZone(profile.time_zone);
+        }
       } catch (error) {
         toast.error(error instanceof Error ? error.message : 'Failed to load profile');
       } finally {
@@ -63,10 +75,12 @@ export function PatientProfile() {
         phone: formData.phone,
         dateOfBirth: formData.dateOfBirth,
         address: formData.address,
+        timeZone: formData.timeZone,
         emergencyContactName: formData.emergencyContactName,
         emergencyContactPhone: formData.emergencyContactPhone,
         accessibilityPreferences: formData.accessibilityPreferences,
       });
+      setStoredPreferredTimeZone(formData.timeZone);
 
       updateUser({
         username: data.user.username,
@@ -150,6 +164,21 @@ export function PatientProfile() {
               rows={3}
               onChange={(e) => setFormData({ ...formData, address: e.target.value })}
             />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="timeZone">Preferred Time Zone</Label>
+            <select
+              id="timeZone"
+              value={formData.timeZone}
+              onChange={(e) => setFormData({ ...formData, timeZone: e.target.value })}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            >
+              {timeZoneOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
           </div>
           <div className="space-y-2">
             <Label htmlFor="emergencyContactName">Emergency Contact Name</Label>

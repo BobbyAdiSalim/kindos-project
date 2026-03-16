@@ -40,6 +40,11 @@ const Patient = sequelize.define(
       type: DataTypes.TEXT,
       allowNull: true,
     },
+    time_zone: {
+      type: DataTypes.STRING(100),
+      allowNull: false,
+      defaultValue: 'America/New_York',
+    },
     emergency_contact_name: {
       type: DataTypes.STRING(255),
       allowNull: true,

@@ -199,6 +199,7 @@ export const serializeAppointment = (appointment) => {
           full_name: doctorProfile.full_name,
           specialty: doctorProfile.specialty,
           clinic_location: doctorProfile.clinic_location,
+          time_zone: doctorProfile.time_zone,
           virtual_available: doctorProfile.virtual_available,
           in_person_available: doctorProfile.in_person_available,
           username: doctorProfile.user?.username || null,

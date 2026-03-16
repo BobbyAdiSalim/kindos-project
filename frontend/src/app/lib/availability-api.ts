@@ -11,6 +11,7 @@ export interface BookedTimeSlot extends TimeSlot {
 export interface BookableSlotsResponse {
   date: string;
   doctor_id: number;
+  doctor_time_zone?: string | null;
   slots: TimeSlot[];
   booked_slots: BookedTimeSlot[];
 }
@@ -52,6 +53,7 @@ export const getBookableSlots = async (
   return {
     date: String(typedData.date || date),
     doctor_id: Number(typedData.doctor_id || 0),
+    doctor_time_zone: typeof typedData.doctor_time_zone === 'string' ? typedData.doctor_time_zone : null,
     slots: Array.isArray(typedData.slots) ? typedData.slots : [],
     booked_slots: Array.isArray(typedData.booked_slots) ? typedData.booked_slots : [],
   };

@@ -117,6 +117,7 @@ const createRoleProfile = async (transaction, user, body) => {
       {
         user_id: user.id,
         full_name: body.name,
+        time_zone: normalizeTimeZone(body.timeZone),
       },
       { transaction }
     );
@@ -135,6 +136,7 @@ const createRoleProfile = async (transaction, user, body) => {
         specialty: body.specialty,
         license_number: body.licenseNumber,
         clinic_location: body.clinicAddress || null,
+        time_zone: normalizeTimeZone(body.timeZone),
         verification_documents: body.verificationDocuments || [],
       },
       { transaction }
@@ -335,6 +337,17 @@ const normalizeBoolean = (value) => {
   if (value === 'true') return true;
   if (value === 'false') return false;
   return undefined;
+};
+
+const normalizeTimeZone = (value, fallback = 'America/New_York') => {
+  if (typeof value !== 'string' || !value.trim()) return fallback;
+  const candidate = value.trim();
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: candidate });
+    return candidate;
+  } catch {
+    return fallback;
+  }
 };
 
 export const registerUser = async (req, res) => {
@@ -685,6 +698,9 @@ export const updateMyProfile = async (req, res) => {
       if (typeof req.body.dateOfBirth === 'string') patientUpdates.date_of_birth = req.body.dateOfBirth || null;
       if (typeof req.body.phone === 'string') patientUpdates.phone = req.body.phone.trim() || null;
       if (typeof req.body.address === 'string') patientUpdates.address = req.body.address.trim() || null;
+      if (Object.prototype.hasOwnProperty.call(req.body, 'timeZone')) {
+        patientUpdates.time_zone = normalizeTimeZone(req.body.timeZone);
+      }
       if (typeof req.body.emergencyContactName === 'string') {
         patientUpdates.emergency_contact_name = req.body.emergencyContactName.trim() || null;
       }
@@ -725,6 +741,9 @@ export const updateMyProfile = async (req, res) => {
       if (typeof req.body.bio === 'string') doctorUpdates.bio = req.body.bio.trim() || null;
       if (typeof req.body.clinicLocation === 'string') {
         doctorUpdates.clinic_location = req.body.clinicLocation.trim() || null;
+      }
+      if (Object.prototype.hasOwnProperty.call(req.body, 'timeZone')) {
+        doctorUpdates.time_zone = normalizeTimeZone(req.body.timeZone);
       }
 
       const parsedLanguages = parseStringArray(req.body.languages);
@@ -925,6 +944,7 @@ export const resubmitDoctorVerification = async (req, res) => {
     const specialty = String(req.body.specialty || '').trim();
     const licenseNumber = String(req.body.licenseNumber || '').trim();
     const clinicLocation = String(req.body.clinicAddress || '').trim();
+    const timeZone = normalizeTimeZone(req.body.timeZone);
     const verificationDocuments = normalizeVerificationDocuments(req.body.verificationDocuments);
 
     if (!fullName || !specialty || !licenseNumber || verificationDocuments.length === 0) {
@@ -950,6 +970,7 @@ export const resubmitDoctorVerification = async (req, res) => {
         specialty,
         license_number: licenseNumber,
         clinic_location: clinicLocation || null,
+        time_zone: timeZone,
         verification_documents: persistedVerificationDocuments,
         verification_status: 'pending',
         verified_by: null,
