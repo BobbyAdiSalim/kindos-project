@@ -7,14 +7,15 @@ import { FRONTEND_URL, cardHtml, formatAppointmentType, toPrettyDate, toPrettyTi
 const strategy = {
   type: 'doctor-cancelled-appointment',
   getLabel: () => 'Appointment Cancellation Email',
-  build: ({ patientName, doctorName, appointmentDate, appointmentTime, appointmentType }) => {
+  build: ({ patientName, doctorName, appointmentDate, appointmentTime, appointmentType, declineReason }) => {
     const prettyDate = toPrettyDate(appointmentDate) || String(appointmentDate || '');
     const prettyTime = toPrettyTime(appointmentTime) || String(appointmentTime || '');
     const normalizedType = formatAppointmentType(appointmentType);
     const rebookLink = `${FRONTEND_URL}/patient/providers`;
+    const normalizedReason = String(declineReason || '').trim();
 
     const subject = 'Your appointment has been cancelled';
-    const text = `Hi ${patientName || 'Patient'}, your appointment with ${doctorName || 'your provider'} on ${prettyDate} at ${prettyTime} (${normalizedType}) has been cancelled. Please book a new appointment here: ${rebookLink}`;
+    const text = `Hi ${patientName || 'Patient'}, your appointment with ${doctorName || 'your provider'} on ${prettyDate} at ${prettyTime} (${normalizedType}) has been cancelled.${normalizedReason ? ` Reason: ${normalizedReason}.` : ''} Please book a new appointment here: ${rebookLink}`;
     const html = cardHtml({
       title: 'Appointment Cancelled',
       intro: `Hi ${patientName || 'Patient'}, your appointment with ${doctorName || 'your provider'} has been cancelled.`,
@@ -22,6 +23,7 @@ const strategy = {
         { label: 'Date', value: prettyDate },
         { label: 'Time', value: prettyTime },
         { label: 'Type', value: normalizedType },
+        ...(normalizedReason ? [{ label: 'Reason', value: normalizedReason }] : []),
       ],
       cta: { href: rebookLink, label: 'Book New Appointment' },
     });

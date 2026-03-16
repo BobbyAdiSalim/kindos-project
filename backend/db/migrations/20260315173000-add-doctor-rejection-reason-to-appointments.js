@@ -1,0 +1,48 @@
+'use strict';
+
+/** @type {import('sequelize-cli').Migration} */
+module.exports = {
+  async up(queryInterface, Sequelize) {
+    const transaction = await queryInterface.sequelize.transaction();
+
+    try {
+      await queryInterface.addColumn(
+        'appointments',
+        'doctor_rejection_reason_code',
+        {
+          type: Sequelize.STRING(64),
+          allowNull: true,
+        },
+        { transaction }
+      );
+
+      await queryInterface.addColumn(
+        'appointments',
+        'doctor_rejection_reason_note',
+        {
+          type: Sequelize.TEXT,
+          allowNull: true,
+        },
+        { transaction }
+      );
+
+      await transaction.commit();
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+  },
+
+  async down(queryInterface) {
+    const transaction = await queryInterface.sequelize.transaction();
+
+    try {
+      await queryInterface.removeColumn('appointments', 'doctor_rejection_reason_note', { transaction });
+      await queryInterface.removeColumn('appointments', 'doctor_rejection_reason_code', { transaction });
+      await transaction.commit();
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+  },
+};

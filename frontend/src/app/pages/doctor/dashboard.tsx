@@ -26,6 +26,7 @@ import {
   respondToConnection,
   type ConnectionInfo,
 } from '@/app/lib/chat-api';
+import { DeclineAppointmentDialog, type DoctorRejectionReasonCode } from '@/app/components/doctor/decline-appointment-dialog';
 
 const mapAppointmentStatus = (appointment: AppointmentRecord) => {
   if (appointment.status === 'cancelled' && appointment.declined_by_doctor) {
@@ -56,6 +57,8 @@ export function DoctorDashboard() {
   const [rejectionReason, setRejectionReason] = useState('');
   const [appointmentsLoading, setAppointmentsLoading] = useState(false);
   const [appointmentActionId, setAppointmentActionId] = useState<string | null>(null);
+  const [declineDialogOpen, setDeclineDialogOpen] = useState(false);
+  const [appointmentPendingDecline, setAppointmentPendingDecline] = useState<AppointmentRecord | null>(null);
   const [appointmentsError, setAppointmentsError] = useState('');
   const [appointments, setAppointments] = useState<AppointmentRecord[]>([]);
   const [pendingRequests, setPendingRequests] = useState<ConnectionInfo[]>([]);
@@ -263,6 +266,48 @@ export function DoctorDashboard() {
     }
   };
 
+  const openDeclineDialog = (appointmentId: string) => {
+    const selectedAppointment = appointments.find((appointment) => String(appointment.id) === appointmentId) || null;
+    if (!selectedAppointment) {
+      toast.error('Appointment not found.');
+      return;
+    }
+
+    setAppointmentPendingDecline(selectedAppointment);
+    setDeclineDialogOpen(true);
+  };
+
+  const handleDeclineConfirm = async ({
+    reasonCode,
+    reasonNote,
+  }: {
+    reasonCode: DoctorRejectionReasonCode;
+    reasonNote?: string;
+  }) => {
+    if (!appointmentPendingDecline || !token) {
+      toast.error('Authentication required.');
+      return;
+    }
+
+    try {
+      setAppointmentActionId(String(appointmentPendingDecline.id));
+      const updated = await updateAppointmentDecision(token, String(appointmentPendingDecline.id), 'decline', {
+        reasonCode,
+        reasonNote,
+      });
+      setAppointments((prev) => prev.map((appointment) => (
+        appointment.id === updated.id ? updated : appointment
+      )));
+      setDeclineDialogOpen(false);
+      setAppointmentPendingDecline(null);
+      toast.success('Booking declined.');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to update booking status.');
+    } finally {
+      setAppointmentActionId(null);
+    }
+  };
+
   const { requestAppointments, upcomingAppointments, pastAppointments } = useMemo(() => {
     const requests = appointments
       .filter((appointment) => appointment.status === 'scheduled')
@@ -385,6 +430,19 @@ export function DoctorDashboard() {
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-5xl">
+      <DeclineAppointmentDialog
+        open={declineDialogOpen}
+        onOpenChange={(open) => {
+          setDeclineDialogOpen(open);
+          if (!open) {
+            setAppointmentPendingDecline(null);
+          }
+        }}
+        onConfirm={handleDeclineConfirm}
+        loading={appointmentActionId === String(appointmentPendingDecline?.id || '')}
+        patientName={appointmentPendingDecline?.patient?.full_name || 'Patient'}
+      />
+
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
         <div>
           <h1 className="text-2xl md:text-3xl font-semibold mb-2">My Schedule</h1>
@@ -520,7 +578,7 @@ export function DoctorDashboard() {
                   handleDecision(appointmentId, 'confirm');
                 }}
                 onDecline={(appointmentId) => {
-                  handleDecision(appointmentId, 'decline');
+                  openDeclineDialog(appointmentId);
                 }}
                 actionLoadingId={appointmentActionId}
               />

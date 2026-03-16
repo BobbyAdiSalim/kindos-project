@@ -103,6 +103,14 @@ const Appointment = sequelize.define(
       type: DataTypes.TEXT,
       allowNull: true,
     },
+    doctor_rejection_reason_code: {
+      type: DataTypes.STRING(64),
+      allowNull: true,
+    },
+    doctor_rejection_reason_note: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
     notify_on_doctor_approval: {
       type: DataTypes.BOOLEAN,
       allowNull: false,
