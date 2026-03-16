@@ -11,6 +11,7 @@ export interface PatientProfile {
   id: number;
   full_name: string;
   profile_complete: boolean;
+  time_zone?: string | null;
   date_of_birth?: string | null;
   phone?: string | null;
   address?: string | null;
@@ -25,6 +26,7 @@ export interface DoctorProfile {
   specialty?: string;
   verification_status?: 'pending' | 'approved' | 'denied';
   profile_complete: boolean;
+  time_zone?: string | null;
   phone?: string | null;
   license_number?: string | null;
   bio?: string | null;

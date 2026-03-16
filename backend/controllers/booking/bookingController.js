@@ -273,6 +273,7 @@ export const getPatientHistory = async (req, res) => {
             full_name: apt.doctor.full_name,
             specialty: apt.doctor.specialty,
             clinic_location: apt.doctor.clinic_location,
+            time_zone: apt.doctor.time_zone,
             username: apt.doctor.user?.username || null,
           }
         : null,

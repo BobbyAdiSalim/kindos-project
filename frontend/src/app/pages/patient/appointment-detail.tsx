@@ -16,6 +16,15 @@ import {
   type AppointmentRecord,
 } from '@/app/lib/appointment-api';
 import { getMyReviewForDoctor } from '@/app/lib/review-api';
+import { TimeZoneSelector } from '@/app/components/time-zone-selector';
+import {
+  formatZonedDateTime,
+  getDefaultPreferredTimeZone,
+  getTimeZoneShortName,
+  isFutureZonedDateTime,
+  resolveTimeZone,
+} from '@/app/lib/timezone';
+import { usePreferredTimeZone } from '@/app/lib/use-preferred-timezone';
 import { toast } from 'sonner';
 import { Calendar } from '@/app/components/ui/calendar';
 import { Label } from '@/app/components/ui/label';
@@ -41,18 +50,21 @@ const mapAppointmentStatus = (appointment: AppointmentRecord) => {
 };
 
 const parseDateOnlyLocal = (value: string) => new Date(`${value}T00:00:00`);
-const isFutureSlotForDate = (selectedDate: Date | undefined, startTime: string) => {
+const isFutureSlotForDate = (
+  selectedDate: Date | undefined,
+  startTime: string,
+  sourceTimeZone: string
+) => {
   if (!selectedDate) return false;
   const dateOnly = format(selectedDate, 'yyyy-MM-dd');
-  const slotDateTime = new Date(`${dateOnly}T${startTime}`);
-  if (Number.isNaN(slotDateTime.getTime())) return false;
-  return slotDateTime.getTime() > Date.now();
+  return isFutureZonedDateTime(dateOnly, startTime, sourceTimeZone);
 };
 
 export function AppointmentDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { token } = useAuth();
+  const { timeZone, timeZoneOptions, setTimeZone, systemTimeZone } = usePreferredTimeZone();
   const [appointment, setAppointment] = useState<AppointmentRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -61,6 +73,7 @@ export function AppointmentDetail() {
   const [rescheduleTime, setRescheduleTime] = useState('');
   const [rescheduleType, setRescheduleType] = useState<'virtual' | 'in-person'>('virtual');
   const [availableSlots, setAvailableSlots] = useState<TimeSlot[]>([]);
+  const [slotSourceTimeZone, setSlotSourceTimeZone] = useState<string | null>(null);
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [slotsError, setSlotsError] = useState('');
   const [rescheduleSubmitting, setRescheduleSubmitting] = useState(false);
@@ -108,8 +121,14 @@ export function AppointmentDetail() {
     [appointment]
   );
 
+  const sourceTimeZone = resolveTimeZone(
+    appointment?.doctor?.time_zone || slotSourceTimeZone,
+    getDefaultPreferredTimeZone()
+  );
+  const targetTimeZone = resolveTimeZone(timeZone, systemTimeZone);
+  const targetTimeZoneShort = getTimeZoneShortName(targetTimeZone, systemTimeZone);
   const visibleAvailableSlots = availableSlots.filter(
-    (slot) => isFutureSlotForDate(rescheduleDate, slot.start_time)
+    (slot) => isFutureSlotForDate(rescheduleDate, slot.start_time, sourceTimeZone)
   );
   const selectedSlot = visibleAvailableSlots.find((slot) => slot.start_time === rescheduleTime);
   const slotSupportsType = (slot: TimeSlot, type: 'virtual' | 'in-person') =>
@@ -137,6 +156,7 @@ export function AppointmentDetail() {
       const dateStr = format(date, 'yyyy-MM-dd');
       const data = await getBookableSlots(String(doctorUserId), dateStr);
       setAvailableSlots(data.slots);
+      setSlotSourceTimeZone(data.doctor_time_zone || null);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load available slots.';
       setSlotsError(message);
@@ -166,7 +186,40 @@ export function AppointmentDetail() {
     return <div className="container mx-auto px-4 py-12 text-center">{error || 'Appointment not found.'}</div>;
   }
 
-  const appointmentDate = parseDateOnlyLocal(appointment.appointment_date);
+  const appointmentDateLabel = formatZonedDateTime(
+    appointment.appointment_date,
+    appointment.start_time,
+    sourceTimeZone,
+    targetTimeZone,
+    { month: 'long', day: 'numeric', year: 'numeric' },
+    appointment.appointment_date
+  );
+  const appointmentTimeLabel = formatZonedDateTime(
+    appointment.appointment_date,
+    appointment.start_time,
+    sourceTimeZone,
+    targetTimeZone,
+    { hour: 'numeric', minute: '2-digit', hour12: true, timeZoneName: 'short' },
+    formatTime24to12(appointment.start_time)
+  );
+  const formatSlotTimeWithZone = (date: string, slotTime: string) =>
+    formatZonedDateTime(
+      date,
+      slotTime,
+      sourceTimeZone,
+      targetTimeZone,
+      { hour: 'numeric', minute: '2-digit', hour12: true, timeZoneName: 'short' },
+      formatTime24to12(slotTime)
+    );
+  const formatSlotTime = (date: string, slotTime: string) =>
+    formatZonedDateTime(
+      date,
+      slotTime,
+      sourceTimeZone,
+      targetTimeZone,
+      { hour: 'numeric', minute: '2-digit', hour12: true },
+      formatTime24to12(slotTime)
+    );
   const openReschedule = () => {
     setRescheduleMode(true);
     setRescheduleDate(parseDateOnlyLocal(appointment.appointment_date));
@@ -274,6 +327,16 @@ export function AppointmentDetail() {
             </div>
           </div>
         </div>
+        <Card>
+          <CardContent className="p-4">
+            <TimeZoneSelector
+              value={timeZone}
+              options={timeZoneOptions}
+              onChange={setTimeZone}
+              label="Show Appointment Times In"
+            />
+          </CardContent>
+        </Card>
 
         <Card>
           <CardContent className="p-6 space-y-6">
@@ -300,7 +363,7 @@ export function AppointmentDetail() {
                 <div>
                   <p className="font-medium">Date</p>
                   <p className="text-muted-foreground">
-                    {format(appointmentDate, 'MMMM d, yyyy')}
+                    {appointmentDateLabel}
                   </p>
                 </div>
               </div>
@@ -310,7 +373,7 @@ export function AppointmentDetail() {
                 <div>
                   <p className="font-medium">Time</p>
                   <p className="text-muted-foreground">
-                    {formatTime24to12(appointment.start_time)} ({appointment.duration} minutes)
+                    {appointmentTimeLabel} ({appointment.duration} minutes)
                   </p>
                 </div>
               </div>
@@ -356,7 +419,16 @@ export function AppointmentDetail() {
                 <p className="text-emerald-900 whitespace-pre-wrap">{appointment.summary}</p>
                 {appointment.summary_written_at && (
                   <p className="text-xs text-emerald-800 mt-3">
-                    Added on {format(new Date(appointment.summary_written_at), 'MMMM d, yyyy h:mm a')}
+                    Added on {new Intl.DateTimeFormat('en-US', {
+                      month: 'long',
+                      day: 'numeric',
+                      year: 'numeric',
+                      hour: 'numeric',
+                      minute: '2-digit',
+                      hour12: true,
+                      timeZone: targetTimeZone,
+                      timeZoneName: 'short',
+                    }).format(new Date(appointment.summary_written_at))}
                   </p>
                 )}
               </div>
@@ -399,7 +471,10 @@ export function AppointmentDetail() {
                   Proposed Date: {format(new Date(`${pendingDoctorReschedule.appointment_date}T00:00:00`), 'MMMM d, yyyy')}
                 </p>
                 <p className="text-amber-900">
-                  Proposed Time: {formatTime24to12(pendingDoctorReschedule.start_time)} ({pendingDoctorReschedule.duration} minutes)
+                  Proposed Time: {formatSlotTimeWithZone(
+                    pendingDoctorReschedule.appointment_date,
+                    pendingDoctorReschedule.start_time
+                  )} ({pendingDoctorReschedule.duration} minutes)
                 </p>
                 <p className="text-amber-900">
                   Proposed Type: {pendingDoctorReschedule.appointment_type === 'in-person' ? 'In-Person' : 'Virtual'}
@@ -495,6 +570,7 @@ export function AppointmentDetail() {
 
                 <div>
                   <Label>Select Time</Label>
+                  <p className="text-xs text-muted-foreground mt-1">Times shown in {targetTimeZoneShort}.</p>
                   <div className="mt-2 min-h-48 border rounded-lg p-3">
                     {slotsLoading ? (
                       <div className="h-full flex items-center justify-center text-muted-foreground">
@@ -514,7 +590,9 @@ export function AppointmentDetail() {
                             className="justify-start"
                             onClick={() => setRescheduleTime(slot.start_time)}
                           >
-                            {formatTime24to12(slot.start_time)}
+                            {rescheduleDate
+                              ? formatSlotTime(format(rescheduleDate, 'yyyy-MM-dd'), slot.start_time)
+                              : formatTime24to12(slot.start_time)}
                           </Button>
                         ))}
                       </div>

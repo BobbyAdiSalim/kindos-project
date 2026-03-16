@@ -55,6 +55,11 @@ const Doctor = sequelize.define(
       type: DataTypes.TEXT,
       allowNull: true,
     },
+    time_zone: {
+      type: DataTypes.STRING(100),
+      allowNull: false,
+      defaultValue: 'America/New_York',
+    },
     latitude: {
       type: DataTypes.DECIMAL(10, 8),
       allowNull: true,

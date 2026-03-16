@@ -9,6 +9,7 @@ const buildDoctorProfileResponse = (profile, includePrivateFields = false) => {
     specialty: profile.specialty,
     verification_status: profile.verification_status,
     profile_complete: profile.profile_complete,
+    time_zone: profile.time_zone || 'America/New_York',
   };
 
   if (!includePrivateFields) {
