@@ -26,6 +26,13 @@ const toAppointmentCardData = (appointment: AppointmentRecord) => ({
   type: appointment.appointment_type,
   status: mapAppointmentStatus(appointment),
   reason: appointment.reason,
+  declineReason: appointment.declined_by_doctor
+    ? (
+        appointment.doctor_rejection_reason_note
+          ? `${appointment.doctor_rejection_reason_label || 'Other'}: ${appointment.doctor_rejection_reason_note}`
+          : appointment.doctor_rejection_reason_label
+      )
+    : null,
   hasReview: Boolean(appointment.review),
 });
 

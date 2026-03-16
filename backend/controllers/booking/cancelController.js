@@ -14,6 +14,8 @@ import {
   hasPendingReschedule,
   CANCELLED_BY_PATIENT_REASON_PREFIX,
   DECLINED_BY_DOCTOR_REASON_PREFIX,
+  DOCTOR_REJECTION_REASON_CODES,
+  getDoctorRejectionReasonLabel,
 } from './bookingShared.js';
 
 /* Strategy for sending Cancellation Email.
@@ -55,6 +57,8 @@ export const cancelAppointmentByPatient = async (req, res) => {
       appointment.cancellation_reason = cancellationReason
         ? `${CANCELLED_BY_PATIENT_REASON_PREFIX}: ${cancellationReason}`
         : CANCELLED_BY_PATIENT_REASON_PREFIX;
+      appointment.doctor_rejection_reason_code = null;
+      appointment.doctor_rejection_reason_note = null;
       clearPendingReschedule(appointment);
 
       await appointment.save({ transaction });
@@ -114,7 +118,9 @@ export const updateAppointmentDecision = async (req, res) => {
     const appointmentId = Number(req.params.appointmentId);
     const doctorUserId = req.auth.userId;
     const action = String(req.body?.action || '').trim().toLowerCase();
-    const declineReason = String(req.body?.reason || '').trim();
+    const declineReasonCode = String(req.body?.reasonCode || '').trim();
+    const declineReasonNote = String(req.body?.reasonNote || '').trim();
+    const legacyDeclineReason = String(req.body?.reason || '').trim();
 
     if (!Number.isInteger(appointmentId) || appointmentId <= 0) {
       return res.status(400).json({ message: 'Invalid appointment ID.' });
@@ -122,6 +128,20 @@ export const updateAppointmentDecision = async (req, res) => {
 
     if (!['confirm', 'decline'].includes(action)) {
       return res.status(400).json({ message: 'action must be either "confirm" or "decline".' });
+    }
+
+    if (action === 'decline') {
+      if (!declineReasonCode && !legacyDeclineReason) {
+        return res.status(400).json({ message: 'reasonCode is required when declining an appointment.' });
+      }
+
+      if (declineReasonCode && !DOCTOR_REJECTION_REASON_CODES.has(declineReasonCode)) {
+        return res.status(400).json({ message: 'Invalid doctor rejection reason.' });
+      }
+
+      if (declineReasonCode === 'other' && !declineReasonNote && !legacyDeclineReason) {
+        return res.status(400).json({ message: 'reasonNote is required when selecting "other".' });
+      }
     }
 
     const { updatedAppointment, waitlistAssignment } = await sequelize.transaction(async (transaction) => {
@@ -158,14 +178,25 @@ export const updateAppointmentDecision = async (req, res) => {
 
       if (action === 'confirm') {
         appointment.status = 'confirmed';
+        appointment.doctor_rejection_reason_code = null;
+        appointment.doctor_rejection_reason_note = null;
         clearPendingReschedule(appointment);
       } else {
+        const normalizedReasonCode = declineReasonCode || 'other';
+        const normalizedReasonNote = declineReasonCode
+          ? (normalizedReasonCode === 'other' ? declineReasonNote : null)
+          : legacyDeclineReason;
+        const reasonLabel = getDoctorRejectionReasonLabel(normalizedReasonCode) || 'Other';
+        const displayReason = normalizedReasonNote
+          ? `${reasonLabel}: ${normalizedReasonNote}`
+          : reasonLabel;
+
         appointment.status = 'cancelled';
         appointment.cancelled_at = new Date();
         appointment.cancelled_by = doctorUserId;
-        appointment.cancellation_reason = declineReason
-          ? `${DECLINED_BY_DOCTOR_REASON_PREFIX}: ${declineReason}`
-          : DECLINED_BY_DOCTOR_REASON_PREFIX;
+        appointment.cancellation_reason = `${DECLINED_BY_DOCTOR_REASON_PREFIX}: ${displayReason}`;
+        appointment.doctor_rejection_reason_code = normalizedReasonCode;
+        appointment.doctor_rejection_reason_note = normalizedReasonNote || null;
         clearPendingReschedule(appointment);
       }
 
@@ -218,6 +249,11 @@ export const updateAppointmentDecision = async (req, res) => {
     }
 
     if (action === 'decline' && patientEmail) {
+      const patientFacingDeclineReason =
+        updatedAppointment?.doctor_rejection_reason_note
+          ? `${getDoctorRejectionReasonLabel(updatedAppointment.doctor_rejection_reason_code) || 'Other'}: ${updatedAppointment.doctor_rejection_reason_note}`
+          : (getDoctorRejectionReasonLabel(updatedAppointment?.doctor_rejection_reason_code) || null);
+
       void sendDoctorCancellationEmail({
         to: patientEmail,
         patientName,
@@ -225,6 +261,7 @@ export const updateAppointmentDecision = async (req, res) => {
         appointmentDate: updatedAppointment.appointment_date,
         appointmentTime: updatedAppointment.start_time,
         appointmentType: updatedAppointment.appointment_type,
+        declineReason: patientFacingDeclineReason,
       }).catch((emailError) => {
         console.error('Failed to send doctor decline email:', emailError);
       });

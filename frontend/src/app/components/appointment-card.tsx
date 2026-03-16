@@ -23,6 +23,7 @@ interface AppointmentCardProps {
       | 'no-show'
       | 'upcoming';
     reason: string;
+    declineReason?: string | null;
     hasReview?: boolean;
     pendingRescheduleRequestedByDoctor?: boolean;
   };
@@ -72,6 +73,9 @@ export function AppointmentCard({
                   {counterpartyName}
                 </h3>
                 <p className="text-sm text-muted-foreground mt-1">{appointment.reason}</p>
+                {appointment.status === 'declined' && appointment.declineReason ? (
+                  <p className="text-sm text-rose-700 mt-2">Decline reason: {appointment.declineReason}</p>
+                ) : null}
               </div>
               <div className="flex gap-2">
                 <AppointmentTypeBadge type={appointment.type} />

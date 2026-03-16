@@ -120,6 +120,13 @@ export function AppointmentDetail() {
   const canRescheduleOrCancel = appointment
     ? ['scheduled', 'confirmed'].includes(appointment.status) && !pendingDoctorReschedule
     : false;
+  const patientVisibleDeclineReason = appointment?.declined_by_doctor
+    ? (
+        appointment.doctor_rejection_reason_note
+          ? `${appointment.doctor_rejection_reason_label || 'Other'}: ${appointment.doctor_rejection_reason_note}`
+          : appointment.doctor_rejection_reason_label
+      )
+    : null;
 
   const loadSlots = async (date: Date, doctorUserId: number) => {
     setSlotsLoading(true);
@@ -368,6 +375,11 @@ export function AppointmentDetail() {
                 <p className="text-rose-900">
                   This booking was declined by the provider.
                 </p>
+                {patientVisibleDeclineReason ? (
+                  <p className="text-rose-900 mt-2">
+                    Reason: {patientVisibleDeclineReason}
+                  </p>
+                ) : null}
               </div>
             )}
           </CardContent>

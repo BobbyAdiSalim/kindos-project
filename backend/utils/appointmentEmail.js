@@ -7,11 +7,12 @@ export const sendDoctorCancellationEmail = async ({
   appointmentDate,
   appointmentTime,
   appointmentType,
+  declineReason,
 }) => {
   await sendEmailByType({
     type: 'doctor-cancelled-appointment',
     to,
-    data: { patientName, doctorName, appointmentDate, appointmentTime, appointmentType },
+    data: { patientName, doctorName, appointmentDate, appointmentTime, appointmentType, declineReason },
   });
 };
 

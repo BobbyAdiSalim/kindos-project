@@ -33,6 +33,9 @@ export interface AppointmentRecord {
   cancelled_at: string | null;
   cancelled_by: number | null;
   cancellation_reason: string | null;
+  doctor_rejection_reason_code: string | null;
+  doctor_rejection_reason_note: string | null;
+  doctor_rejection_reason_label: string | null;
   notify_on_doctor_approval: boolean;
   declined_by_doctor: boolean;
   pending_reschedule: {
@@ -155,7 +158,10 @@ export const updateAppointmentDecision = async (
   token: string | null,
   appointmentId: string,
   action: 'confirm' | 'decline',
-  reason?: string
+  options?: {
+    reasonCode?: string;
+    reasonNote?: string;
+  }
 ): Promise<AppointmentRecord> => {
   const response = await fetch(`${API_BASE}/appointments/${appointmentId}/status`, {
     method: 'PATCH',
@@ -163,7 +169,8 @@ export const updateAppointmentDecision = async (
     credentials: 'include',
     body: JSON.stringify({
       action,
-      ...(reason ? { reason } : {}),
+      ...(options?.reasonCode ? { reasonCode: options.reasonCode } : {}),
+      ...(options?.reasonNote ? { reasonNote: options.reasonNote } : {}),
     }),
   });
 

@@ -19,6 +19,7 @@ import { Calendar } from '@/app/components/ui/calendar';
 import { Label } from '@/app/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/app/components/ui/radio-group';
 import { cn } from '@/app/components/ui/utils';
+import { DeclineAppointmentDialog, type DoctorRejectionReasonCode } from '@/app/components/doctor/decline-appointment-dialog';
 
 const mapAppointmentStatus = (appointment: AppointmentRecord) => {
   if (appointment.status === 'cancelled' && appointment.declined_by_doctor) {
@@ -43,6 +44,7 @@ export function DoctorAppointmentDetail() {
   const [appointment, setAppointment] = useState<AppointmentRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+  const [declineDialogOpen, setDeclineDialogOpen] = useState(false);
   const [error, setError] = useState('');
   const [rescheduleMode, setRescheduleMode] = useState(false);
   const [rescheduleDate, setRescheduleDate] = useState<Date | undefined>();
@@ -140,6 +142,31 @@ export function DoctorAppointmentDetail() {
     }
   };
 
+  const handleDeclineConfirm = async ({
+    reasonCode,
+    reasonNote,
+  }: {
+    reasonCode: DoctorRejectionReasonCode;
+    reasonNote?: string;
+  }) => {
+    if (!token || !id) return;
+
+    try {
+      setActionLoading(true);
+      const updated = await updateAppointmentDecision(token, id, 'decline', {
+        reasonCode,
+        reasonNote,
+      });
+      setAppointment(updated);
+      setDeclineDialogOpen(false);
+      toast.success('Booking declined.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update booking.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   if (loading) {
     return <div className="container mx-auto px-4 py-12 text-center">Loading appointment details...</div>;
   }
@@ -205,6 +232,14 @@ export function DoctorAppointmentDetail() {
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-3xl">
+      <DeclineAppointmentDialog
+        open={declineDialogOpen}
+        onOpenChange={setDeclineDialogOpen}
+        onConfirm={handleDeclineConfirm}
+        loading={actionLoading}
+        patientName={appointment.patient?.full_name || 'Patient'}
+      />
+
       <Button variant="ghost" onClick={() => navigate(-1)} className="mb-6">
         ← Back
       </Button>
@@ -306,7 +341,7 @@ export function DoctorAppointmentDetail() {
                   <Button
                     variant="destructive"
                     className="flex-1"
-                    onClick={() => handleDecision('decline')}
+                    onClick={() => setDeclineDialogOpen(true)}
                     disabled={actionLoading}
                   >
                     Decline
