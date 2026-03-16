@@ -34,10 +34,21 @@ const __dirname = path.dirname(__filename);
 const UPLOADS_DIR = path.join(__dirname, '..', 'uploads', 'verification-docs');
 const LEGACY_UPLOADS_PREFIX = '/api/uploads/verification-docs/';
 const R2_DOCUMENT_PREFIX = 'r2:';
+const AUTH_COOKIE_NAME = 'utlwa_auth';
 
 const isR2Configured = Boolean(
   R2_BUCKET_NAME && R2_ENDPOINT && R2_ACCESS_KEY_ID && R2_SECRET_ACCESS_KEY
 );
+
+const isProduction = cleanEnv(process.env.NODE_ENV) === 'production';
+
+const getAuthCookieOptions = () => ({
+  httpOnly: true,
+  secure: isProduction,
+  sameSite: 'lax',
+  path: '/',
+  maxAge: 60 * 60 * 1000,
+});
 
 let r2Client = null;
 
@@ -413,9 +424,10 @@ export const registerUser = async (req, res) => {
       expiresIn: JWT_EXPIRES_IN,
     });
 
+    res.cookie(AUTH_COOKIE_NAME, token, getAuthCookieOptions());
+
     return res.status(201).json({
       message: 'User registered successfully.',
-      token,
       user: sanitizeUser(user, profile),
     });
   } catch (error) {
@@ -489,9 +501,10 @@ export const loginUser = async (req, res) => {
       expiresIn: JWT_EXPIRES_IN,
     });
 
+    res.cookie(AUTH_COOKIE_NAME, token, getAuthCookieOptions());
+
     return res.json({
       message: 'User logged in successfully.',
-      token,
       user: sanitizeUser(user, profile),
     });
   } catch (error) {
@@ -500,6 +513,12 @@ export const loginUser = async (req, res) => {
 };
 
 export const logoutUser = async (_req, res) => {
+  res.clearCookie(AUTH_COOKIE_NAME, {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: 'lax',
+    path: '/',
+  });
   return res.status(200).json({ message: 'User logged out successfully.' });
 };
 

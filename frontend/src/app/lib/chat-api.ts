@@ -7,7 +7,6 @@ const withAuth = (token: string | null) => {
 
   return {
     'Content-Type': 'application/json',
-    Authorization: `Bearer ${token}`,
   };
 };
 
@@ -57,6 +56,7 @@ export const sendConnectRequest = async (
   const response = await fetch(`${API_BASE}/chat/connect`, {
     method: 'POST',
     headers: withAuth(token),
+    credentials: 'include',
     body: JSON.stringify({ doctorId }),
   });
 
@@ -73,6 +73,7 @@ export const getMyConnections = async (
 ): Promise<{ connections: ConnectionInfo[] }> => {
   const response = await fetch(`${API_BASE}/chat/connections`, {
     headers: withAuth(token),
+    credentials: 'include',
   });
 
   const data = await response.json();
@@ -88,6 +89,7 @@ export const getPendingRequests = async (
 ): Promise<{ requests: ConnectionInfo[] }> => {
   const response = await fetch(`${API_BASE}/chat/requests/pending`, {
     headers: withAuth(token),
+    credentials: 'include',
   });
 
   const data = await response.json();
@@ -106,6 +108,7 @@ export const respondToConnection = async (
   const response = await fetch(`${API_BASE}/chat/connections/${connectionId}`, {
     method: 'PATCH',
     headers: withAuth(token),
+    credentials: 'include',
     body: JSON.stringify({ status }),
   });
 
@@ -139,6 +142,7 @@ export const getConversation = async (
 
   const response = await fetch(url, {
     headers: withAuth(token),
+    credentials: 'include',
   });
 
   const data = await response.json();
@@ -157,6 +161,7 @@ export const sendMessageApi = async (
   const response = await fetch(`${API_BASE}/chat/messages/${connectionId}`, {
     method: 'POST',
     headers: withAuth(token),
+    credentials: 'include',
     body: JSON.stringify({ content }),
   });
 
@@ -175,6 +180,7 @@ export const markMessagesRead = async (
   const response = await fetch(`${API_BASE}/chat/messages/${connectionId}/read`, {
     method: 'PATCH',
     headers: withAuth(token),
+    credentials: 'include',
   });
 
   const data = await response.json();

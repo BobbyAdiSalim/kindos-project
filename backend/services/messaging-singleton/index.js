@@ -22,6 +22,20 @@ import { User, Connection, Patient, Doctor } from '../../models/index.js';
 
 let ioInstance = null;
 
+const getCookieValue = (cookieHeader, name) => {
+  if (typeof cookieHeader !== 'string' || !cookieHeader.trim()) return null;
+
+  const cookies = cookieHeader.split(';');
+  for (const cookie of cookies) {
+    const [rawKey, ...rawValueParts] = cookie.trim().split('=');
+    if (rawKey !== name) continue;
+    const rawValue = rawValueParts.join('=');
+    return rawValue ? decodeURIComponent(rawValue) : null;
+  }
+
+  return null;
+};
+
 const verifyConnectionMembership = async (userId, connectionId) => {
   const id = Number(connectionId);
   if (!Number.isInteger(id) || id <= 0) return false;
@@ -88,7 +102,9 @@ export const initMessagingIO = (httpServer, { frontendUrl, jwtSecret }) => {
 
   io.use(async (socket, next) => {
     try {
-      const token = socket.handshake.auth.token;
+      const token =
+        getCookieValue(socket.handshake.headers.cookie, 'utlwa_auth') ||
+        socket.handshake.auth.token;
       if (!token) {
         return next(new Error('Authentication required.'));
       }

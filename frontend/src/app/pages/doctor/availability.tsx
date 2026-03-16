@@ -136,14 +136,7 @@ export function AvailabilitySetup() {
   const [loading, setLoading] = useState(false);
 
   const getAuthHeader = () => {
-    const raw = localStorage.getItem('utlwa_auth');
-    if (!raw) return {};
-    try {
-      const { token } = JSON.parse(raw);
-      return { Authorization: `Bearer ${token}` };
-    } catch {
-      return {};
-    }
+    return {};
   };
 
   useEffect(() => {
@@ -155,6 +148,7 @@ export function AvailabilitySetup() {
     try {
       const response = await fetch(`${API_BASE_URL}/availability/patterns`, {
         headers: getAuthHeader(),
+        credentials: 'include',
       });
 
       if (response.ok) {
@@ -204,6 +198,7 @@ export function AvailabilitySetup() {
       const startDate = new Date().toISOString().split('T')[0];
       const response = await fetch(`${API_BASE_URL}/availability/slots?startDate=${startDate}`, {
         headers: getAuthHeader(),
+        credentials: 'include',
       });
 
       if (response.ok) {
@@ -266,6 +261,7 @@ export function AvailabilitySetup() {
           'Content-Type': 'application/json',
           ...getAuthHeader(),
         },
+        credentials: 'include',
         body: JSON.stringify({ patterns }),
       });
 
@@ -311,6 +307,7 @@ export function AvailabilitySetup() {
           'Content-Type': 'application/json',
           ...getAuthHeader(),
         },
+        credentials: 'include',
         body: JSON.stringify({ slots: [slot] }),
       });
 
@@ -336,6 +333,7 @@ export function AvailabilitySetup() {
       const response = await fetch(`${API_BASE_URL}/availability/slots/${slotId}`, {
         method: 'DELETE',
         headers: getAuthHeader(),
+        credentials: 'include',
       });
 
       if (response.ok) {

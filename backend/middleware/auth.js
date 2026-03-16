@@ -8,12 +8,37 @@ const cleanEnv = (value, fallback = undefined) => {
 
 const JWT_SECRET = cleanEnv(process.env.JWT_SECRET, 'dev-secret-key');
 
+const getCookieValue = (cookieHeader, name) => {
+  if (typeof cookieHeader !== 'string' || !cookieHeader.trim()) return null;
+
+  const cookies = cookieHeader.split(';');
+  for (const cookie of cookies) {
+    const [rawKey, ...rawValueParts] = cookie.trim().split('=');
+    if (rawKey !== name) continue;
+    const rawValue = rawValueParts.join('=');
+    return rawValue ? decodeURIComponent(rawValue) : null;
+  }
+
+  return null;
+};
+
+const getTokenFromRequest = (req) => {
+  const cookieToken = getCookieValue(req.headers.cookie, 'utlwa_auth');
+  if (cookieToken) return cookieToken;
+
+  const authHeader = req.headers.authorization || '';
+  const [scheme, bearerToken] = authHeader.split(' ');
+  if (scheme === 'Bearer' && bearerToken) {
+    return bearerToken;
+  }
+
+  return null;
+};
+
 export const requireAuth = async (req, res, next) => {
   try {
-    const authHeader = req.headers.authorization || '';
-    const [scheme, token] = authHeader.split(' ');
-
-    if (scheme !== 'Bearer' || !token) {
+    const token = getTokenFromRequest(req);
+    if (!token) {
       return res.status(401).json({ error: 'Authentication required.' });
     }
 

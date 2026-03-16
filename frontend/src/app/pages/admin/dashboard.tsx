@@ -34,9 +34,7 @@ export function AdminDashboard() {
 
       try {
         const response = await fetch('/api/admin/doctors/unverified', {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          credentials: 'include',
         });
         const data = await response.json();
 

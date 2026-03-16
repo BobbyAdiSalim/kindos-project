@@ -10,7 +10,7 @@ interface ProtectedRouteProps {
 }
 
 function ProtectedRoute({ allowedRoles }: ProtectedRouteProps) {
-  const { isAuthenticated, token, user, updateUser, logout } = useAuth();
+  const { isAuthenticated, isLoading, token, user, updateUser, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [status, setStatus] = useState<GuardStatus>('checking');
@@ -21,6 +21,8 @@ function ProtectedRoute({ allowedRoles }: ProtectedRouteProps) {
     let isCancelled = false;
 
     const verifySession = async () => {
+      if (isLoading) return;
+
       if (!isAuthenticated || !token || !user) {
         if (!isCancelled) setStatus('unauthenticated');
         return;
@@ -28,9 +30,7 @@ function ProtectedRoute({ allowedRoles }: ProtectedRouteProps) {
 
       try {
         const response = await fetch('/api/profile/me', {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          credentials: 'include',
         });
 
         const data = await response.json();
@@ -121,6 +121,7 @@ function ProtectedRoute({ allowedRoles }: ProtectedRouteProps) {
   }, [
     allowedRolesKey,
     isAuthenticated,
+    isLoading,
     logout,
     token,
     updateUser,
@@ -134,7 +135,7 @@ function ProtectedRoute({ allowedRoles }: ProtectedRouteProps) {
     location.pathname,
   ]);
 
-  if (status === 'checking') {
+  if (isLoading || status === 'checking') {
     return (
       <div className="container mx-auto px-4 py-10 text-sm text-muted-foreground">
         Verifying session...

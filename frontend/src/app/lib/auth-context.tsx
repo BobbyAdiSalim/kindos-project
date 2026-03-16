@@ -18,6 +18,7 @@ interface AuthContextType {
   user: User | null;
   token: string | null;
   isAuthenticated: boolean;
+  isLoading: boolean;
   login: (email: string, password: string, role: UserRole) => Promise<void>;
   register: (
     email: string,
@@ -37,18 +38,10 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const STORAGE_KEY = 'utlwa_auth';
 const API_BASE = '/api';
-const SESSION_DURATION_MS = 60 * 60 * 1000;
-
-interface StoredAuthState {
-  user: User;
-  token: string;
-  expiresAt: number;
-}
+const SESSION_TOKEN_PLACEHOLDER = 'cookie-session';
 
 interface AuthApiResponse {
-  token: string;
   user: {
     id: number;
     username: string;
@@ -79,50 +72,6 @@ export const getDashboardPath = (role: UserRole) => {
   return '/admin/dashboard';
 };
 
-const parseTokenExpiry = (token: string): number | null => {
-  try {
-    const [, payload] = token.split('.');
-    if (!payload) return null;
-
-    const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
-    const decodedPayload = JSON.parse(atob(normalized));
-    if (!decodedPayload?.exp) return null;
-
-    return decodedPayload.exp * 1000;
-  } catch {
-    return null;
-  }
-};
-
-const saveAuthState = (user: User, token: string) => {
-  const tokenExpiry = parseTokenExpiry(token);
-  const expiresAt = tokenExpiry && tokenExpiry > Date.now() ? tokenExpiry : Date.now() + SESSION_DURATION_MS;
-
-  const payload: StoredAuthState = { user, token, expiresAt };
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-};
-
-const loadAuthState = (): { user: User | null; token: string | null } => {
-  const raw = localStorage.getItem(STORAGE_KEY);
-  if (!raw) return { user: null, token: null };
-
-  try {
-    const parsed = JSON.parse(raw) as Partial<StoredAuthState>;
-    if (!parsed?.expiresAt || parsed.expiresAt <= Date.now()) {
-      localStorage.removeItem(STORAGE_KEY);
-      return { user: null, token: null };
-    }
-
-    return {
-      user: parsed.user || null,
-      token: parsed.token || null,
-    };
-  } catch {
-    localStorage.removeItem(STORAGE_KEY);
-    return { user: null, token: null };
-  }
-};
-
 const parseApiResponse = async (response: Response): Promise<any> => {
   const contentType = response.headers.get('content-type') || '';
   if (contentType.includes('application/json')) {
@@ -134,42 +83,60 @@ const parseApiResponse = async (response: Response): Promise<any> => {
 };
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [authState, setAuthState] = useState(() => loadAuthState());
+  const [authState, setAuthState] = useState<{ user: User | null; token: string | null }>({
+    user: null,
+    token: null,
+  });
+  const [isLoading, setIsLoading] = useState(true);
   const { user, token } = authState;
 
   useEffect(() => {
-    if (!token) return;
+    localStorage.removeItem('utlwa_auth');
 
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return;
+    let isCancelled = false;
 
-    try {
-      const parsed = JSON.parse(raw) as Partial<StoredAuthState>;
-      const expiresAt = parsed.expiresAt || 0;
-      const remainingMs = expiresAt - Date.now();
+    const restoreSession = async () => {
+      try {
+        const response = await fetch(`${API_BASE}/profile/me`, {
+          credentials: 'include',
+        });
 
-      if (remainingMs <= 0) {
-        localStorage.removeItem(STORAGE_KEY);
-        setAuthState({ user: null, token: null });
-        return;
+        if (!response.ok) {
+          if (!isCancelled) {
+            setAuthState({ user: null, token: null });
+          }
+          return;
+        }
+
+        const data = await parseApiResponse(response);
+        const nextUser = mapApiUserToUser((data as AuthApiResponse).user);
+
+        if (!isCancelled) {
+          setAuthState({ user: nextUser, token: SESSION_TOKEN_PLACEHOLDER });
+        }
+      } catch {
+        if (!isCancelled) {
+          setAuthState({ user: null, token: null });
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsLoading(false);
+        }
       }
+    };
 
-      const timeout = window.setTimeout(() => {
-        localStorage.removeItem(STORAGE_KEY);
-        setAuthState({ user: null, token: null });
-      }, remainingMs);
+    restoreSession();
 
-      return () => window.clearTimeout(timeout);
-    } catch {
-      localStorage.removeItem(STORAGE_KEY);
-      setAuthState({ user: null, token: null });
-    }
-  }, [token]);
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
 
   const login = async (email: string, password: string, role: UserRole) => {
     const response = await fetch(`${API_BASE}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({ email, password, role }),
     });
 
@@ -179,10 +146,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
 
     const nextUser = mapApiUserToUser((data as AuthApiResponse).user);
-    const nextToken = (data as AuthApiResponse).token;
-
-    saveAuthState(nextUser, nextToken);
-    setAuthState({ user: nextUser, token: nextToken });
+    setAuthState({ user: nextUser, token: SESSION_TOKEN_PLACEHOLDER });
   };
 
   const register = async (
@@ -200,6 +164,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const response = await fetch(`${API_BASE}/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({
         email,
         password,
@@ -215,40 +180,31 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
 
     const nextUser = mapApiUserToUser((data as AuthApiResponse).user);
-    const nextToken = (data as AuthApiResponse).token;
-
-    saveAuthState(nextUser, nextToken);
-    setAuthState({ user: nextUser, token: nextToken });
+    setAuthState({ user: nextUser, token: SESSION_TOKEN_PLACEHOLDER });
   };
 
   const logout = async () => {
     try {
-      if (token) {
-        await fetch(`${API_BASE}/auth/logout`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-        });
-      }
+      await fetch(`${API_BASE}/auth/logout`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+      });
     } catch {
       // Intentionally ignored: local logout should still always proceed.
     }
 
     disconnectSocket();
-    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem('utlwa_auth');
     setAuthState({ user: null, token: null });
   };
 
   const updateUser = (updates: Partial<User>) => {
-    if (user) {
-      const updatedUser = { ...user, ...updates };
-      if (token) {
-        saveAuthState(updatedUser, token);
-      }
-      setAuthState((prev: { user: User | null; token: string | null }) => ({ ...prev, user: updatedUser }));
-    }
+    if (!user) return;
+    const updatedUser = { ...user, ...updates };
+    setAuthState((prev) => ({ ...prev, user: updatedUser, token: SESSION_TOKEN_PLACEHOLDER }));
   };
 
   return (
@@ -256,7 +212,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       value={{
         user,
         token,
-        isAuthenticated: Boolean(user && token),
+        isAuthenticated: Boolean(user),
+        isLoading,
         login,
         register,
         logout,

@@ -50,13 +50,13 @@ const withAuth = (token: string | null) => {
 
   return {
     'Content-Type': 'application/json',
-    Authorization: `Bearer ${token}`,
   };
 };
 
 export const getMyProfile = async (token: string | null): Promise<ProfileResponse> => {
   const response = await fetch(`${API_BASE}/profile/me`, {
     headers: withAuth(token),
+    credentials: 'include',
   });
 
   const data = await response.json();
@@ -74,6 +74,7 @@ export const updateMyProfile = async (
   const response = await fetch(`${API_BASE}/profile/me`, {
     method: 'PUT',
     headers: withAuth(token),
+    credentials: 'include',
     body: JSON.stringify(body),
   });
 

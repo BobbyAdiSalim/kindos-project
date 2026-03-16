@@ -80,7 +80,7 @@ export function DoctorMessaging() {
   // Connect socket
   useEffect(() => {
     if (!token) return;
-    getSocket(token);
+    getSocket();
   }, [token]);
 
   // Sync active connection id to URL
@@ -125,7 +125,7 @@ export function DoctorMessaging() {
     joinConversation(activeConnection.id);
     prevConnectionRef.current = activeConnection.id;
 
-    const s = getSocket(token);
+    const s = getSocket();
     const handleReconnect = () => joinConversation(activeConnection.id);
     s.on('connect', handleReconnect);
     return () => {

@@ -86,9 +86,7 @@ export function DoctorDashboard() {
 
       try {
         const response = await fetch('/api/profile/me', {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          credentials: 'include',
         });
         const data = await response.json();
 
@@ -214,8 +212,8 @@ export function DoctorDashboard() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
         },
+        credentials: 'include',
         body: JSON.stringify({
           fullName: formData.fullName,
           specialty: formData.specialty,
