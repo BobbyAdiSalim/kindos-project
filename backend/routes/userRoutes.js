@@ -18,6 +18,7 @@ import {
   getUnverifiedDoctors,
   updateDoctorVerificationStatus,
   getDoctorVerificationHistory,
+  getAppointmentRejectionAnalytics,
 } from "../controllers/roles/adminController.js";
 import {
   getAvailabilityPatterns,
@@ -179,6 +180,10 @@ router.patch("/admin/doctors/:doctorId/verification", requireAuth, requireRole("
 
 router.get("/admin/doctors/verification-history", requireAuth, requireRole("admin"), (req, res) => {
   getDoctorVerificationHistory(req, res);
+});
+
+router.get("/admin/analytics/appointment-rejections", requireAuth, requireRole("admin"), (req, res) => {
+  getAppointmentRejectionAnalytics(req, res);
 });
 
 router.post("/doctor/verification/resubmit", requireAuth, requireRole("doctor"), (req, res) => {
