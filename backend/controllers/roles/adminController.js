@@ -1,5 +1,9 @@
 import { Op } from 'sequelize';
-import { AdminLog, Doctor, User } from '../../models/index.js';
+import { AdminLog, Appointment, Doctor, User } from '../../models/index.js';
+import {
+  DOCTOR_REJECTION_REASON_OPTIONS,
+  getDoctorRejectionReasonLabel,
+} from '../booking/bookingShared.js';
 import { sendEmailByType } from '../../services/email-strategy/index.js';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
@@ -166,6 +170,94 @@ export const getDoctorVerificationHistory = async (_req, res) => {
     }));
 
     return res.status(200).json({ history });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+const TIMEFRAME_TO_DAYS = {
+  '7d': 7,
+  '30d': 30,
+  '90d': 90,
+  '365d': 365,
+  all: null,
+};
+
+const toIsoDate = (value) => value.toISOString().slice(0, 10);
+
+export const getAppointmentRejectionAnalytics = async (req, res) => {
+  try {
+    const requestedTimeframe = String(req.query.timeframe || '30d').trim().toLowerCase();
+    const timeframe = Object.prototype.hasOwnProperty.call(TIMEFRAME_TO_DAYS, requestedTimeframe)
+      ? requestedTimeframe
+      : '30d';
+    const days = TIMEFRAME_TO_DAYS[timeframe];
+
+    const where = {
+      status: 'cancelled',
+      doctor_rejection_reason_code: {
+        [Op.not]: null,
+      },
+    };
+
+    let dateRange = null;
+    if (days) {
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setHours(0, 0, 0, 0);
+      startDate.setDate(startDate.getDate() - (days - 1));
+
+      where.updated_at = {
+        [Op.gte]: startDate,
+      };
+
+      dateRange = {
+        start: toIsoDate(startDate),
+        end: toIsoDate(endDate),
+      };
+    }
+
+    const appointments = await Appointment.findAll({
+      where,
+      attributes: [
+        'doctor_rejection_reason_code',
+        'doctor_rejection_reason_note',
+      ],
+      order: [['updated_at', 'DESC']],
+    });
+
+    const countsByCode = new Map(
+      DOCTOR_REJECTION_REASON_OPTIONS.map((option) => [option.code, 0])
+    );
+
+    for (const appointment of appointments) {
+      const code = appointment.doctor_rejection_reason_code;
+      if (!code || !countsByCode.has(code)) continue;
+      countsByCode.set(code, (countsByCode.get(code) || 0) + 1);
+    }
+
+    const reasons = Array.from(countsByCode.entries())
+      .map(([code, count]) => ({
+        code,
+        label: getDoctorRejectionReasonLabel(code) || code,
+        count,
+      }))
+      .filter((item) => item.count > 0)
+      .sort((left, right) => right.count - left.count || left.label.localeCompare(right.label));
+
+    const totalDeclinedAppointments = reasons.reduce((sum, item) => sum + item.count, 0);
+    const topReason = reasons[0] || null;
+
+    return res.status(200).json({
+      timeframe,
+      date_range: dateRange,
+      summary: {
+        total_declined_appointments: totalDeclinedAppointments,
+        unique_reason_count: reasons.length,
+        top_reason: topReason,
+      },
+      reasons,
+    });
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }
