@@ -11,6 +11,7 @@ import { DoctorProfile as DoctorProfileApi, getPublicProfile } from '@/app/lib/p
 import { useAuth } from '@/app/lib/auth-context';
 import { getMyConnections, sendConnectRequest, type ConnectionInfo } from '@/app/lib/chat-api';
 import { getDoctorReviews, type DoctorReviewsResponse } from '@/app/lib/review-api';
+import { getDefaultPreferredTimeZone, resolveTimeZone } from '@/app/lib/timezone';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 
@@ -148,6 +149,10 @@ export function DoctorProfile() {
   const hasNextAvailableDate = Boolean(
     nextAvailableDate && !Number.isNaN(nextAvailableDate.getTime())
   );
+  const doctorTimeZone = resolveTimeZone(
+    doctorFromApi?.time_zone,
+    getDefaultPreferredTimeZone()
+  );
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-4xl">
@@ -269,7 +274,16 @@ export function DoctorProfile() {
                 <h3 className="font-semibold mb-2">Next Available</h3>
                 <p className="text-muted-foreground">
                   {hasNextAvailableDate
-                    ? format(nextAvailableDate as Date, 'MMMM d, yyyy \'at\' h:mm a')
+                    ? new Intl.DateTimeFormat('en-US', {
+                      month: 'long',
+                      day: 'numeric',
+                      year: 'numeric',
+                      hour: 'numeric',
+                      minute: '2-digit',
+                      hour12: true,
+                      timeZone: doctorTimeZone,
+                      timeZoneName: 'short',
+                    }).format(nextAvailableDate as Date)
                     : 'No available dates'}
                 </p>
               </div>

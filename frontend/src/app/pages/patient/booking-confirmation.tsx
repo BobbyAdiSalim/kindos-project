@@ -2,20 +2,42 @@ import React from 'react';
 import { Link, useLocation } from 'react-router';
 import { Button } from '@/app/components/ui/button';
 import { Card, CardContent } from '@/app/components/ui/card';
+import { TimeZoneSelector } from '@/app/components/time-zone-selector';
 import { Check, Calendar, MapPin, Video } from 'lucide-react';
-import { format } from 'date-fns';
 import { formatTime24to12 } from '@/app/lib/availability-api';
 import { type AppointmentRecord } from '@/app/lib/appointment-api';
+import { formatZonedDateTime, getDefaultPreferredTimeZone, resolveTimeZone } from '@/app/lib/timezone';
+import { usePreferredTimeZone } from '@/app/lib/use-preferred-timezone';
 
 export function BookingConfirmation() {
+  const { timeZone, timeZoneOptions, setTimeZone, systemTimeZone } = usePreferredTimeZone();
   const location = useLocation();
   const appointment = (location.state as { appointment?: AppointmentRecord } | null)?.appointment;
+  const sourceTimeZone = resolveTimeZone(
+    appointment?.doctor?.time_zone,
+    getDefaultPreferredTimeZone()
+  );
+  const targetTimeZone = resolveTimeZone(timeZone, systemTimeZone);
 
   const appointmentDateLabel = appointment
-    ? format(new Date(`${appointment.appointment_date}T00:00:00`), 'MMMM d, yyyy')
+    ? formatZonedDateTime(
+        appointment.appointment_date,
+        appointment.start_time,
+        sourceTimeZone,
+        targetTimeZone,
+        { month: 'long', day: 'numeric', year: 'numeric' },
+        'Appointment date'
+      )
     : 'Appointment date';
   const appointmentTimeLabel = appointment
-    ? formatTime24to12(appointment.start_time)
+    ? formatZonedDateTime(
+        appointment.appointment_date,
+        appointment.start_time,
+        sourceTimeZone,
+        targetTimeZone,
+        { hour: 'numeric', minute: '2-digit', hour12: true, timeZoneName: 'short' },
+        formatTime24to12(appointment.start_time)
+      )
     : 'Appointment time';
   const durationLabel = appointment?.duration ? `${appointment.duration} minutes` : 'Duration not available';
   const doctorName = appointment?.doctor?.full_name || 'Assigned Doctor';
@@ -39,6 +61,15 @@ export function BookingConfirmation() {
             <p className="text-muted-foreground text-lg">
               Your provider will confirm or decline this request soon.
             </p>
+          </div>
+
+          <div className="mx-auto w-full max-w-lg">
+            <TimeZoneSelector
+              value={timeZone}
+              options={timeZoneOptions}
+              onChange={setTimeZone}
+              label="Show Appointment Time In"
+            />
           </div>
 
           <Card className="bg-muted/30 border-none">

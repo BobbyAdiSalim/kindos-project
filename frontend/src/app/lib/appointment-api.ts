@@ -13,6 +13,7 @@ export interface AppointmentPerson {
 export interface AppointmentDoctor extends AppointmentPerson {
   specialty: string | null;
   clinic_location: string | null;
+  time_zone?: string | null;
   virtual_available: boolean;
   in_person_available: boolean;
 }

@@ -8,6 +8,7 @@ export interface WaitlistDoctor {
   user_id: number;
   full_name: string;
   specialty: string | null;
+  time_zone?: string | null;
   username: string | null;
 }
 

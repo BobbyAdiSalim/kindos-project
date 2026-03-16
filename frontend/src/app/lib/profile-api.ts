@@ -14,6 +14,7 @@ export interface PatientProfile {
   date_of_birth?: string | null;
   phone?: string | null;
   address?: string | null;
+  time_zone?: string | null;
   emergency_contact_name?: string | null;
   emergency_contact_phone?: string | null;
   accessibility_preferences?: string[];
@@ -30,6 +31,7 @@ export interface DoctorProfile {
   bio?: string | null;
   languages?: string[];
   clinic_location?: string | null;
+  time_zone?: string | null;
   virtual_available?: boolean;
   in_person_available?: boolean;
   latitude?: string | null;

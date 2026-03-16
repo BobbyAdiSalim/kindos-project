@@ -5,6 +5,7 @@ import { Bell, Calendar, Clock, Loader2, Trash2 } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { Badge } from '@/app/components/ui/badge';
+import { TimeZoneSelector } from '@/app/components/time-zone-selector';
 import { useAuth } from '@/app/lib/auth-context';
 import {
   getMyWaitlistEntries,
@@ -12,6 +13,12 @@ import {
   type WaitlistEntry,
 } from '@/app/lib/waitlist-api';
 import { formatTime24to12 } from '@/app/lib/availability-api';
+import {
+  formatZonedDateTime,
+  getDefaultPreferredTimeZone,
+  resolveTimeZone,
+} from '@/app/lib/timezone';
+import { usePreferredTimeZone } from '@/app/lib/use-preferred-timezone';
 import { toast } from 'sonner';
 
 const waitlistStatusStyles: Record<string, string> = {
@@ -33,6 +40,7 @@ const parseDateOnlyLocal = (value: string) => new Date(`${value}T00:00:00`);
 export function JoinWaitlist() {
   const navigate = useNavigate();
   const { token } = useAuth();
+  const { timeZone, timeZoneOptions, setTimeZone, systemTimeZone } = usePreferredTimeZone();
   const [entries, setEntries] = useState<WaitlistEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [removingEntryId, setRemovingEntryId] = useState<number | null>(null);
@@ -95,6 +103,17 @@ export function JoinWaitlist() {
         </CardContent>
       </Card>
 
+      <Card className="mb-6">
+        <CardContent className="p-4">
+          <TimeZoneSelector
+            value={timeZone}
+            options={timeZoneOptions}
+            onChange={setTimeZone}
+            label="Show Waitlist Times In"
+          />
+        </CardContent>
+      </Card>
+
       {loading ? (
         <Card>
           <CardContent className="flex items-center justify-center p-12 text-muted-foreground">
@@ -143,11 +162,25 @@ export function JoinWaitlist() {
                     <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
                       <span className="inline-flex items-center gap-1">
                         <Calendar className="h-4 w-4" />
-                        {format(parseDateOnlyLocal(entry.desired_date), 'MMMM d, yyyy')}
+                        {formatZonedDateTime(
+                          entry.desired_date,
+                          entry.desired_start_time,
+                          resolveTimeZone(entry.doctor?.time_zone, getDefaultPreferredTimeZone()),
+                          resolveTimeZone(timeZone, systemTimeZone),
+                          { month: 'long', day: 'numeric', year: 'numeric' },
+                          format(parseDateOnlyLocal(entry.desired_date), 'MMMM d, yyyy')
+                        )}
                       </span>
                       <span className="inline-flex items-center gap-1">
                         <Clock className="h-4 w-4" />
-                        {formatTime24to12(entry.desired_start_time)}
+                        {formatZonedDateTime(
+                          entry.desired_date,
+                          entry.desired_start_time,
+                          resolveTimeZone(entry.doctor?.time_zone, getDefaultPreferredTimeZone()),
+                          resolveTimeZone(timeZone, systemTimeZone),
+                          { hour: 'numeric', minute: '2-digit', hour12: true, timeZoneName: 'short' },
+                          formatTime24to12(entry.desired_start_time)
+                        )}
                       </span>
                       {entry.status === 'active'
                         && typeof entry.queue_position === 'number'

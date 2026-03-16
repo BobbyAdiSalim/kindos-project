@@ -611,6 +611,7 @@ export const getBookableSlots = async (req, res) => {
     res.json({
       date,
       doctor_id: doctor.id,
+      doctor_time_zone: doctor.time_zone || null,
       slots: availableSlots.map((slot) => ({
         start_time: slot.startTime,
         end_time: slot.endTime,

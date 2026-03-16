@@ -21,6 +21,7 @@ const serializeWaitlistEntry = (entry) => ({
         user_id: entry.doctor.user_id,
         full_name: entry.doctor.full_name,
         specialty: entry.doctor.specialty,
+        time_zone: entry.doctor.time_zone || null,
         username: entry.doctor.user?.username || null,
       }
     : null,

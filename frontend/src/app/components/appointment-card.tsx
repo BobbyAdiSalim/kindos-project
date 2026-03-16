@@ -13,6 +13,8 @@ interface AppointmentCardProps {
     patientName?: string;
     date: string;
     time: string;
+    dateLabel?: string;
+    timeLabel?: string;
     type: 'virtual' | 'in-person';
     status:
       | 'scheduled'
@@ -80,11 +82,11 @@ export function AppointmentCard({
             <div className="flex flex-wrap gap-4 text-sm">
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Calendar className="h-4 w-4" />
-                <span>{format(appointmentDateValue, 'MMMM d, yyyy')}</span>
+                <span>{appointment.dateLabel || format(appointmentDateValue, 'MMMM d, yyyy')}</span>
               </div>
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Clock className="h-4 w-4" />
-                <span>{appointment.time}</span>
+                <span>{appointment.timeLabel || appointment.time}</span>
               </div>
             </div>
           </div>

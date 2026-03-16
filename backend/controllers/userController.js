@@ -185,10 +185,12 @@ const findAvailableUsername = async (requestedUsername, email) => {
 
 const createRoleProfile = async (transaction, user, body) => {
   if (user.role === 'patient') {
+    const normalizedTimeZone = normalizeTimeZone(body.timeZone);
     const profile = await Patient.create(
       {
         user_id: user.id,
         full_name: body.name,
+        time_zone: normalizedTimeZone ?? 'America/New_York',
       },
       { transaction }
     );
@@ -200,6 +202,7 @@ const createRoleProfile = async (transaction, user, body) => {
   }
 
   if (user.role === 'doctor') {
+    const normalizedTimeZone = normalizeTimeZone(body.timeZone);
     const profile = await Doctor.create(
       {
         user_id: user.id,
@@ -207,6 +210,7 @@ const createRoleProfile = async (transaction, user, body) => {
         specialty: body.specialty,
         license_number: body.licenseNumber,
         clinic_location: body.clinicAddress || null,
+        time_zone: normalizedTimeZone ?? 'America/New_York',
         verification_documents: body.verificationDocuments || [],
       },
       { transaction }
@@ -409,6 +413,19 @@ const normalizeBoolean = (value) => {
   return undefined;
 };
 
+const normalizeTimeZone = (value) => {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: trimmed });
+    return trimmed;
+  } catch {
+    return undefined;
+  }
+};
+
 const buildPatientProfileResponse = (profile, includePrivateFields = false) => {
   if (!profile) return null;
 
@@ -427,6 +444,7 @@ const buildPatientProfileResponse = (profile, includePrivateFields = false) => {
     date_of_birth: profile.date_of_birth,
     phone: profile.phone,
     address: profile.address,
+    time_zone: profile.time_zone,
     emergency_contact_name: profile.emergency_contact_name,
     emergency_contact_phone: profile.emergency_contact_phone,
     accessibility_preferences: profile.accessibility_preferences || [],
@@ -450,6 +468,7 @@ const buildDoctorProfileResponse = (profile, includePrivateFields = false) => {
       bio: profile.bio,
       languages: profile.languages || [],
       clinic_location: profile.clinic_location,
+      time_zone: profile.time_zone,
       virtual_available: profile.virtual_available,
       in_person_available: profile.in_person_available,
     };
@@ -462,6 +481,7 @@ const buildDoctorProfileResponse = (profile, includePrivateFields = false) => {
     bio: profile.bio,
     languages: profile.languages || [],
     clinic_location: profile.clinic_location,
+    time_zone: profile.time_zone,
     latitude: profile.latitude,
     longitude: profile.longitude,
     virtual_available: profile.virtual_available,
@@ -834,6 +854,14 @@ export const updateMyProfile = async (req, res) => {
       if (typeof req.body.dateOfBirth === 'string') patientUpdates.date_of_birth = req.body.dateOfBirth || null;
       if (typeof req.body.phone === 'string') patientUpdates.phone = req.body.phone.trim() || null;
       if (typeof req.body.address === 'string') patientUpdates.address = req.body.address.trim() || null;
+      if (Object.prototype.hasOwnProperty.call(req.body, 'timeZone')) {
+        const normalizedTimeZone = normalizeTimeZone(req.body.timeZone);
+        if (normalizedTimeZone === undefined) {
+          await transaction.rollback();
+          return res.status(400).json({ error: 'Invalid timeZone. Expected a valid IANA timezone.' });
+        }
+        patientUpdates.time_zone = normalizedTimeZone;
+      }
       if (typeof req.body.emergencyContactName === 'string') {
         patientUpdates.emergency_contact_name = req.body.emergencyContactName.trim() || null;
       }
@@ -874,6 +902,14 @@ export const updateMyProfile = async (req, res) => {
       if (typeof req.body.bio === 'string') doctorUpdates.bio = req.body.bio.trim() || null;
       if (typeof req.body.clinicLocation === 'string') {
         doctorUpdates.clinic_location = req.body.clinicLocation.trim() || null;
+      }
+      if (Object.prototype.hasOwnProperty.call(req.body, 'timeZone')) {
+        const normalizedTimeZone = normalizeTimeZone(req.body.timeZone);
+        if (normalizedTimeZone === undefined) {
+          await transaction.rollback();
+          return res.status(400).json({ error: 'Invalid timeZone. Expected a valid IANA timezone.' });
+        }
+        doctorUpdates.time_zone = normalizedTimeZone;
       }
 
       const parsedLanguages = parseStringArray(req.body.languages);
@@ -1083,7 +1119,14 @@ export const resubmitDoctorVerification = async (req, res) => {
     const specialty = String(req.body.specialty || '').trim();
     const licenseNumber = String(req.body.licenseNumber || '').trim();
     const clinicLocation = String(req.body.clinicAddress || '').trim();
+    const hasTimeZoneOverride = Object.prototype.hasOwnProperty.call(req.body, 'timeZone');
+    const normalizedTimeZone = hasTimeZoneOverride ? normalizeTimeZone(req.body.timeZone) : undefined;
     const verificationDocuments = normalizeVerificationDocuments(req.body.verificationDocuments);
+
+    if (hasTimeZoneOverride && normalizedTimeZone === undefined) {
+      await transaction.rollback();
+      return res.status(400).json({ error: 'Invalid timeZone. Expected a valid IANA timezone.' });
+    }
 
     if (!fullName || !specialty || !licenseNumber || verificationDocuments.length === 0) {
       await transaction.rollback();
@@ -1108,6 +1151,7 @@ export const resubmitDoctorVerification = async (req, res) => {
         specialty,
         license_number: licenseNumber,
         clinic_location: clinicLocation || null,
+        ...(hasTimeZoneOverride ? { time_zone: normalizedTimeZone } : {}),
         verification_documents: persistedVerificationDocuments,
         verification_status: 'pending',
         verified_by: null,
