@@ -27,6 +27,8 @@ import {
   type ConnectionInfo,
 } from '@/app/lib/chat-api';
 import { DeclineAppointmentDialog, type DoctorRejectionReasonCode } from '@/app/components/doctor/decline-appointment-dialog';
+import { formatZonedDateTime, getDefaultPreferredTimeZone, resolveTimeZone } from '@/app/lib/timezone';
+import { usePreferredTimeZone } from '@/app/lib/use-preferred-timezone';
 
 const mapAppointmentStatus = (appointment: AppointmentRecord) => {
   if (appointment.status === 'cancelled' && appointment.declined_by_doctor) {
@@ -36,21 +38,49 @@ const mapAppointmentStatus = (appointment: AppointmentRecord) => {
   return appointment.status;
 };
 
-const toAppointmentCardData = (appointment: AppointmentRecord) => ({
-  id: String(appointment.id),
-  doctorName: appointment.doctor?.full_name || 'Doctor',
-  patientName: appointment.patient?.full_name || 'Patient',
-  date: appointment.appointment_date,
-  time: formatTime24to12(appointment.start_time),
-  type: appointment.appointment_type,
-  status: mapAppointmentStatus(appointment),
-  reason: appointment.reason,
-  pendingRescheduleRequestedByDoctor: appointment.pending_reschedule?.requested_by_role === 'doctor',
-});
+const toAppointmentCardData = (
+  appointment: AppointmentRecord,
+  preferredTimeZone: string,
+  systemTimeZone: string
+) => {
+  const sourceTimeZone = getDefaultPreferredTimeZone();
+  const targetTimeZone = resolveTimeZone(preferredTimeZone, systemTimeZone);
+  const dateLabel = formatZonedDateTime(
+    appointment.appointment_date,
+    appointment.start_time,
+    sourceTimeZone,
+    targetTimeZone,
+    { month: 'long', day: 'numeric', year: 'numeric' },
+    appointment.appointment_date
+  );
+  const timeLabel = formatZonedDateTime(
+    appointment.appointment_date,
+    appointment.start_time,
+    sourceTimeZone,
+    targetTimeZone,
+    { hour: 'numeric', minute: '2-digit', hour12: true, timeZoneName: 'short' },
+    formatTime24to12(appointment.start_time)
+  );
+
+  return {
+    id: String(appointment.id),
+    doctorName: appointment.doctor?.full_name || 'Doctor',
+    patientName: appointment.patient?.full_name || 'Patient',
+    date: appointment.appointment_date,
+    time: timeLabel,
+    dateLabel,
+    timeLabel,
+    type: appointment.appointment_type,
+    status: mapAppointmentStatus(appointment),
+    reason: appointment.reason,
+    pendingRescheduleRequestedByDoctor: appointment.pending_reschedule?.requested_by_role === 'doctor',
+  };
+};
 
 export function DoctorDashboard() {
   const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
   const { user, token, updateUser } = useAuth();
+  const { timeZone, timeZoneOptions, systemTimeZone } = usePreferredTimeZone();
   const isVerified = user?.verified === true;
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -71,6 +101,8 @@ export function DoctorDashboard() {
   });
   const [verificationDocumentName, setVerificationDocumentName] = useState('');
   const [verificationDocumentDataUrl, setVerificationDocumentDataUrl] = useState('');
+  const displayTimeZone = resolveTimeZone(timeZone, systemTimeZone);
+  const displayTimeZoneLabel = timeZoneOptions.find((option) => option.value === displayTimeZone)?.label || displayTimeZone;
 
   const fileToDataUrl = (file: File) =>
     new Promise<string>((resolve, reject) => {
@@ -311,26 +343,26 @@ export function DoctorDashboard() {
   const { requestAppointments, upcomingAppointments, pastAppointments } = useMemo(() => {
     const requests = appointments
       .filter((appointment) => appointment.status === 'scheduled')
-      .map(toAppointmentCardData);
+      .map((appointment) => toAppointmentCardData(appointment, timeZone, systemTimeZone));
     const upcoming = appointments
       .filter((appointment) => appointment.status === 'confirmed')
-      .map(toAppointmentCardData);
+      .map((appointment) => toAppointmentCardData(appointment, timeZone, systemTimeZone));
     const past = appointments
       .filter((appointment) => !['scheduled', 'confirmed'].includes(appointment.status))
       .sort((a, b) => {
-        const dateCompare = new Date(`${b.appointment_date}T00:00:00`).getTime() - 
+        const dateCompare = new Date(`${b.appointment_date}T00:00:00`).getTime() -
                           new Date(`${a.appointment_date}T00:00:00`).getTime();
         if (dateCompare !== 0) return dateCompare;
         return b.end_time.localeCompare(a.end_time);
       })
-      .map(toAppointmentCardData);
+      .map((appointment) => toAppointmentCardData(appointment, timeZone, systemTimeZone));
 
     return {
       requestAppointments: requests,
       upcomingAppointments: upcoming,
       pastAppointments: past,
     };
-  }, [appointments]);
+  }, [appointments, systemTimeZone, timeZone]);
 
   if (!isVerified) {
     const isDenied = user?.verificationStatus === 'denied';
@@ -534,6 +566,13 @@ export function DoctorDashboard() {
           </Popover>
         </div>
       </div>
+      <p className="text-sm text-muted-foreground -mt-4 mb-6">
+        Times shown in <span className="font-medium text-foreground">{displayTimeZoneLabel}</span>. Change this in{' '}
+        <Link to="/doctor/profile" className="underline underline-offset-4">
+          Profile
+        </Link>
+        .
+      </p>
 
       <Tabs defaultValue="upcoming" className="w-full">
         <TabsList className="w-full md:w-auto">

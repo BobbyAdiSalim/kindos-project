@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router';
 import { Button } from '@/app/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/app/components/ui/card';
 import { Label } from '@/app/components/ui/label';
@@ -10,6 +11,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/app/components/ui/ta
 import { Badge } from '@/app/components/ui/badge';
 import { toast } from 'sonner';
 import { Trash2, Plus, Calendar as CalendarIcon } from 'lucide-react';
+import { getTimeZoneShortName, resolveTimeZone } from '@/app/lib/timezone';
+import { usePreferredTimeZone } from '@/app/lib/use-preferred-timezone';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 
@@ -121,6 +124,7 @@ const createWeeklySchedule = (enabledByDefault: (dayIndex: number) => boolean): 
   }), {});
 
 export function AvailabilitySetup() {
+  const { timeZone, systemTimeZone, timeZoneOptions } = usePreferredTimeZone();
   const [schedule, setSchedule] = useState<WeeklySchedule>(
     createWeeklySchedule((index) => index !== 0 && index !== 6)
   );
@@ -134,6 +138,11 @@ export function AvailabilitySetup() {
     duration: 30,
   });
   const [loading, setLoading] = useState(false);
+  const availabilityTimeZone = resolveTimeZone(timeZone, systemTimeZone);
+  const availabilityTimeZoneShort = getTimeZoneShortName(availabilityTimeZone, systemTimeZone);
+  const availabilityTimeZoneLabel =
+    timeZoneOptions.find((option) => option.value === availabilityTimeZone)?.label
+    || availabilityTimeZone;
 
   const getAuthHeader = () => {
     return {};
@@ -415,6 +424,13 @@ export function AvailabilitySetup() {
         <p className="text-muted-foreground">
           Configure your regular schedule and add specific dates when you're available for appointments
         </p>
+        <p className="text-sm text-muted-foreground mt-2">
+          Times are shown in <span className="font-medium text-foreground">{availabilityTimeZoneLabel}</span> ({availabilityTimeZoneShort}). Change this in{' '}
+          <Link to="/doctor/profile" className="underline underline-offset-4">
+            Profile
+          </Link>
+          .
+        </p>
       </div>
 
       <Tabs defaultValue="weekly" className="space-y-6">
@@ -428,7 +444,7 @@ export function AvailabilitySetup() {
             <CardHeader>
               <CardTitle>Regular Weekly Schedule</CardTitle>
               <CardDescription>
-                Set your recurring weekly availability pattern
+                Set your recurring weekly availability pattern. Times use {availabilityTimeZoneShort}.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -597,7 +613,7 @@ export function AvailabilitySetup() {
               <CardHeader>
                 <CardTitle>Add Specific Availability</CardTitle>
                 <CardDescription>
-                  Add or remove availability for specific dates (overrides weekly schedule)
+                    Add or remove availability for specific dates (overrides weekly schedule). Times use {availabilityTimeZoneShort}.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
@@ -770,6 +786,8 @@ export function AvailabilitySetup() {
                               minute: '2-digit',
                               hour12: true,
                             })}
+                            {' '}
+                            ({availabilityTimeZoneShort})
                           </div>
                           <div className="flex gap-2 flex-wrap">
                             {slot.appointment_type.map((type) => (
