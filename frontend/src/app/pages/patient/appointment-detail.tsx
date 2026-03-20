@@ -4,7 +4,7 @@ import { Button } from '@/app/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { AppointmentTypeBadge, StatusBadge } from '@/app/components/status-badges';
 import { format } from 'date-fns';
-import { Calendar as CalendarIcon, Clock, MapPin, Video, Loader2 } from 'lucide-react';
+import { Calendar as CalendarIcon, Clock, MapPin, MessageSquare, Video, Loader2 } from 'lucide-react';
 import { useAuth } from '@/app/lib/auth-context';
 import { formatTime24to12, getBookableSlots, type TimeSlot } from '@/app/lib/availability-api';
 import {
@@ -26,6 +26,7 @@ import {
 } from '@/app/lib/timezone';
 import { usePreferredTimeZone } from '@/app/lib/use-preferred-timezone';
 import { toast } from 'sonner';
+import { getMyConnections } from '@/app/lib/chat-api';
 import { Calendar } from '@/app/components/ui/calendar';
 import { Label } from '@/app/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/app/components/ui/radio-group';
@@ -80,6 +81,7 @@ export function AppointmentDetail() {
   const [cancelSubmitting, setCancelSubmitting] = useState(false);
   const [proposalDecisionSubmitting, setProposalDecisionSubmitting] = useState(false);
   const [hasDoctorReview, setHasDoctorReview] = useState(false);
+  const [connectionId, setConnectionId] = useState<number | null>(null);
 
   useEffect(() => {
     const loadAppointment = async () => {
@@ -115,6 +117,20 @@ export function AppointmentDetail() {
 
     loadAppointment();
   }, [id, token]);
+
+  useEffect(() => {
+    if (!token || !appointment?.doctor?.id) return;
+    const findConnection = async () => {
+      try {
+        const { connections } = await getMyConnections(token);
+        const match = connections.find((c) => c.doctor_id === appointment.doctor!.id);
+        if (match) setConnectionId(match.id);
+      } catch {
+        // No connection yet (doctor hasn't messaged)
+      }
+    };
+    findConnection();
+  }, [token, appointment?.doctor?.id]);
 
   const status = useMemo(
     () => (appointment ? mapAppointmentStatus(appointment) : 'pending'),
@@ -326,6 +342,15 @@ export function AppointmentDetail() {
               <StatusBadge status={status} />
             </div>
           </div>
+          {connectionId && (
+            <Button
+              variant="outline"
+              onClick={() => navigate(`/patient/messages?connectionId=${connectionId}`)}
+            >
+              <MessageSquare className="h-4 w-4 mr-2" />
+              Message Doctor
+            </Button>
+          )}
         </div>
         <Card>
           <CardContent className="p-4">

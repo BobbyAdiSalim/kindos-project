@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { format } from 'date-fns';
-import { Calendar as CalendarIcon, Clock, FileText, Loader2, User } from 'lucide-react';
+import { Calendar as CalendarIcon, Clock, FileText, Loader2, MessageSquare, User } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { AppointmentTypeBadge, StatusBadge } from '@/app/components/status-badges';
@@ -29,6 +29,7 @@ import {
   resolveTimeZone,
 } from '@/app/lib/timezone';
 import { usePreferredTimeZone } from '@/app/lib/use-preferred-timezone';
+import { getMyConnections } from '@/app/lib/chat-api';
 
 const mapAppointmentStatus = (appointment: AppointmentRecord) => {
   if (appointment.status === 'cancelled' && appointment.declined_by_doctor) {
@@ -67,6 +68,7 @@ export function DoctorAppointmentDetail() {
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [slotsError, setSlotsError] = useState('');
   const [rescheduleSubmitting, setRescheduleSubmitting] = useState(false);
+  const [connectionId, setConnectionId] = useState<number | null>(null);
 
   useEffect(() => {
     const loadAppointment = async () => {
@@ -91,6 +93,20 @@ export function DoctorAppointmentDetail() {
 
     loadAppointment();
   }, [id, token]);
+
+  useEffect(() => {
+    if (!token || !appointment?.patient?.id) return;
+    const findConnection = async () => {
+      try {
+        const { connections } = await getMyConnections(token);
+        const match = connections.find((c) => c.patient_id === appointment.patient!.id);
+        if (match) setConnectionId(match.id);
+      } catch {
+        // Connection may not exist yet
+      }
+    };
+    findConnection();
+  }, [token, appointment?.patient?.id]);
 
   const status = useMemo(
     () => (appointment ? mapAppointmentStatus(appointment) : 'pending'),
@@ -301,15 +317,26 @@ export function DoctorAppointmentDetail() {
               <StatusBadge status={status} />
             </div>
           </div>
-          {['scheduled', 'confirmed'].includes(appointment.status) && appointment.patient && (
-            <Button
-              variant="outline"
-              onClick={() => navigate(`/doctor/patient/${appointment.patient!.id}/history`)}
-            >
-              <User className="h-4 w-4 mr-2" />
-              Patient History
-            </Button>
-          )}
+          <div className="flex gap-2">
+            {connectionId && (
+              <Button
+                variant="outline"
+                onClick={() => navigate(`/doctor/messages?connectionId=${connectionId}`)}
+              >
+                <MessageSquare className="h-4 w-4 mr-2" />
+                Message Patient
+              </Button>
+            )}
+            {['scheduled', 'confirmed'].includes(appointment.status) && appointment.patient && (
+              <Button
+                variant="outline"
+                onClick={() => navigate(`/doctor/patient/${appointment.patient!.id}/history`)}
+              >
+                <User className="h-4 w-4 mr-2" />
+                Patient History
+              </Button>
+            )}
+          </div>
         </div>
 
         <Card>
