@@ -50,63 +50,9 @@ const ALLOWED_MIME_TYPES = new Set([
 ]);
 
 /**
- * Send a connect request from a patient to a doctor.
- * POST /api/chat/connect
- * Body: { doctorId }
- */
-export const sendConnectRequest = async (req, res) => {
-  try {
-    const { userId, role } = req.auth;
-
-    if (role !== 'patient') {
-      return res.status(403).json({ error: 'Only patients can send connect requests.' });
-    }
-
-    const { doctorId } = req.body;
-    if (!doctorId) {
-      return res.status(400).json({ error: 'doctorId is required.' });
-    }
-
-    const patient = await Patient.findOne({ where: { user_id: userId } });
-    if (!patient) {
-      return res.status(404).json({ error: 'Patient profile not found.' });
-    }
-
-    const doctor = await Doctor.findByPk(doctorId);
-    if (!doctor) {
-      return res.status(404).json({ error: 'Doctor not found.' });
-    }
-
-    if (doctor.verification_status !== 'approved') {
-      return res.status(400).json({ error: 'Doctor is not verified.' });
-    }
-
-    const existing = await Connection.findOne({
-      where: { patient_id: patient.id, doctor_id: doctor.id },
-    });
-
-    if (existing) {
-      return res.status(409).json({
-        error: `Connection already exists with status: ${existing.status}.`,
-        connection: existing,
-      });
-    }
-
-    const connection = await Connection.create({
-      patient_id: patient.id,
-      doctor_id: doctor.id,
-      status: 'pending',
-    });
-
-    return res.status(201).json({ message: 'Connect request sent.', connection });
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({ error: 'Internal server error.' });
-  }
-};
-
-/**
  * Get all connections for the current user (patient or doctor).
+ * For patients: only returns connections where the doctor has sent at least one message.
+ * For doctors: returns all connections.
  * GET /api/chat/connections
  */
 export const getMyConnections = async (req, res) => {
@@ -127,119 +73,47 @@ export const getMyConnections = async (req, res) => {
         const connJson = conn.toJSON();
         const otherUserId = roleStrategy.getOtherConnectionUserId(connJson);
 
-        if (conn.status === 'accepted' && otherUserId) {
-          const lastMessage = await Message.findOne({
-            where: {
-              [Op.or]: [
-                { sender_id: userId, receiver_id: otherUserId },
-                { sender_id: otherUserId, receiver_id: userId },
-              ],
-            },
-            order: [['created_at', 'DESC']],
-          });
+        if (!otherUserId) return connJson;
 
-          const unreadCount = await Message.count({
-            where: {
-              sender_id: otherUserId,
-              receiver_id: userId,
-              read: false,
-            },
-          });
+        const lastMessage = await Message.findOne({
+          where: {
+            [Op.or]: [
+              { sender_id: userId, receiver_id: otherUserId },
+              { sender_id: otherUserId, receiver_id: userId },
+            ],
+          },
+          order: [['created_at', 'DESC']],
+        });
 
-          connJson.lastMessage = lastMessage;
-          connJson.unreadCount = unreadCount;
-        }
+        const unreadCount = await Message.count({
+          where: {
+            sender_id: otherUserId,
+            receiver_id: userId,
+            read: false,
+          },
+        });
+
+        connJson.lastMessage = lastMessage;
+        connJson.unreadCount = unreadCount;
 
         return connJson;
       })
     );
 
-    return res.status(200).json({ connections: connectionsWithMeta });
+    // For patients: only show connections where doctor has sent at least one message
+    let filtered = connectionsWithMeta;
+    if (req.auth.role === 'patient') {
+      filtered = connectionsWithMeta.filter((conn) => {
+        return conn.lastMessage != null;
+      });
+    }
+
+    return res.status(200).json({ connections: filtered });
   } catch (error) {
     if (error?.status) {
       return res.status(error.status).json({ error: error.message });
     }
 
-    console.error(error);
-    return res.status(500).json({ error: 'Internal server error.' });
-  }
-};
-
-/**
- * Get pending connect requests for a doctor.
- * GET /api/chat/requests/pending
- */
-export const getPendingRequests = async (req, res) => {
-  try {
-    const { userId, role } = req.auth;
-
-    if (role !== 'doctor') {
-      return res.status(403).json({ error: 'Only doctors can view pending requests.' });
-    }
-
-    const doctor = await Doctor.findOne({ where: { user_id: userId } });
-    if (!doctor) return res.status(404).json({ error: 'Doctor profile not found.' });
-
-    const pending = await Connection.findAll({
-      where: { doctor_id: doctor.id, status: 'pending' },
-      include: [
-        {
-          model: Patient,
-          as: 'patient',
-          attributes: ['id', 'full_name', 'user_id'],
-          include: [{ model: User, as: 'user', attributes: ['id', 'username', 'email'] }],
-        },
-      ],
-      order: [['created_at', 'ASC']],
-    });
-
-    return res.status(200).json({ requests: pending });
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({ error: 'Internal server error.' });
-  }
-};
-
-/**
- * Accept or reject a connection request (doctor only).
- * PATCH /api/chat/connections/:connectionId
- * Body: { status: 'accepted' | 'rejected' }
- */
-export const respondToConnection = async (req, res) => {
-  try {
-    const { userId, role } = req.auth;
-
-    if (role !== 'doctor') {
-      return res.status(403).json({ error: 'Only doctors can respond to connection requests.' });
-    }
-
-    const { connectionId } = req.params;
-    const { status } = req.body;
-
-    if (!['accepted', 'rejected'].includes(status)) {
-      return res.status(400).json({ error: 'Status must be "accepted" or "rejected".' });
-    }
-
-    const doctor = await Doctor.findOne({ where: { user_id: userId } });
-    if (!doctor) return res.status(404).json({ error: 'Doctor profile not found.' });
-
-    const connection = await Connection.findOne({
-      where: { id: connectionId, doctor_id: doctor.id },
-    });
-
-    if (!connection) {
-      return res.status(404).json({ error: 'Connection not found.' });
-    }
-
-    if (connection.status !== 'pending') {
-      return res.status(400).json({ error: `Connection has already been ${connection.status}.` });
-    }
-
-    connection.status = status;
-    await connection.save();
-
-    return res.status(200).json({ message: `Connection ${status}.`, connection });
-  } catch (error) {
     console.error(error);
     return res.status(500).json({ error: 'Internal server error.' });
   }
@@ -252,7 +126,7 @@ export const respondToConnection = async (req, res) => {
  */
 export const getConversation = async (req, res) => {
   try {
-    const { userId, role } = req.auth;
+    const { userId } = req.auth;
     const { connectionId } = req.params;
     const limit = Math.min(parseInt(req.query.limit) || 50, 100);
     const before = req.query.before ? parseInt(req.query.before) : null;
@@ -273,10 +147,6 @@ export const getConversation = async (req, res) => {
     const isDoctor = connection.doctor?.user_id === userId;
     if (!isPatient && !isDoctor) {
       return res.status(403).json({ error: 'You are not part of this connection.' });
-    }
-
-    if (connection.status !== 'accepted') {
-      return res.status(400).json({ error: 'Connection must be accepted to view messages.' });
     }
 
     const patientUserId = connection.patient.user_id;
@@ -308,7 +178,6 @@ export const getConversation = async (req, res) => {
         id: connection.id,
         patient: connection.patient,
         doctor: connection.doctor,
-        status: connection.status,
       },
     });
   } catch (error) {
@@ -321,6 +190,9 @@ export const getConversation = async (req, res) => {
  * Send a message within a connection.
  * POST /api/chat/messages/:connectionId
  * Body: { content } or { content?, file: { data, name, type } }
+ *
+ * Doctors can always send messages. Patients can only reply after the doctor
+ * has sent at least one message in the conversation.
  */
 export const sendMessage = async (req, res) => {
   try {
@@ -352,11 +224,23 @@ export const sendMessage = async (req, res) => {
       return res.status(403).json({ error: 'You are not part of this connection.' });
     }
 
-    if (connection.status !== 'accepted') {
-      return res.status(400).json({ error: 'Connection must be accepted to send messages.' });
-    }
-
     const receiverId = isPatient ? connection.doctor.user_id : connection.patient.user_id;
+
+    // Patients can only send messages after the doctor has initiated the conversation
+    if (isPatient) {
+      const doctorMessageCount = await Message.count({
+        where: {
+          sender_id: connection.doctor.user_id,
+          receiver_id: userId,
+        },
+      });
+
+      if (doctorMessageCount === 0) {
+        return res.status(403).json({
+          error: 'You cannot send messages until the doctor initiates the conversation.',
+        });
+      }
+    }
 
     let fileUrl = null;
     let fileName = null;

@@ -64,7 +64,7 @@ export function DoctorMessaging() {
 
         if (initialConnectionIdRef.current) {
           const match = data.connections.find(
-            (c) => c.id === initialConnectionIdRef.current && c.status === 'accepted'
+            (c) => c.id === initialConnectionIdRef.current
           );
           if (match) setActiveConnection(match);
         }
@@ -96,7 +96,7 @@ export function DoctorMessaging() {
 
   // Load messages when active connection changes
   useEffect(() => {
-    if (!activeConnection || activeConnection.status !== 'accepted') return;
+    if (!activeConnection) return;
 
     if (prevConnectionRef.current && prevConnectionRef.current !== activeConnection.id) {
       leaveConversation(prevConnectionRef.current);
@@ -166,7 +166,7 @@ export function DoctorMessaging() {
     }
   }, [messageInput, pendingFile, activeConnection, token, sending, updateConnectionPreview]);
 
-  const acceptedConnections = connections.filter((c) => c.status === 'accepted');
+  const acceptedConnections = connections;
 
   if (loading) {
     return (

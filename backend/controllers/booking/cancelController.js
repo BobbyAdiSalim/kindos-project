@@ -1,4 +1,4 @@
-import { sequelize, Appointment, Doctor } from '../../models/index.js';
+import { sequelize, Appointment, Connection, Doctor, Patient } from '../../models/index.js';
 import waitlistService from '../../services/WaitlistService.js';
 import {
   sendDoctorApprovalEmail,
@@ -181,6 +181,26 @@ export const updateAppointmentDecision = async (req, res) => {
         appointment.doctor_rejection_reason_code = null;
         appointment.doctor_rejection_reason_note = null;
         clearPendingReschedule(appointment);
+
+        // Create chat connection between doctor and patient on confirmation
+        const patient = await Patient.findOne({
+          where: { id: appointment.patient_id },
+          transaction,
+        });
+
+        if (patient) {
+          const existingConnection = await Connection.findOne({
+            where: { patient_id: patient.id, doctor_id: doctor.id },
+            transaction,
+          });
+
+          if (!existingConnection) {
+            await Connection.create(
+              { patient_id: patient.id, doctor_id: doctor.id },
+              { transaction }
+            );
+          }
+        }
       } else {
         const normalizedReasonCode = declineReasonCode || 'other';
         const normalizedReasonNote = declineReasonCode
