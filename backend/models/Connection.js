@@ -1,8 +1,7 @@
 /**
  * Connection Model
- * Represents connection requests between patients and doctors.
- * A patient must send a connect request that the doctor accepts
- * before messages can be exchanged.
+ * Represents a chat connection between a patient and a doctor.
+ * Connections are created automatically when an appointment is booked.
  */
 
 import { DataTypes } from 'sequelize';
@@ -32,11 +31,6 @@ const Connection = sequelize.define(
         key: 'id',
       },
     },
-    status: {
-      type: DataTypes.ENUM('pending', 'accepted', 'rejected'),
-      allowNull: false,
-      defaultValue: 'pending',
-    },
   },
   {
     tableName: 'connections',
@@ -48,9 +42,6 @@ const Connection = sequelize.define(
       {
         unique: true,
         fields: ['patient_id', 'doctor_id'],
-      },
-      {
-        fields: ['doctor_id', 'status'],
       },
     ],
   }

@@ -14,7 +14,6 @@ export interface ConnectionInfo {
   id: number;
   patient_id: number;
   doctor_id: number;
-  status: 'pending' | 'accepted' | 'rejected';
   created_at: string;
   updated_at: string;
   doctor?: {
@@ -53,25 +52,6 @@ export interface MessageInfo {
   };
 }
 
-export const sendConnectRequest = async (
-  token: string | null,
-  doctorId: number
-): Promise<{ message: string; connection: ConnectionInfo }> => {
-  const response = await fetch(`${API_BASE}/chat/connect`, {
-    method: 'POST',
-    headers: withAuth(token),
-    credentials: 'include',
-    body: JSON.stringify({ doctorId }),
-  });
-
-  const data = await response.json();
-  if (!response.ok) {
-    throw new Error(data?.error || 'Failed to send connect request.');
-  }
-
-  return data;
-};
-
 export const getMyConnections = async (
   token: string | null
 ): Promise<{ connections: ConnectionInfo[] }> => {
@@ -83,42 +63,6 @@ export const getMyConnections = async (
   const data = await response.json();
   if (!response.ok) {
     throw new Error(data?.error || 'Failed to load connections.');
-  }
-
-  return data;
-};
-
-export const getPendingRequests = async (
-  token: string | null
-): Promise<{ requests: ConnectionInfo[] }> => {
-  const response = await fetch(`${API_BASE}/chat/requests/pending`, {
-    headers: withAuth(token),
-    credentials: 'include',
-  });
-
-  const data = await response.json();
-  if (!response.ok) {
-    throw new Error(data?.error || 'Failed to load pending requests.');
-  }
-
-  return data;
-};
-
-export const respondToConnection = async (
-  token: string | null,
-  connectionId: number,
-  status: 'accepted' | 'rejected'
-): Promise<{ message: string; connection: ConnectionInfo }> => {
-  const response = await fetch(`${API_BASE}/chat/connections/${connectionId}`, {
-    method: 'PATCH',
-    headers: withAuth(token),
-    credentials: 'include',
-    body: JSON.stringify({ status }),
-  });
-
-  const data = await response.json();
-  if (!response.ok) {
-    throw new Error(data?.error || 'Failed to respond to connection.');
   }
 
   return data;

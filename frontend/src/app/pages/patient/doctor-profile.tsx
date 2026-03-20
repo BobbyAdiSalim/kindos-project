@@ -5,11 +5,10 @@ import { Card, CardContent } from '@/app/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/app/components/ui/avatar';
 import { Badge } from '@/app/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/app/components/ui/tabs';
-import { Star, MapPin, Video, User as UserIcon, Calendar, MessageSquare, Clock, UserPlus } from 'lucide-react';
+import { Star, MapPin, Video, User as UserIcon, Calendar } from 'lucide-react';
 import { mockDoctors, mockReviews } from '@/app/lib/mock-data';
 import { DoctorProfile as DoctorProfileApi, getPublicProfile } from '@/app/lib/profile-api';
 import { useAuth } from '@/app/lib/auth-context';
-import { getMyConnections, sendConnectRequest, type ConnectionInfo } from '@/app/lib/chat-api';
 import { getDoctorReviews, type DoctorReviewsResponse } from '@/app/lib/review-api';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
@@ -22,8 +21,6 @@ export function DoctorProfile() {
   const [doctorFromApi, setDoctorFromApi] = useState<DoctorProfileApi | null>(null);
   const [doctorUsername, setDoctorUsername] = useState('');
   const [doctorReviewsData, setDoctorReviewsData] = useState<DoctorReviewsResponse | null>(null);
-  const [connectionStatus, setConnectionStatus] = useState<'none' | 'pending' | 'accepted' | 'rejected'>('none');
-  const [connectLoading, setConnectLoading] = useState(false);
   const mockDoctor = mockDoctors.find((d) => d.id === id);
 
   useEffect(() => {
@@ -49,26 +46,6 @@ export function DoctorProfile() {
     loadDoctor();
   }, [id]);
 
-  // Load connection status with this doctor
-  useEffect(() => {
-    const loadConnectionStatus = async () => {
-      if (!token || !doctorFromApi) return;
-      try {
-        const data = await getMyConnections(token);
-        const match = data.connections.find(
-          (c: ConnectionInfo) => c.doctor_id === doctorFromApi.id
-        );
-        if (match) {
-          setConnectionStatus(match.status);
-        }
-      } catch {
-        // Non-critical — button defaults to "Connect"
-      }
-    };
-
-    loadConnectionStatus();
-  }, [token, doctorFromApi]);
-
   useEffect(() => {
     const loadDoctorReviews = async () => {
       if (!doctorFromApi?.id) return;
@@ -83,20 +60,6 @@ export function DoctorProfile() {
 
     void loadDoctorReviews();
   }, [doctorFromApi?.id]);
-
-  const handleConnect = async () => {
-    if (!doctorFromApi || !token) return;
-    setConnectLoading(true);
-    try {
-      await sendConnectRequest(token, doctorFromApi.id);
-      setConnectionStatus('pending');
-      toast.success('Connect request sent!');
-    } catch (err: any) {
-      toast.error(err.message);
-    } finally {
-      setConnectLoading(false);
-    }
-  };
 
   if (loading) {
     return (
@@ -205,29 +168,6 @@ export function DoctorProfile() {
                   Book Appointment
                 </Button>
               </Link>
-              {connectionStatus === 'accepted' ? (
-                <Link to="/patient/messages" className="flex-1 md:flex-none">
-                  <Button variant="outline" className="w-full">
-                    <MessageSquare className="h-4 w-4 mr-2" />
-                    Message
-                  </Button>
-                </Link>
-              ) : connectionStatus === 'pending' ? (
-                <Button variant="outline" className="w-full flex-1 md:flex-none" disabled>
-                  <Clock className="h-4 w-4 mr-2" />
-                  Pending
-                </Button>
-              ) : (
-                <Button
-                  variant="outline"
-                  className="w-full flex-1 md:flex-none"
-                  onClick={handleConnect}
-                  disabled={connectLoading}
-                >
-                  <UserPlus className="h-4 w-4 mr-2" />
-                  {connectLoading ? 'Connecting...' : 'Connect'}
-                </Button>
-              )}
             </div>
           </div>
         </CardContent>

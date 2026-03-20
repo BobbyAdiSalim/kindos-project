@@ -33,10 +33,7 @@ import {
   getBookableSlots,
 } from "../controllers/other/availabilityController.js";
 import {
-  sendConnectRequest,
   getMyConnections,
-  getPendingRequests,
-  respondToConnection,
   getConversation,
   sendMessage,
   markMessagesRead,
@@ -253,24 +250,9 @@ router.get("/availability/doctor/:doctorId", (req, res) => {
  * Chat Routes - Connection requests and messaging
  */
 
-// Send a connect request to a doctor (patient only)
-router.post("/chat/connect", requireAuth, requireRole("patient"), (req, res) => {
-  sendConnectRequest(req, res);
-});
-
 // Get all connections for the current user
 router.get("/chat/connections", requireAuth, requireRole("patient", "doctor"), (req, res) => {
   getMyConnections(req, res);
-});
-
-// Get pending connect requests (doctor only)
-router.get("/chat/requests/pending", requireAuth, requireRole("doctor"), (req, res) => {
-  getPendingRequests(req, res);
-});
-
-// Accept or reject a connection request (doctor only)
-router.patch("/chat/connections/:connectionId", requireAuth, requireRole("doctor"), (req, res) => {
-  respondToConnection(req, res);
 });
 
 // Get messages for a conversation
