@@ -766,17 +766,18 @@ export const getDoctorsWithAvailability = async (req, res) => {
       date,
       timeOfDay,
       language,
+      careType,
       limit = 50,
       offset = 0
     } = req.query;
 
-    console.log('Fetching doctors with availability filters:', { appointmentType, specialty, date, timeOfDay, language });
+    console.log('Fetching doctors with availability filters:', { appointmentType, specialty, date, timeOfDay, language, careType });
 
     const {
       slotWhereClause,
       patternWhereClause,
       doctorWhereClause,
-    } = buildAvailabilityFilterClauses({ date, appointmentType, timeOfDay, language });
+    } = buildAvailabilityFilterClauses({ date, appointmentType, timeOfDay, language, careType });
 
     console.log('Slot where clause:', JSON.stringify(slotWhereClause, null, 2));
     console.log('Pattern where clause:', JSON.stringify(patternWhereClause, null, 2));
@@ -849,6 +850,7 @@ export const getDoctorsWithAvailability = async (req, res) => {
       phone: doctor.phone,
       bio: doctor.bio,
       languages: doctor.languages || [],
+      careType: doctor.care_types || [],
       clinic_location: doctor.clinic_location,
       latitude: doctor.latitude,
       longitude: doctor.longitude,
