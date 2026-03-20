@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { DeclineAppointmentDialog } from './decline-appointment-dialog';
+import { DeclineAppointmentDialog } from '@/app/components/doctor/decline-appointment-dialog';
 
 describe('DeclineAppointmentDialog', () => {
   it('requires a reason before submit is enabled', () => {

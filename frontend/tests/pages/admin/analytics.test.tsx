@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
-import { Analytics } from './analytics';
+import { Analytics } from '@/app/pages/admin/analytics';
 
 vi.mock('@/app/lib/auth-context', () => ({
   useAuth: () => ({
