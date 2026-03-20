@@ -16,8 +16,37 @@ import {
 import { toast } from 'sonner';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { Check } from 'lucide-react';
 
 const timeZoneOptions = getTimeZoneOptions();
+
+// Care types options
+const CARE_TYPES = [
+  { 
+    id: 'primary', 
+    label: 'Primary Care', 
+    description: 'General health concerns, checkups, and preventive care',
+    icon: '🏥'
+  },
+  { 
+    id: 'mental-health', 
+    label: 'Mental Health', 
+    description: 'Counseling, therapy, and mental wellness support',
+    icon: '🧠'
+  },
+  { 
+    id: 'specialist', 
+    label: 'Specialist Care', 
+    description: 'Specific medical conditions requiring specialized expertise',
+    icon: '🩺'
+  },
+  { 
+    id: 'urgent-care', 
+    label: 'Urgent Care', 
+    description: 'Non-emergency conditions needing prompt attention',
+    icon: '⚡'
+  },
+];
 
 // Fix for default markers in Leaflet with Next.js/React
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -57,6 +86,7 @@ export function DoctorProfileEdit() {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedLocation, setSelectedLocation] = useState<LocationData | null>(null);
   const [viewBounds, setViewBounds] = useState<{ minlat?: number; maxlat?: number; minlon?: number; maxlon?: number }>({});
+  const [selectedCareTypes, setSelectedCareTypes] = useState<string[]>([]);
 
   const [formData, setFormData] = useState({
     username: '',
@@ -98,6 +128,15 @@ export function DoctorProfileEdit() {
       });
     }
   }, []);
+
+  // Handle care type toggle
+  const handleCareTypeToggle = (careTypeId: string) => {
+    setSelectedCareTypes(prev => 
+      prev.includes(careTypeId)
+        ? prev.filter(id => id !== careTypeId)
+        : [...prev, careTypeId]
+    );
+  };
 
   // Debounced address search for autocomplete - BEST BALANCE
   const searchAddressAutocomplete = useCallback(async (query: string) => {
@@ -386,6 +425,9 @@ export function DoctorProfileEdit() {
           inPersonAvailable: profile.in_person_available ?? true,
         });
 
+        // Load care types
+        setSelectedCareTypes(profile.care_types || []);
+
         if (profile.time_zone) {
           setStoredPreferredTimeZone(profile.time_zone);
         }
@@ -431,6 +473,7 @@ export function DoctorProfileEdit() {
         timeZone: formData.timeZone,
         virtualAvailable: formData.virtualAvailable,
         inPersonAvailable: formData.inPersonAvailable,
+        careTypes: selectedCareTypes,
       });
 
       setStoredPreferredTimeZone(formData.timeZone);
@@ -695,6 +738,57 @@ export function DoctorProfileEdit() {
                 </p>
               </div>
             )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Care Types</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-base font-semibold">Care Types You Provide</Label>
+              <p className="text-sm text-muted-foreground mb-2">
+                Select the types of care you offer. Patients will use these to find you.
+              </p>
+              
+              <div className="flex flex-wrap gap-2">
+                {CARE_TYPES.map(careType => (
+                  <button
+                    key={careType.id}
+                    type="button"
+                    onClick={() => handleCareTypeToggle(careType.id)}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg border transition-all ${
+                      selectedCareTypes.includes(careType.id)
+                        ? 'border-primary bg-primary/10 text-primary'
+                        : 'border-input hover:border-primary/50'
+                    }`}
+                  >
+                    <span className="text-lg">{careType.icon}</span>
+                    <div className="text-left">
+                      <div className="font-medium text-sm">{careType.label}</div>
+                      <div className="text-xs text-muted-foreground">{careType.description}</div>
+                    </div>
+                    {selectedCareTypes.includes(careType.id) && (
+                      <Check className="h-4 w-4 ml-1" />
+                    )}
+                  </button>
+                ))}
+              </div>
+              
+              {selectedCareTypes.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {selectedCareTypes.map(id => {
+                    const careType = CARE_TYPES.find(c => c.id === id);
+                    return careType ? (
+                      <span key={id} className="inline-flex items-center gap-1 bg-primary/10 text-primary rounded-full px-2 py-0.5 text-sm">
+                        {careType.icon} {careType.label}
+                      </span>
+                    ) : null;
+                  })}
+                </div>
+              )}
+            </div>
           </CardContent>
         </Card>
 

@@ -7,8 +7,36 @@ import { Label } from '@/app/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { RadioGroup, RadioGroupItem } from '@/app/components/ui/radio-group';
 import { Textarea } from '@/app/components/ui/textarea';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, Check } from 'lucide-react';
 import { toast } from 'sonner';
+
+// Care types options
+const CARE_TYPES = [
+  { 
+    id: 'primary', 
+    label: 'Primary Care', 
+    description: 'General health concerns, checkups, and preventive care',
+    icon: '🏥'
+  },
+  { 
+    id: 'mental-health', 
+    label: 'Mental Health', 
+    description: 'Counseling, therapy, and mental wellness support',
+    icon: '🧠'
+  },
+  { 
+    id: 'specialist', 
+    label: 'Specialist Care', 
+    description: 'Specific medical conditions requiring specialized expertise',
+    icon: '🩺'
+  },
+  { 
+    id: 'urgent-care', 
+    label: 'Urgent Care', 
+    description: 'Non-emergency conditions needing prompt attention',
+    icon: '⚡'
+  },
+];
 
 export function Register() {
   const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
@@ -18,6 +46,9 @@ export function Register() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [verificationDocumentName, setVerificationDocumentName] = useState('');
   const [verificationDocumentDataUrl, setVerificationDocumentDataUrl] = useState('');
+  const [selectedCareTypes, setSelectedCareTypes] = useState<string[]>([]);
+  const [showCareTypesDropdown, setShowCareTypesDropdown] = useState(false);
+  
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -58,14 +89,19 @@ export function Register() {
       return;
     }
 
-    if (role === 'doctor' && (!formData.specialty || !formData.licenseNumber)) {
-      toast.error('Please fill in all professional details');
-      return;
-    }
-
-    if (role === 'doctor' && !verificationDocumentDataUrl) {
-      toast.error('Please upload a verification document (max 5MB).');
-      return;
+    if (role === 'doctor') {
+      if (!formData.specialty || !formData.licenseNumber) {
+        toast.error('Please fill in all professional details');
+        return;
+      }
+      if (selectedCareTypes.length === 0) {
+        toast.error('Please select at least one care type you provide');
+        return;
+      }
+      if (!verificationDocumentDataUrl) {
+        toast.error('Please upload a verification document (max 5MB).');
+        return;
+      }
     }
 
     try {
@@ -74,6 +110,7 @@ export function Register() {
         specialty: formData.specialty,
         licenseNumber: formData.licenseNumber,
         clinicAddress: formData.clinicAddress,
+        careTypes: selectedCareTypes,
         verificationDocuments: verificationDocumentDataUrl ? [verificationDocumentDataUrl] : [],
       });
 
@@ -93,6 +130,14 @@ export function Register() {
 
   const updateField = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleCareTypeToggle = (careTypeId: string) => {
+    setSelectedCareTypes(prev => 
+      prev.includes(careTypeId)
+        ? prev.filter(id => id !== careTypeId)
+        : [...prev, careTypeId]
+    );
   };
 
   const handleVerificationDocumentChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -123,7 +168,7 @@ export function Register() {
   };
 
   return (
-    <div className="container mx-auto px-4 py-12 md:py-20 max-w-lg">
+    <div className="container mx-auto px-4 py-12 md:py-20 max-w-2xl">
       <Card>
         <CardHeader className="space-y-2">
           <CardTitle className="text-2xl">Create Your Account</CardTitle>
@@ -136,7 +181,10 @@ export function Register() {
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="role">I am a:</Label>
-                <RadioGroup value={role} onValueChange={(value: string) => setRole(value as UserRole)}>
+                <RadioGroup value={role} onValueChange={(value: string) => {
+                  setRole(value as UserRole);
+                  setSelectedCareTypes([]);
+                }}>
                   <div className="flex items-center space-x-3 space-y-0">
                     <RadioGroupItem value="patient" id="register-patient" />
                     <Label htmlFor="register-patient" className="font-normal cursor-pointer">
@@ -204,6 +252,51 @@ export function Register() {
                       required
                       className="h-12"
                     />
+                  </div>
+
+                  {/* Care Types Selection */}
+                  <div className="space-y-2">
+                    <Label className="text-base font-semibold">Care Types You Provide</Label>
+                    <p className="text-sm text-muted-foreground mb-2">
+                      Select all that apply. Patients will use these to find you.
+                    </p>
+                    
+                    <div className="flex flex-wrap gap-2">
+                      {CARE_TYPES.map(careType => (
+                        <button
+                          key={careType.id}
+                          type="button"
+                          onClick={() => handleCareTypeToggle(careType.id)}
+                          className={`flex items-center gap-2 px-4 py-2 rounded-lg border transition-all ${
+                            selectedCareTypes.includes(careType.id)
+                              ? 'border-primary bg-primary/10 text-primary'
+                              : 'border-input hover:border-primary/50'
+                          }`}
+                        >
+                          <span className="text-lg">{careType.icon}</span>
+                          <div className="text-left">
+                            <div className="font-medium text-sm">{careType.label}</div>
+                            <div className="text-xs text-muted-foreground">{careType.description}</div>
+                          </div>
+                          {selectedCareTypes.includes(careType.id) && (
+                            <Check className="h-4 w-4 ml-1" />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                    
+                    {selectedCareTypes.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {selectedCareTypes.map(id => {
+                          const careType = CARE_TYPES.find(c => c.id === id);
+                          return careType ? (
+                            <span key={id} className="inline-flex items-center gap-1 bg-primary/10 text-primary rounded-full px-2 py-0.5 text-sm">
+                              {careType.icon} {careType.label}
+                            </span>
+                          ) : null;
+                        })}
+                      </div>
+                    )}
                   </div>
 
                   <div className="space-y-2">
@@ -288,6 +381,11 @@ export function Register() {
                   require verification. You'll be able to access your account after our team reviews
                   your credentials.
                 </p>
+                {selectedCareTypes.length > 0 && (
+                  <p className="mt-2 text-xs text-primary">
+                    ✓ You've selected {selectedCareTypes.length} care type{selectedCareTypes.length !== 1 ? 's' : ''} for your profile.
+                  </p>
+                )}
               </div>
             )}
 
