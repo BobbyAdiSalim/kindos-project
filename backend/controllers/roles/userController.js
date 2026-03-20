@@ -138,6 +138,7 @@ const createRoleProfile = async (transaction, user, body) => {
         clinic_location: body.clinicAddress || null,
         time_zone: normalizeTimeZone(body.timeZone),
         verification_documents: body.verificationDocuments || [],
+        care_types: body.careTypes || [],
       },
       { transaction }
     );
@@ -749,6 +750,14 @@ export const updateMyProfile = async (req, res) => {
       const parsedLanguages = parseStringArray(req.body.languages);
       if (parsedLanguages !== undefined) {
         doctorUpdates.languages = parsedLanguages;
+      }
+
+      // 👇 ADD CARE TYPES SUPPORT
+      if (req.body.careTypes !== undefined) {
+        const parsedCareTypes = parseStringArray(req.body.careTypes);
+        if (parsedCareTypes !== undefined) {
+          doctorUpdates.care_types = parsedCareTypes;
+        }
       }
 
       if (Object.prototype.hasOwnProperty.call(req.body, 'virtualAvailable')) {
