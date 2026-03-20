@@ -482,7 +482,7 @@ export const downloadChatDocument = async (req, res) => {
     );
 
     res.setHeader('Content-Type', message.file_type || 'application/octet-stream');
-    res.setHeader('Content-Disposition', `inline; filename="${message.file_name || 'document'}"`);
+    res.setHeader('Content-Disposition', `attachment; filename="${message.file_name || 'document'}"`);
 
     if (response.Body instanceof Readable) {
       response.Body.pipe(res);

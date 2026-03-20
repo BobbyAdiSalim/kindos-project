@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Avatar, AvatarFallback } from '@/app/components/ui/avatar';
-import { FileText, Download, Image } from 'lucide-react';
+import { FileText, Download, Image, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface MessageBubbleProps {
   content: string | null;
@@ -32,15 +33,40 @@ function FileAttachment({
   fileDownloadUrl?: string | null;
   isMine: boolean;
 }) {
+  const [downloading, setDownloading] = useState(false);
   const isImage = fileType?.startsWith('image/');
   const Icon = isImage ? Image : FileText;
 
+  const handleDownload = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (!fileDownloadUrl || downloading) return;
+
+    setDownloading(true);
+    try {
+      const response = await fetch(fileDownloadUrl, { credentials: 'include' });
+      if (!response.ok) throw new Error('Download failed');
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error('Failed to download document');
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   return (
-    <a
-      href={fileDownloadUrl || '#'}
-      target="_blank"
-      rel="noopener noreferrer"
-      className={`flex items-center gap-3 rounded-md p-2 mt-1 transition-colors ${
+    <button
+      onClick={handleDownload}
+      disabled={downloading}
+      className={`flex items-center gap-3 rounded-md p-2 mt-1 w-full text-left transition-colors cursor-pointer ${
         isMine
           ? 'bg-primary-foreground/15 hover:bg-primary-foreground/25'
           : 'bg-background/60 hover:bg-background/80'
@@ -53,8 +79,12 @@ function FileAttachment({
           <p className="text-xs opacity-70">{formatFileSize(fileSize)}</p>
         )}
       </div>
-      <Download className="h-4 w-4 flex-shrink-0 opacity-70" />
-    </a>
+      {downloading ? (
+        <Loader2 className="h-4 w-4 flex-shrink-0 opacity-70 animate-spin" />
+      ) : (
+        <Download className="h-4 w-4 flex-shrink-0 opacity-70" />
+      )}
+    </button>
   );
 }
 
