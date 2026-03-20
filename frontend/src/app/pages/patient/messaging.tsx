@@ -243,6 +243,7 @@ export function Messaging() {
               onMessageInputChange={setMessageInput}
               onSend={handleSend}
               sending={sending}
+              activeConnectionId={activeConnection.id}
             />
           ) : (
             <EmptyChatPanel />

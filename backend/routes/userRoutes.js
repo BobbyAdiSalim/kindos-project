@@ -40,6 +40,7 @@ import {
   getConversation,
   sendMessage,
   markMessagesRead,
+  downloadChatDocument,
 } from "../controllers/other/chatController.js";
 import {
   createAppointmentBooking,
@@ -285,6 +286,11 @@ router.post("/chat/messages/:connectionId", requireAuth, requireRole("patient", 
 // Mark messages as read in a conversation
 router.patch("/chat/messages/:connectionId/read", requireAuth, requireRole("patient", "doctor"), (req, res) => {
   markMessagesRead(req, res);
+});
+
+// Download a chat document
+router.get("/chat/messages/:connectionId/document/:messageId", requireAuth, requireRole("patient", "doctor"), (req, res) => {
+  downloadChatDocument(req, res);
 });
 
 /*
