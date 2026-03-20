@@ -4,7 +4,7 @@ import { Input } from '@/app/components/ui/input';
 import { Button } from '@/app/components/ui/button';
 import { ScrollArea } from '@/app/components/ui/scroll-area';
 import { MessageBubble } from './message-bubble';
-import { Send, MessageSquare, Paperclip, X } from 'lucide-react';
+import { Send, MessageSquare, Paperclip, X, Info } from 'lucide-react';
 import { toast } from 'sonner';
 import { getChatDocumentUrl, type MessageInfo } from '@/app/lib/chat-api';
 
@@ -99,6 +99,12 @@ export function ChatPanel({
 
       <ScrollArea className="flex-1 min-h-0 p-4">
         <div className="space-y-4">
+          {messages.length === 0 && allowFileUpload && (
+            <div className="flex items-center gap-2 p-3 rounded-md bg-muted/50 text-sm text-muted-foreground">
+              <Info className="h-4 w-4 flex-shrink-0" />
+              <p>This patient cannot message you until you send the first message.</p>
+            </div>
+          )}
           {messages.map((msg) => {
             const isMine = msg.sender_id === currentUserId;
             const initial = msg.sender?.username?.[0]?.toUpperCase() || '?';
