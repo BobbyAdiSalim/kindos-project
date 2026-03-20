@@ -38,10 +38,14 @@ export interface MessageInfo {
   id: number;
   sender_id: number;
   receiver_id: number;
-  content: string;
+  content: string | null;
   read: boolean;
   read_at: string | null;
   created_at: string;
+  file_url?: string | null;
+  file_name?: string | null;
+  file_size?: number | null;
+  file_type?: string | null;
   sender?: {
     id: number;
     username: string;
@@ -156,13 +160,18 @@ export const getConversation = async (
 export const sendMessageApi = async (
   token: string | null,
   connectionId: number,
-  content: string
+  content: string,
+  file?: { data: string; name: string; type: string } | null
 ): Promise<{ message: MessageInfo }> => {
+  const body: Record<string, unknown> = {};
+  if (content) body.content = content;
+  if (file) body.file = file;
+
   const response = await fetch(`${API_BASE}/chat/messages/${connectionId}`, {
     method: 'POST',
     headers: withAuth(token),
     credentials: 'include',
-    body: JSON.stringify({ content }),
+    body: JSON.stringify(body),
   });
 
   const data = await response.json();
@@ -171,6 +180,10 @@ export const sendMessageApi = async (
   }
 
   return data;
+};
+
+export const getChatDocumentUrl = (connectionId: number, messageId: number): string => {
+  return `${API_BASE}/chat/messages/${connectionId}/document/${messageId}`;
 };
 
 export const markMessagesRead = async (

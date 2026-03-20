@@ -1,6 +1,53 @@
+import crypto from 'crypto';
+import { Readable } from 'stream';
 import { Op } from 'sequelize';
+import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { User, Patient, Doctor, Connection, Message } from '../../models/index.js';
 import { getRoleStrategy } from '../../services/role-strategy/index.js';
+
+const cleanEnv = (value, fallback = '') => {
+  if (value === undefined || value === null || value === '') return fallback;
+  return String(value).replace(/\r/g, '').trim();
+};
+
+const R2_BUCKET_NAME = cleanEnv(process.env.R2_BUCKET_NAME);
+const R2_ENDPOINT = cleanEnv(process.env.R2_ENDPOINT);
+const R2_REGION = cleanEnv(process.env.R2_REGION, 'auto');
+const R2_ACCESS_KEY_ID = cleanEnv(process.env.R2_ACCESS_KEY_ID);
+const R2_SECRET_ACCESS_KEY = cleanEnv(process.env.R2_SECRET_ACCESS_KEY);
+
+const isR2Configured = Boolean(
+  R2_BUCKET_NAME && R2_ENDPOINT && R2_ACCESS_KEY_ID && R2_SECRET_ACCESS_KEY
+);
+
+let r2Client = null;
+
+const getR2Client = () => {
+  if (!isR2Configured) {
+    throw new Error('R2 storage is not configured.');
+  }
+  if (!r2Client) {
+    r2Client = new S3Client({
+      region: R2_REGION,
+      endpoint: R2_ENDPOINT,
+      credentials: {
+        accessKeyId: R2_ACCESS_KEY_ID,
+        secretAccessKey: R2_SECRET_ACCESS_KEY,
+      },
+    });
+  }
+  return r2Client;
+};
+
+const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10 MB
+const ALLOWED_MIME_TYPES = new Set([
+  'application/pdf',
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+]);
 
 /**
  * Send a connect request from a patient to a doctor.
@@ -273,16 +320,19 @@ export const getConversation = async (req, res) => {
 /**
  * Send a message within a connection.
  * POST /api/chat/messages/:connectionId
- * Body: { content }
+ * Body: { content } or { content?, file: { data, name, type } }
  */
 export const sendMessage = async (req, res) => {
   try {
     const { userId } = req.auth;
     const { connectionId } = req.params;
-    const { content } = req.body;
+    const { content, file } = req.body;
 
-    if (!content || !content.trim()) {
-      return res.status(400).json({ error: 'Message content is required.' });
+    const hasContent = content && content.trim();
+    const hasFile = file && file.data && file.name && file.type;
+
+    if (!hasContent && !hasFile) {
+      return res.status(400).json({ error: 'Message content or file is required.' });
     }
 
     const connection = await Connection.findByPk(connectionId, {
@@ -308,10 +358,60 @@ export const sendMessage = async (req, res) => {
 
     const receiverId = isPatient ? connection.doctor.user_id : connection.patient.user_id;
 
+    let fileUrl = null;
+    let fileName = null;
+    let fileSize = null;
+    let fileType = null;
+
+    if (hasFile) {
+      if (!isDoctor) {
+        return res.status(403).json({ error: 'Only doctors can send documents.' });
+      }
+
+      if (!ALLOWED_MIME_TYPES.has(file.type)) {
+        return res.status(400).json({
+          error: 'File type not allowed. Accepted: PDF, PNG, JPEG, WebP, DOC, DOCX.',
+        });
+      }
+
+      // Strip data URL prefix if present
+      const base64Data = file.data.includes(',') ? file.data.split(',')[1] : file.data;
+      const buffer = Buffer.from(base64Data, 'base64');
+
+      if (buffer.length > MAX_FILE_BYTES) {
+        return res.status(400).json({ error: 'File size exceeds the 10 MB limit.' });
+      }
+
+      if (!isR2Configured) {
+        return res.status(503).json({ error: 'File storage is not configured.' });
+      }
+
+      const uniqueName = `${crypto.randomUUID()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+      const objectKey = `chat-documents/connection-${connectionId}/${uniqueName}`;
+
+      await getR2Client().send(
+        new PutObjectCommand({
+          Bucket: R2_BUCKET_NAME,
+          Key: objectKey,
+          Body: buffer,
+          ContentType: file.type,
+        })
+      );
+
+      fileUrl = `r2:${objectKey}`;
+      fileName = file.name;
+      fileSize = buffer.length;
+      fileType = file.type;
+    }
+
     const message = await Message.create({
       sender_id: userId,
       receiver_id: receiverId,
-      content: content.trim(),
+      content: hasContent ? content.trim() : null,
+      file_url: fileUrl,
+      file_name: fileName,
+      file_size: fileSize,
+      file_type: fileType,
     });
 
     const fullMessage = await Message.findByPk(message.id, {
@@ -321,6 +421,77 @@ export const sendMessage = async (req, res) => {
     });
 
     return res.status(201).json({ message: fullMessage });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+};
+
+/**
+ * Download a chat document.
+ * GET /api/chat/messages/:connectionId/document/:messageId
+ */
+export const downloadChatDocument = async (req, res) => {
+  try {
+    const { userId } = req.auth;
+    const { connectionId, messageId } = req.params;
+
+    const connection = await Connection.findByPk(connectionId, {
+      include: [
+        { model: Patient, as: 'patient', attributes: ['id', 'user_id'] },
+        { model: Doctor, as: 'doctor', attributes: ['id', 'user_id'] },
+      ],
+    });
+
+    if (!connection) {
+      return res.status(404).json({ error: 'Connection not found.' });
+    }
+
+    const isPatient = connection.patient?.user_id === userId;
+    const isDoctor = connection.doctor?.user_id === userId;
+    if (!isPatient && !isDoctor) {
+      return res.status(403).json({ error: 'You are not part of this connection.' });
+    }
+
+    const message = await Message.findByPk(messageId);
+    if (!message || !message.file_url) {
+      return res.status(404).json({ error: 'Document not found.' });
+    }
+
+    // Verify the message belongs to this connection's participants
+    const patientUserId = connection.patient.user_id;
+    const doctorUserId = connection.doctor.user_id;
+    const validParticipant =
+      (message.sender_id === patientUserId && message.receiver_id === doctorUserId) ||
+      (message.sender_id === doctorUserId && message.receiver_id === patientUserId);
+
+    if (!validParticipant) {
+      return res.status(403).json({ error: 'Document does not belong to this conversation.' });
+    }
+
+    if (!isR2Configured) {
+      return res.status(503).json({ error: 'File storage is not configured.' });
+    }
+
+    const objectKey = message.file_url.replace(/^r2:/, '');
+    const response = await getR2Client().send(
+      new GetObjectCommand({
+        Bucket: R2_BUCKET_NAME,
+        Key: objectKey,
+      })
+    );
+
+    res.setHeader('Content-Type', message.file_type || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="${message.file_name || 'document'}"`);
+
+    if (response.Body instanceof Readable) {
+      response.Body.pipe(res);
+    } else if (response.Body?.transformToByteArray) {
+      const bytes = await response.Body.transformToByteArray();
+      res.end(Buffer.from(bytes));
+    } else {
+      res.status(500).json({ error: 'Unable to stream document.' });
+    }
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: 'Internal server error.' });

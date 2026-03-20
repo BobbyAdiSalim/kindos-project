@@ -49,7 +49,7 @@ async function connectToPG() {
 }
 
 // Middleware
-app.use(express.json({ limit: "8mb" }));
+app.use(express.json({ limit: "15mb" }));
 
 // API Routes
 // All routes defined in userRoutes will be prefixed with /api
