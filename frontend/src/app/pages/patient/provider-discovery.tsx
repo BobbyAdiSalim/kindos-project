@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DoctorCard } from '@/app/components/doctor-card';
 import { Badge } from '@/app/components/ui/badge';
 import { careTypes } from '@/app/lib/mock-data';
-import { Calendar, MapPin, Video, User, ArrowRight, ArrowLeft, Loader2, Globe, Navigation, LocateFixed } from 'lucide-react';
+import { Calendar, MapPin, Video, User, ArrowRight, ArrowLeft, Loader2, Globe, Navigation, LocateFixed, X } from 'lucide-react';
 import { RadioGroup, RadioGroupItem } from '@/app/components/ui/radio-group';
 import { Card, CardContent } from '@/app/components/ui/card';
 import { format, addDays, parseISO } from 'date-fns';
@@ -66,6 +66,15 @@ const userIcon = L.divIcon({
   popupAnchor: [0, -12],
 });
 
+// Care types for patient selection
+const PATIENT_CARE_TYPES = [
+  { id: 'primary', label: 'Primary Care', icon: '🏥', description: 'General health concerns, checkups, and preventive care' },
+  { id: 'mental-health', label: 'Mental Health', icon: '🧠', description: 'Counseling, therapy, and mental wellness support' },
+  { id: 'specialist', label: 'Specialist Care', icon: '🩺', description: 'Specific medical conditions requiring specialized expertise' },
+  { id: 'urgent-care', label: 'Urgent Care', icon: '⚡', description: 'Non-emergency conditions needing prompt attention' },
+  { id: 'dont-know', label: "I'm not sure / Don't know", icon: '🤔', description: 'Help me find the right provider' },
+];
+
 // Step definitions
 const STEPS = [
   { id: 'appointment-type', title: 'Appointment Type', icon: Video },
@@ -96,7 +105,7 @@ export function ProviderDiscovery() {
   
   const [formData, setFormData] = useState({
     appointmentType: '',
-    careType: '',
+    selectedCareTypes: [] as string[],
     preferredDate: '',
     preferredTimeOfDay: '',
   });
@@ -105,6 +114,8 @@ export function ProviderDiscovery() {
   const [doctors, setDoctors] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [showCareTypesDropdown, setShowCareTypesDropdown] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   
   // Map related state
   const mapRef = useRef<L.Map | null>(null);
@@ -114,6 +125,17 @@ export function ProviderDiscovery() {
   const [userLocation, setUserLocation] = useState(null);
   const [gettingLocation, setGettingLocation] = useState(false);
   const [isMapReady, setIsMapReady] = useState(false);
+
+  // Click outside to close dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowCareTypesDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const getDateRangeFromPreference = (preference: string) => {
     const today = new Date();
@@ -138,86 +160,138 @@ export function ProviderDiscovery() {
   };
 
   // API service function to fetch doctors with availability
-  const fetchDoctorsWithAvailability = async (filters = {}) => {
-    try {
-      const params = new URLSearchParams();
-      if (filters.appointmentType && filters.appointmentType !== 'no-preference') 
-        params.append('appointmentType', filters.appointmentType);
-      if (filters.specialty) params.append('specialty', filters.specialty);
-      if (filters.date) params.append('date', filters.date.toISOString().split('T')[0]);
-      if (filters.timeOfDay) params.append('timeOfDay', filters.timeOfDay);
-      
-      const url = `/api/doctors/with-availability?${params.toString()}`;      
-      const response = await fetch(url);
-      
-      if (!response.ok) {
-        throw new Error(`Failed to fetch doctors: ${response.status}`);
+const fetchDoctorsWithAvailability = async (filters = {}) => {
+  try {
+    const params = new URLSearchParams();
+    if (filters.appointmentType && filters.appointmentType !== 'no-preference') 
+      params.append('appointmentType', filters.appointmentType);
+    
+    // Fix: Send as 'careType' (singular) as expected by backend
+    if (filters.careTypes && filters.careTypes.length > 0) {
+      // Filter out 'dont-know' if present
+      const actualCareTypes = filters.careTypes.filter((id: string) => id !== 'dont-know');
+      if (actualCareTypes.length > 0) {
+        // Send as comma-separated string under 'careType'
+        params.append('careType', actualCareTypes.join(','));
       }
-      
-      const data = await response.json();
-      return data.doctors || [];
-    } catch (error) {
-      console.error('Error fetching doctors:', error);
-      throw error;
+    }
+    
+    if (filters.date) params.append('date', filters.date.toISOString().split('T')[0]);
+    if (filters.timeOfDay) params.append('timeOfDay', filters.timeOfDay);
+    
+    const url = `/api/doctors/with-availability?${params.toString()}`;      
+    console.log('Fetching URL:', url);
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch doctors: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    console.log('Doctors received:', data.doctors?.length);
+    console.log("Doctors:", data.doctors); // Log the actual doctor data for debugging
+    return data.doctors || [];
+  } catch (error) {
+    console.error('Error fetching doctors:', error);
+    throw error;
+  }
+};
+
+  const handleCareTypeToggle = (careTypeId: string) => {
+    if (careTypeId === 'dont-know') {
+      // If "Don't know" is selected, clear all other selections
+      setFormData(prev => ({ ...prev, selectedCareTypes: ['dont-know'] }));
+    } else {
+      setFormData(prev => {
+        let newSelected = [...prev.selectedCareTypes];
+        
+        // Remove "dont-know" if it was selected
+        if (newSelected.includes('dont-know')) {
+          newSelected = newSelected.filter(id => id !== 'dont-know');
+        }
+        
+        // Toggle the selected care type
+        if (newSelected.includes(careTypeId)) {
+          newSelected = newSelected.filter(id => id !== careTypeId);
+        } else {
+          newSelected.push(careTypeId);
+        }
+        
+        return { ...prev, selectedCareTypes: newSelected };
+      });
     }
   };
 
   const hasMatchingAvailability = (doctor: any) => {
-    const preferredDateRange = getDateRangeFromPreference(formData.preferredDate);
-    const preferredTimeRange = TIME_OF_DAY_OPTIONS.find(
-      opt => opt.value === formData.preferredTimeOfDay
-    )?.range;
+  const preferredDateRange = getDateRangeFromPreference(formData.preferredDate);
+  const preferredTimeRange = TIME_OF_DAY_OPTIONS.find(
+    opt => opt.value === formData.preferredTimeOfDay
+  )?.range;
 
-    // Check explicit slots first
-    const hasMatchingSlot = doctor.availability_slots?.some((slot: any) => {
-      if (preferredDateRange) {
-        const slotDate = parseISO(slot.slot_date);
-        if (slotDate < preferredDateRange.start || slotDate > preferredDateRange.end) return false;
-      }
+  // Check if doctor offers any of the selected care types
+  const selectedCareTypes = formData.selectedCareTypes.filter((id: string) => id !== 'dont-know');
+  
+  // If user selected specific care types (not "don't know")
+  if (selectedCareTypes.length > 0) {
+    const doctorCareTypes = doctor.careType || doctor.care_types || [];
+    const hasMatchingCareType = selectedCareTypes.some(type => doctorCareTypes.includes(type));
+    
+    // If no matching care type, doctor should not be shown
+    if (!hasMatchingCareType) return false;
+  }
+  // If user selected "don't know", show all doctors (no filtering by care type)
 
-      if (preferredTimeRange && formData.preferredTimeOfDay !== 'any') {
-        if (!(slot.start_time < preferredTimeRange.end && slot.end_time > preferredTimeRange.start)) return false;
-      }
-
-      if (formData.appointmentType !== 'no-preference') {
-        if (!slot.appointment_type?.includes(formData.appointmentType)) return false;
-      }
-
-      return slot.is_available;
-    });
-
-    if (hasMatchingSlot) return true;
-
-    // Fall back to recurring patterns
-    if (!doctor.availability_patterns?.length) return false;
-
-    // Compute the set of day_of_week values covered by the date preference
-    const coveredDays: Set<number> = new Set();
-    if (!preferredDateRange) {
-      // 'any' date — all days match, skip day filtering
-    } else {
-      const current = new Date(preferredDateRange.start);
-      const end = new Date(preferredDateRange.end);
-      while (current <= end) {
-        coveredDays.add(current.getDay());
-        current.setDate(current.getDate() + 1);
-      }
+  // Rest of availability checks...
+  // Check explicit slots first
+  const hasMatchingSlot = doctor.availability_slots?.some((slot: any) => {
+    if (preferredDateRange) {
+      const slotDate = parseISO(slot.slot_date);
+      if (slotDate < preferredDateRange.start || slotDate > preferredDateRange.end) return false;
     }
 
-    return doctor.availability_patterns.some((pattern: any) => {
-      if (coveredDays.size > 0 && !coveredDays.has(pattern.day_of_week)) return false;
+    if (preferredTimeRange && formData.preferredTimeOfDay !== 'any') {
+      if (!(slot.start_time < preferredTimeRange.end && slot.end_time > preferredTimeRange.start)) return false;
+    }
 
-      if (preferredTimeRange && formData.preferredTimeOfDay !== 'any') {
-        if (!(pattern.start_time < preferredTimeRange.end && pattern.end_time > preferredTimeRange.start)) return false;
-      }
+    if (formData.appointmentType !== 'no-preference') {
+      if (!slot.appointment_type?.includes(formData.appointmentType)) return false;
+    }
 
-      if (formData.appointmentType !== 'no-preference') {
-        if (!pattern.appointment_type?.includes(formData.appointmentType)) return false;
-      }
+    return slot.is_available;
+  });
 
-      return true;
-    });
-  };
+  if (hasMatchingSlot) return true;
+
+  // Fall back to recurring patterns
+  if (!doctor.availability_patterns?.length) return false;
+
+  // Compute the set of day_of_week values covered by the date preference
+  const coveredDays: Set<number> = new Set();
+  if (!preferredDateRange) {
+    // 'any' date — all days match, skip day filtering
+  } else {
+    const current = new Date(preferredDateRange.start);
+    const end = new Date(preferredDateRange.end);
+    while (current <= end) {
+      coveredDays.add(current.getDay());
+      current.setDate(current.getDate() + 1);
+    }
+  }
+
+  return doctor.availability_patterns.some((pattern: any) => {
+    if (coveredDays.size > 0 && !coveredDays.has(pattern.day_of_week)) return false;
+
+    if (preferredTimeRange && formData.preferredTimeOfDay !== 'any') {
+      if (!(pattern.start_time < preferredTimeRange.end && pattern.end_time > preferredTimeRange.start)) return false;
+    }
+
+    if (formData.appointmentType !== 'no-preference') {
+      if (!pattern.appointment_type?.includes(formData.appointmentType)) return false;
+    }
+
+    return true;
+  });
+};
 
   const filteredDoctors = useMemo(() => {
     if (!doctors.length) return [];
@@ -321,7 +395,6 @@ export function ProviderDiscovery() {
         if (button) {
           button.onclick = (e) => {
             e.stopPropagation();
-            // Use window.location to navigate (simpler than trying to use React Router in a popup)
             window.location.href = `/patient/doctor/${doctor.user_id || doctor.id}`;
           };
         }
@@ -453,7 +526,7 @@ export function ProviderDiscovery() {
       case 'appointment-type':
         return !!formData.appointmentType;
       case 'care-type':
-        return !!formData.careType;
+        return formData.selectedCareTypes.length > 0;
       case 'schedule':
         return !!formData.preferredDate && !!formData.preferredTimeOfDay;
       default:
@@ -477,25 +550,32 @@ export function ProviderDiscovery() {
   };
 
   const runSearch = async (searchFormData = formData) => {
-    setIsLoading(true);
-    setError(null);
+  setIsLoading(true);
+  setError(null);
+  
+  try {
+    // Get actual care types (filter out 'dont-know')
+    const actualCareTypes = searchFormData.selectedCareTypes.filter(
+      (id: string) => id !== 'dont-know'
+    );
     
-    try {
-      const filters = {
-        appointmentType: searchFormData.appointmentType,
-        specialty: searchFormData.careType,
-        date: searchFormData.preferredDate === 'any' ? null : getDateFromPreference(searchFormData.preferredDate),
-        timeOfDay: searchFormData.preferredTimeOfDay,
-      };
-      
-      const data = await fetchDoctorsWithAvailability(filters);
-      setDoctors(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    const filters = {
+      appointmentType: searchFormData.appointmentType,
+      careTypes: actualCareTypes, // Only send actual care types, not 'dont-know'
+      date: searchFormData.preferredDate === 'any' ? null : getDateFromPreference(searchFormData.preferredDate),
+      timeOfDay: searchFormData.preferredTimeOfDay,
+    };
+    
+    console.log('Filters being sent:', filters); // Debug
+    
+    const data = await fetchDoctorsWithAvailability(filters);
+    setDoctors(data);
+  } catch (err) {
+    setError(err instanceof Error ? err.message : 'An error occurred');
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   const handleSearch = async () => {
     await runSearch(formData);
@@ -512,7 +592,7 @@ export function ProviderDiscovery() {
 
     const prefilledFormData = {
       appointmentType: searchParams.get('appointmentType') || 'no-preference',
-      careType: searchParams.get('careType') || '',
+      selectedCareTypes: searchParams.get('careTypes') ? searchParams.get('careTypes')!.split(',') : [],
       preferredDate: searchParams.get('preferredDate') || 'any',
       preferredTimeOfDay: searchParams.get('preferredTimeOfDay') || 'any',
     };
@@ -551,6 +631,7 @@ export function ProviderDiscovery() {
     nextAvailable: doctor.next_available || getNextAvailableFromSlots(doctor.availability_slots),
     verified: doctor.verification_status === 'approved',
     availableSlots: doctor.availability_slots || [],
+    careTypes: doctor.careType || doctor.care_types || [],
   });
 
   const renderStep = () => {
@@ -594,22 +675,49 @@ export function ProviderDiscovery() {
           <div className="space-y-6">
             <div className="text-center mb-8">
               <h2 className="text-2xl font-semibold mb-2">What type of care do you need?</h2>
-              <p className="text-muted-foreground">Select the specialty that best matches your needs</p>
+              <p className="text-muted-foreground">Select all that apply (or choose "I'm not sure")</p>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[400px] overflow-y-auto p-2">
-              {careTypes.map((type) => (
-                <Button
-                  key={type.id}
-                  variant={formData.careType === type.id ? "default" : "outline"}
-                  className="h-auto py-4 px-4 justify-start text-left whitespace-normal"
-                  onClick={() => handleInputChange('careType', type.id)}
-                >
-                  <div className="w-full">
-                    <div className="font-medium truncate">{type.name}</div>
-                    <div className="text-sm text-muted-foreground mt-1 line-clamp-2">{type.description}</div>
-                  </div>
-                </Button>
-              ))}
+            
+            <div className="space-y-4">
+              <div className="flex flex-wrap gap-3">
+                {PATIENT_CARE_TYPES.map(careType => (
+                  <button
+                    key={careType.id}
+                    type="button"
+                    onClick={() => handleCareTypeToggle(careType.id)}
+                    className={`flex items-center gap-3 px-4 py-3 rounded-lg border transition-all ${
+                      formData.selectedCareTypes.includes(careType.id)
+                        ? careType.id === 'dont-know'
+                          ? 'border-amber-500 bg-amber-50 text-amber-700'
+                          : 'border-primary bg-primary/10 text-primary'
+                        : 'border-input hover:border-primary/50'
+                    }`}
+                  >
+                    <span className="text-2xl">{careType.icon}</span>
+                    <div className="text-left">
+                      <div className="font-medium">{careType.label}</div>
+                      <div className="text-xs text-muted-foreground">{careType.description}</div>
+                    </div>
+                    {formData.selectedCareTypes.includes(careType.id) && (
+                      <X className="h-4 w-4 ml-2 text-muted-foreground" />
+                    )}
+                  </button>
+                ))}
+              </div>
+              
+              {formData.selectedCareTypes.length > 0 && formData.selectedCareTypes[0] !== 'dont-know' && (
+                <div className="flex flex-wrap gap-2 mt-4 p-3 bg-muted/30 rounded-lg">
+                  <span className="text-sm text-muted-foreground">Selected:</span>
+                  {formData.selectedCareTypes.map(id => {
+                    const careType = PATIENT_CARE_TYPES.find(c => c.id === id);
+                    return careType ? (
+                      <Badge key={id} variant="secondary" className="gap-1">
+                        {careType.icon} {careType.label}
+                      </Badge>
+                    ) : null;
+                  })}
+                </div>
+              )}
             </div>
           </div>
         );
@@ -671,9 +779,19 @@ export function ProviderDiscovery() {
                 {formData.appointmentType === 'virtual' ? 'Virtual Visit' : 
                  formData.appointmentType === 'in-person' ? 'In-Person Visit' : 'No Preference'}
               </Badge>
-              <Badge variant="secondary" className="px-3 py-1">
-                {careTypes.find(t => t.id === formData.careType)?.name || formData.careType}
-              </Badge>
+              {formData.selectedCareTypes.length > 0 && formData.selectedCareTypes[0] !== 'dont-know' && (
+                <Badge variant="secondary" className="px-3 py-1">
+                  {formData.selectedCareTypes.map(id => {
+                    const careType = PATIENT_CARE_TYPES.find(c => c.id === id);
+                    return careType?.label;
+                  }).join(', ')}
+                </Badge>
+              )}
+              {formData.selectedCareTypes.includes('dont-know') && (
+                <Badge variant="secondary" className="px-3 py-1 bg-amber-100 text-amber-700">
+                  🤔 Not sure / Need help
+                </Badge>
+              )}
               <Badge variant="secondary" className="px-3 py-1">
                 {DATE_OPTIONS.find(d => d.value === formData.preferredDate)?.label}
               </Badge>
@@ -693,8 +811,8 @@ export function ProviderDiscovery() {
               </div>
             ) : filteredDoctors.length === 0 ? (
               <div className="text-center py-12 bg-card rounded-lg border">
-                <p className="text-muted-foreground mb-4">No providers available for your selected time.</p>
-                <Button onClick={() => setCurrentStep(2)}>Change Schedule</Button>
+                <p className="text-muted-foreground mb-4">No providers available for your selected criteria.</p>
+                <Button onClick={() => setCurrentStep(1)}>Change Care Type</Button>
               </div>
             ) : (
               <div className="flex gap-4 h-[600px]">
@@ -877,7 +995,7 @@ export function ProviderDiscovery() {
             setCurrentStep(0);
             setDoctors([]);
             setSelectedDoctor(null);
-            setFormData({ appointmentType: '', careType: '', preferredDate: '', preferredTimeOfDay: '' });
+            setFormData({ appointmentType: '', selectedCareTypes: [], preferredDate: '', preferredTimeOfDay: '' });
           }}>
             Start Over
           </Button>

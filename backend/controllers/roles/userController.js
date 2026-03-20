@@ -1082,6 +1082,11 @@ export const getDoctors = async (req, res) => {
       whereClause.languages = { [Op.contains]: [language] };
     }
 
+    if (req.query.careTypes) {
+      const careTypes = req.query.careTypes.split(',');
+      whereClause.care_types = { [Op.overlap]: careTypes };
+    }
+
     // Fetch doctors
     const doctors = await Doctor.findAndCountAll({
       where: whereClause,
