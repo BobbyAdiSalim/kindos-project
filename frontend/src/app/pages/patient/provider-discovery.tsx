@@ -10,7 +10,7 @@ import { careTypes } from '@/app/lib/mock-data';
 import { Calendar, MapPin, Video, User, ArrowRight, ArrowLeft, Loader2, Globe, Navigation, LocateFixed, X } from 'lucide-react';
 import { RadioGroup, RadioGroupItem } from '@/app/components/ui/radio-group';
 import { Card, CardContent } from '@/app/components/ui/card';
-import { format, addDays, parseISO } from 'date-fns';
+import { format, addDays, parseISO, set } from 'date-fns';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -115,6 +115,7 @@ export function ProviderDiscovery() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [showCareTypesDropdown, setShowCareTypesDropdown] = useState(false);
+  const [hasSavedPreferences, setHasSavedPreferences] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   
   // Map related state
@@ -536,6 +537,7 @@ const fetchDoctorsWithAvailability = async (filters = {}) => {
 
   const handleNext = () => {
     if (currentStep === 2) {
+      savePreferencesToLocalStorage(formData);
       setCurrentStep(3);
       void handleSearch();
     } else if (currentStep < STEPS.length - 1) {
@@ -633,6 +635,66 @@ const fetchDoctorsWithAvailability = async (filters = {}) => {
     availableSlots: doctor.availability_slots || [],
     careTypes: doctor.careType || doctor.care_types || [],
   });
+
+  // Save questionnaire answers to localStorage
+  const savePreferencesToLocalStorage = (formData: any) => {
+    const savedData = {
+      careType: formData.selectedCareTypes.length > 0 && formData.selectedCareTypes[0] !== 'dont-know' 
+        ? formData.selectedCareTypes[0] 
+        : '',
+      urgency: '',
+      preferredAppointmentType: formData.appointmentType,
+      accessibilityNeeds: '',
+      description: '',
+      savedAt: new Date().toISOString()
+    };
+    localStorage.setItem('patient_questionnaire', JSON.stringify(savedData));
+    setHasSavedPreferences(true);
+    console.log('Saved preferences to localStorage');
+  };
+
+  // Load saved preferences and handle auto-skip in one useEffect
+  useEffect(() => {
+    const saved = localStorage.getItem('patient_questionnaire');
+    
+    // If coming from questionnaire via autoSearch, let that useEffect handle it
+    if (searchParams.get('autoSearch') === '1') {
+      console.log("Coming from questionnaire - not auto-loading saved preferences");
+      return;
+    }
+    
+    if (saved) {
+      try {
+        const data = JSON.parse(saved);
+        const hasValidPreferences = data.careType || data.preferredAppointmentType;
+        
+        if (hasValidPreferences) {
+          console.log("✅ Found saved preferences, loading and skipping to results");
+          
+          // Set the form data
+          setFormData(prev => ({
+            ...prev,
+            appointmentType: data.preferredAppointmentType || '',
+            selectedCareTypes: data.careType ? [data.careType] : [],
+            preferredDate: '',
+            preferredTimeOfDay: '',
+          }));
+          
+          setHasSavedPreferences(true);
+          
+          // Small delay to ensure state updates are processed
+          setTimeout(() => {
+            setCurrentStep(3);
+            handleSearch();
+          }, 100);
+        } else {
+          console.log("Saved preferences found but empty, not skipping");
+        }
+      } catch (error) {
+        console.error('Error loading saved preferences:', error);
+      }
+    }
+  }, [searchParams]); // Only run on mount or when searchParams changes
 
   const renderStep = () => {
     switch (currentStep) {
@@ -793,10 +855,10 @@ const fetchDoctorsWithAvailability = async (filters = {}) => {
                 </Badge>
               )}
               <Badge variant="secondary" className="px-3 py-1">
-                {DATE_OPTIONS.find(d => d.value === formData.preferredDate)?.label}
+                {DATE_OPTIONS.find(d => d.value === formData.preferredDate)?.label || 'Any date'}
               </Badge>
               <Badge variant="secondary" className="px-3 py-1">
-                {TIME_OF_DAY_OPTIONS.find(t => t.value === formData.preferredTimeOfDay)?.label}
+                {TIME_OF_DAY_OPTIONS.find(t => t.value === formData.preferredTimeOfDay)?.label || 'Any time'}
               </Badge>
             </div>
 
@@ -812,7 +874,11 @@ const fetchDoctorsWithAvailability = async (filters = {}) => {
             ) : filteredDoctors.length === 0 ? (
               <div className="text-center py-12 bg-card rounded-lg border">
                 <p className="text-muted-foreground mb-4">No providers available for your selected criteria.</p>
-                <Button onClick={() => setCurrentStep(1)}>Change Care Type</Button>
+                <Button onClick={() => {
+                  setCurrentStep(1)
+                  localStorage.removeItem('patient_questionnaire');
+                  setHasSavedPreferences(false);
+                  }}>Change Care Type</Button>
               </div>
             ) : (
               <div className="flex gap-4 h-[600px]">
@@ -995,6 +1061,8 @@ const fetchDoctorsWithAvailability = async (filters = {}) => {
             setCurrentStep(0);
             setDoctors([]);
             setSelectedDoctor(null);
+            localStorage.removeItem('patient_questionnaire');
+            setHasSavedPreferences(false);
             setFormData({ appointmentType: '', selectedCareTypes: [], preferredDate: '', preferredTimeOfDay: '' });
           }}>
             Start Over
