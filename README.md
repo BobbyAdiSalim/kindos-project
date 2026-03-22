@@ -206,6 +206,38 @@ npm install
 npm run dev  # Runs with Vite dev server
 ```
 
+## Testing
+
+Run tests from each package directory.
+
+### Backend Tests
+```bash
+cd backend
+npm test
+```
+
+### Backend Coverage
+```bash
+cd backend
+npm run test:coverage
+```
+
+Coverage reports are generated in `backend/coverage/`, and the HTML report is available at `backend/coverage/index.html`.
+
+### Frontend Tests
+```bash
+cd frontend
+npm test
+```
+
+### Frontend Coverage
+```bash
+cd frontend
+npm run test:coverage
+```
+
+Coverage reports are generated in `frontend/coverage/`, and the HTML report is available at `frontend/coverage/index.html`.
+
 ## Database Models
 
 The backend uses Sequelize ORM with the following models:
@@ -291,6 +323,8 @@ npm run db:fresh:seed   # clean + migrate + seed
 ```bash
 npm start           # Start production server
 npm run dev         # Start development server with auto-reload
+npm test            # Run backend tests
+npm run test:coverage  # Run backend tests with coverage
 npm run migrate          # Apply migrations
 npm run migrate:status   # Show applied/pending migrations
 npm run migration:create -- <name>   # Create a migration file
@@ -305,6 +339,8 @@ npm run db:fresh:seed    # Clean all tables + migrate + seed
 npm run dev         # Start Vite development server
 npm run build       # Build for production
 npm run preview     # Preview production build
+npm test            # Run frontend tests
+npm run test:coverage  # Run frontend tests with coverage
 ```
 
 ## Features
