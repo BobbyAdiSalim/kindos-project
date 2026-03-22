@@ -95,6 +95,24 @@ describe('Header', () => {
     expect(screen.getAllByRole('link', { name: /messages/i }).some((link) => link.getAttribute('href') === '/patient/messages')).toBe(true);
   });
 
+  it('renders admin dashboard link and hides patient/doctor-only links', () => {
+    authState = {
+      user: { name: 'Admin', email: 'admin@example.com', role: 'admin' },
+      logout: logoutMock,
+    };
+
+    render(
+      <MemoryRouter>
+        <Header />
+      </MemoryRouter>
+    );
+
+    expect(screen.getAllByRole('link', { name: /dashboard/i }).some((link) => link.getAttribute('href') === '/admin/dashboard')).toBe(true);
+    expect(screen.getAllByRole('link', { name: /profile/i }).some((link) => link.getAttribute('href') === '/')).toBe(true);
+    expect(screen.queryByRole('link', { name: /waitlist/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /messages/i })).not.toBeInTheDocument();
+  });
+
   it('logs out and navigates home', async () => {
     const user = userEvent.setup();
     authState = {

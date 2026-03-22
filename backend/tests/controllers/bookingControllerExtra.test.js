@@ -5,8 +5,6 @@ const appointmentCreate = vi.fn();
 const appointmentFindByPk = vi.fn();
 const appointmentFindAll = vi.fn();
 const appointmentFindOne = vi.fn();
-const connectionFindOne = vi.fn();
-const connectionCreate = vi.fn();
 const doctorFindOne = vi.fn();
 const patientFindOne = vi.fn();
 
@@ -27,10 +25,6 @@ vi.mock('../../models/index.js', () => ({
     findByPk: appointmentFindByPk,
     findAll: appointmentFindAll,
     findOne: appointmentFindOne,
-  },
-  Connection: {
-    findOne: connectionFindOne,
-    create: connectionCreate,
   },
   Doctor: {
     findOne: doctorFindOne,
@@ -73,8 +67,6 @@ describe('bookingController additional coverage', () => {
     appointmentFindByPk.mockReset();
     appointmentFindAll.mockReset();
     appointmentFindOne.mockReset();
-    connectionFindOne.mockReset();
-    connectionCreate.mockReset();
     doctorFindOne.mockReset();
     patientFindOne.mockReset();
 
@@ -109,7 +101,6 @@ describe('bookingController additional coverage', () => {
     ensureSlotIsBookableMock.mockResolvedValue(55);
     ensureNoOverlappingAppointmentMock.mockResolvedValue(undefined);
     appointmentCreate.mockResolvedValue({ id: 42 });
-    connectionFindOne.mockResolvedValue(null);
     appointmentFindByPk.mockResolvedValue({ id: 42 });
 
     const req = createMockReq({ auth: { userId: 5 }, body: {} });
@@ -118,7 +109,6 @@ describe('bookingController additional coverage', () => {
     await createAppointmentBooking(req, res);
 
     expect(res.status).toHaveBeenCalledWith(201);
-    expect(connectionCreate).toHaveBeenCalled();
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({ message: expect.stringContaining('Booking request submitted') })
     );

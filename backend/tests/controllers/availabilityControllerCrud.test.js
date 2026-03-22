@@ -230,4 +230,93 @@ describe('availabilityController CRUD and validation', () => {
     );
     expect(byDateRes.status).toHaveBeenCalledWith(200);
   });
+
+  it('deletes availability pattern and handles not-found branches', async () => {
+    const { deleteAvailabilityPattern } = await import('../../controllers/other/availabilityController.js');
+
+    doctorFindOne.mockResolvedValueOnce(null);
+    const noDoctorRes = createMockRes();
+    await deleteAvailabilityPattern(
+      createMockReq({ auth: { userId: 1 }, params: { patternId: '2' } }),
+      noDoctorRes
+    );
+    expect(noDoctorRes.status).toHaveBeenCalledWith(404);
+
+    doctorFindOne.mockResolvedValueOnce({ id: 8 });
+    availabilityPatternFindOne.mockResolvedValueOnce(null);
+    const noPatternRes = createMockRes();
+    await deleteAvailabilityPattern(
+      createMockReq({ auth: { userId: 1 }, params: { patternId: '2' } }),
+      noPatternRes
+    );
+    expect(noPatternRes.status).toHaveBeenCalledWith(404);
+
+    const destroy = vi.fn(async () => undefined);
+    doctorFindOne.mockResolvedValueOnce({ id: 8 });
+    availabilityPatternFindOne.mockResolvedValueOnce({ destroy });
+    const okRes = createMockRes();
+    await deleteAvailabilityPattern(
+      createMockReq({ auth: { userId: 1 }, params: { patternId: '2' } }),
+      okRes
+    );
+    expect(destroy).toHaveBeenCalled();
+    expect(okRes.json).toHaveBeenCalledWith({ message: 'Pattern deleted successfully' });
+  });
+
+  it('getBookableSlots validates date and doctor existence', async () => {
+    const { getBookableSlots } = await import('../../controllers/other/availabilityController.js');
+
+    const badDateRes = createMockRes();
+    await getBookableSlots(
+      createMockReq({ params: { userId: '1' }, query: { date: 'bad' } }),
+      badDateRes
+    );
+    expect(badDateRes.status).toHaveBeenCalledWith(400);
+
+    doctorFindOne.mockResolvedValueOnce(null);
+    const missingDocRes = createMockRes();
+    await getBookableSlots(
+      createMockReq({ params: { userId: '1' }, query: { date: '2026-03-20' } }),
+      missingDocRes
+    );
+    expect(missingDocRes.status).toHaveBeenCalledWith(404);
+  });
+
+  it('getDoctorsWithAvailability filters doctors and handles errors', async () => {
+    const { getDoctorsWithAvailability } = await import('../../controllers/other/availabilityController.js');
+
+    doctorFindAll.mockResolvedValueOnce([
+      {
+        id: 1,
+        full_name: 'Dr A',
+        user_id: 10,
+        specialty: 'ENT',
+        languages: ['English'],
+        care_types: ['primary'],
+        availabilitySlots: [{ id: 99, slot_date: '2026-03-20', start_time: '10:00', end_time: '10:30', is_available: true, appointment_type: ['virtual'] }],
+        availabilityPatterns: [],
+      },
+      {
+        id: 2,
+        full_name: 'Dr B',
+        user_id: 11,
+        specialty: 'ENT',
+        languages: ['English'],
+        care_types: ['primary'],
+        availabilitySlots: [],
+        availabilityPatterns: [],
+      },
+    ]);
+    reviewFindAll.mockResolvedValueOnce([]);
+
+    const okRes = createMockRes();
+    await getDoctorsWithAvailability(createMockReq({ query: { date: '2026-03-20' } }), okRes);
+    expect(okRes.status).toHaveBeenCalledWith(200);
+    expect(okRes.json).toHaveBeenCalledWith(expect.objectContaining({ success: true, count: 1 }));
+
+    doctorFindAll.mockRejectedValueOnce(new Error('db fail'));
+    const errRes = createMockRes();
+    await getDoctorsWithAvailability(createMockReq({ query: { date: '2026-03-20' } }), errRes);
+    expect(errRes.status).toHaveBeenCalledWith(500);
+  });
 });

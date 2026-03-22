@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
-import { RequireAdminRoute, RequirePatientRoute } from '@/app/components/auth/protected-route';
+import { RequireAdminRoute, RequireDoctorRoute, RequirePatientRoute } from '@/app/components/auth/protected-route';
 
 const navigateMock = vi.fn();
 
@@ -142,5 +142,136 @@ describe('Protected routes', () => {
     expect(await screen.findByText(/do not have permission/i)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /go to dashboard/i }));
     await waitFor(() => expect(navigateMock).toHaveBeenCalledWith('/patient/dashboard'));
+  });
+
+  it('logs out and shows unauthenticated when session user id mismatches', async () => {
+    const logout = vi.fn(async () => undefined);
+    authState = {
+      isAuthenticated: true,
+      isLoading: false,
+      token: 'cookie-session',
+      user: { id: '1', username: 'doc', email: 'd@example.com', role: 'doctor', name: 'Doctor', verified: true },
+      updateUser: vi.fn(),
+      logout,
+    };
+
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          user: { id: 999, username: 'doc', email: 'd@example.com', role: 'doctor' },
+          profile: { full_name: 'Doctor', verification_status: 'approved' },
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } }
+      )
+    );
+
+    render(
+      <MemoryRouter initialEntries={['/doctor']}> 
+        <Routes>
+          <Route path="/doctor" element={<RequireDoctorRoute />}>
+            <Route index element={<div>Doctor Content</div>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText(/you must be logged in/i)).toBeInTheDocument();
+    expect(logout).toHaveBeenCalled();
+  });
+
+  it('blocks unverified doctor on restricted routes', async () => {
+    authState = {
+      isAuthenticated: true,
+      isLoading: false,
+      token: 'cookie-session',
+      user: { id: '2', username: 'doc', email: 'd@example.com', role: 'doctor', name: 'Doctor', verified: false },
+      updateUser: vi.fn(),
+      logout: vi.fn(async () => undefined),
+    };
+
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          user: { id: 2, username: 'doc', email: 'd@example.com', role: 'doctor' },
+          profile: { full_name: 'Doctor', verification_status: 'pending' },
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } }
+      )
+    );
+
+    render(
+      <MemoryRouter initialEntries={['/doctor/messages']}> 
+        <Routes>
+          <Route path="/doctor/messages" element={<RequireDoctorRoute />}>
+            <Route index element={<div>Doctor Messages</div>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText(/account is not verified yet/i)).toBeInTheDocument();
+  });
+
+  it('allows unverified doctor on dashboard path', async () => {
+    authState = {
+      isAuthenticated: true,
+      isLoading: false,
+      token: 'cookie-session',
+      user: { id: '2', username: 'doc', email: 'd@example.com', role: 'doctor', name: 'Doctor', verified: false },
+      updateUser: vi.fn(),
+      logout: vi.fn(async () => undefined),
+    };
+
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          user: { id: 2, username: 'doc', email: 'd@example.com', role: 'doctor' },
+          profile: { full_name: 'Doctor', verification_status: 'pending' },
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } }
+      )
+    );
+
+    render(
+      <MemoryRouter initialEntries={['/doctor/dashboard']}> 
+        <Routes>
+          <Route path="/doctor/dashboard" element={<RequireDoctorRoute />}>
+            <Route index element={<div>Doctor Dashboard</div>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText('Doctor Dashboard')).toBeInTheDocument();
+  });
+
+  it('forces unauthenticated state when profile fetch fails', async () => {
+    authState = {
+      isAuthenticated: true,
+      isLoading: false,
+      token: 'cookie-session',
+      user: { id: '1', username: 'pat', email: 'p@example.com', role: 'patient', name: 'Patient', verified: undefined },
+      updateUser: vi.fn(),
+      logout: vi.fn(async () => undefined),
+    };
+
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ error: 'bad session' }), {
+        status: 401,
+        headers: { 'content-type': 'application/json' },
+      })
+    );
+
+    render(
+      <MemoryRouter initialEntries={['/patient']}> 
+        <Routes>
+          <Route path="/patient" element={<RequirePatientRoute />}>
+            <Route index element={<div>Patient Content</div>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText(/you must be logged in/i)).toBeInTheDocument();
   });
 });

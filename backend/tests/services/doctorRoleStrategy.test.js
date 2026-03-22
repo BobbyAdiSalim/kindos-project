@@ -1,31 +1,29 @@
-const patientFindOne = vi.fn();
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 const doctorFindOne = vi.fn();
 const adminLogFindOne = vi.fn();
 
 vi.mock('../../models/index.js', () => ({
-  Patient: { findOne: patientFindOne },
   Doctor: { findOne: doctorFindOne },
   AdminLog: { findOne: adminLogFindOne },
+  Patient: {},
   User: {},
 }));
 
-describe('patient and doctor role strategies', () => {
+describe('doctor role strategy', () => {
   beforeEach(() => {
     vi.resetModules();
-    patientFindOne.mockReset();
     doctorFindOne.mockReset();
     adminLogFindOne.mockReset();
   });
 
-  it('throws not found errors for missing patient/doctor profiles', async () => {
-    patientFindOne.mockResolvedValue(null);
+  it('throws not found errors for missing doctor profile', async () => {
     doctorFindOne.mockResolvedValue(null);
 
-    const { default: patientRoleStrategy } = await import('../../services/role-strategy/strategies/patientRoleStrategy.js');
     const { default: doctorRoleStrategy } = await import('../../services/role-strategy/strategies/doctorRoleStrategy.js');
 
-    await expect(patientRoleStrategy.getAppointmentScope(1)).rejects.toMatchObject({
-      message: 'Patient profile not found.',
+    await expect(doctorRoleStrategy.getAppointmentScope(1)).rejects.toMatchObject({
+      message: 'Doctor profile not found.',
       status: 404,
     });
     await expect(doctorRoleStrategy.getConnectionScope(1)).rejects.toMatchObject({
@@ -34,47 +32,7 @@ describe('patient and doctor role strategies', () => {
     });
   });
 
-  it('builds private and public patient profiles with defaults', async () => {
-    patientFindOne
-      .mockResolvedValueOnce({
-        id: 5,
-        full_name: 'Patient One',
-        profile_complete: false,
-        time_zone: null,
-        date_of_birth: '2000-01-01',
-        phone: '123',
-        address: 'Main',
-        emergency_contact_name: 'EC',
-        emergency_contact_phone: '456',
-        accessibility_preferences: null,
-      })
-      .mockResolvedValueOnce({
-        id: 5,
-        full_name: 'Patient One',
-        profile_complete: false,
-        time_zone: null,
-      });
-
-    const { default: patientRoleStrategy } = await import('../../services/role-strategy/strategies/patientRoleStrategy.js');
-
-    const privateProfile = await patientRoleStrategy.buildPrivateProfile(3);
-    const publicProfile = await patientRoleStrategy.buildPublicProfile(3);
-
-    expect(privateProfile).toEqual(
-      expect.objectContaining({
-        time_zone: 'America/New_York',
-        accessibility_preferences: [],
-      })
-    );
-    expect(publicProfile).toEqual(
-      expect.objectContaining({
-        full_name: 'Patient One',
-        time_zone: 'America/New_York',
-      })
-    );
-  });
-
-  it('builds doctor denied profile with rejection reason and resolves other user ids', async () => {
+  it('builds denied doctor profile with rejection reason and public profile fields', async () => {
     doctorFindOne
       .mockResolvedValueOnce({
         id: 10,
@@ -127,6 +85,27 @@ describe('patient and doctor role strategies', () => {
         bio: 'Bio',
       })
     );
+  });
+
+  it('returns appointment and connection scopes for existing doctor', async () => {
+    doctorFindOne
+      .mockResolvedValueOnce({ id: 42 })
+      .mockResolvedValueOnce({ id: 42 });
+
+    const { default: doctorRoleStrategy } = await import('../../services/role-strategy/strategies/doctorRoleStrategy.js');
+
+    const doctorAppointmentScope = await doctorRoleStrategy.getAppointmentScope(2002);
+    const doctorConnectionScope = await doctorRoleStrategy.getConnectionScope(2002);
+
+    expect(doctorAppointmentScope).toEqual({ doctor_id: 42 });
+    expect(doctorConnectionScope.where).toEqual({ doctor_id: 42 });
+    expect(doctorConnectionScope.include[0]).toEqual(
+      expect.objectContaining({ as: 'patient' })
+    );
+  });
+
+  it('resolves connection counterpart user id branches', async () => {
+    const { default: doctorRoleStrategy } = await import('../../services/role-strategy/strategies/doctorRoleStrategy.js');
 
     expect(doctorRoleStrategy.getOtherConnectionUserId({ patient: { user_id: 20 } })).toBe(20);
     expect(doctorRoleStrategy.getOtherConnectionUserId({})).toBeNull();

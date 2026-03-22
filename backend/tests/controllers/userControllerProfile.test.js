@@ -193,6 +193,89 @@ describe('userController profile/document/resubmission', () => {
     expect(tx.rollback).toHaveBeenCalled();
   });
 
+  it('updateMyProfile handles doctor success and unique constraint conflicts', async () => {
+    const { updateMyProfile } = await import('../../controllers/roles/userController.js');
+
+    const tx1 = makeTx();
+    transactionMock.mockResolvedValueOnce(tx1);
+
+    const user = {
+      id: 8,
+      role: 'doctor',
+      username: 'doctor_old',
+      email: 'doctor.old@example.com',
+      update: vi.fn(async () => undefined),
+    };
+    const doctor = { update: vi.fn(async () => undefined) };
+
+    userFindByPk
+      .mockResolvedValueOnce(user)
+      .mockResolvedValueOnce({
+        id: 8,
+        role: 'doctor',
+        username: 'doctor_new',
+        email: 'doctor.new@example.com',
+      });
+    doctorFindOne.mockResolvedValueOnce(doctor);
+    roleStrategyMock.mockReturnValueOnce({
+      buildPrivateProfile: vi.fn(async () => ({ full_name: 'Dr Updated', specialty: 'Audiology' })),
+      buildPublicProfile: vi.fn(async () => null),
+    });
+
+    const successRes = createMockRes();
+    await updateMyProfile(
+      createMockReq({
+        auth: { userId: 8 },
+        body: {
+          username: 'doctor_new',
+          email: 'doctor.new@example.com',
+          fullName: 'Dr Updated',
+          specialty: 'Audiology',
+          licenseNumber: 'NEW-LIC',
+          clinicLocation: 'Downtown Clinic',
+          languages: 'English,French',
+          careTypes: ['adult'],
+          virtualAvailable: 'true',
+          inPersonAvailable: 'false',
+          latitude: 43.66,
+          longitude: -79.39,
+          profileComplete: 'true',
+          timeZone: 'America/Toronto',
+        },
+      }),
+      successRes
+    );
+
+    expect(user.update).toHaveBeenCalled();
+    expect(doctor.update).toHaveBeenCalled();
+    expect(tx1.commit).toHaveBeenCalled();
+    expect(successRes.status).toHaveBeenCalledWith(200);
+
+    const tx2 = makeTx();
+    transactionMock.mockResolvedValueOnce(tx2);
+    userFindByPk.mockResolvedValueOnce({
+      id: 9,
+      role: 'patient',
+      update: vi.fn(async () => {
+        const err = new Error('duplicate');
+        err.name = 'SequelizeUniqueConstraintError';
+        throw err;
+      }),
+    });
+
+    const conflictRes = createMockRes();
+    await updateMyProfile(
+      createMockReq({
+        auth: { userId: 9 },
+        body: { username: 'taken_name' },
+      }),
+      conflictRes
+    );
+
+    expect(tx2.rollback).toHaveBeenCalled();
+    expect(conflictRes.status).toHaveBeenCalledWith(409);
+  });
+
   it('getPublicProfile and verification document endpoint guard paths', async () => {
     const { getPublicProfile, getDoctorVerificationDocument } = await import('../../controllers/roles/userController.js');
 
@@ -252,6 +335,30 @@ describe('userController profile/document/resubmission', () => {
       invalidRefRes
     );
     expect(invalidRefRes.status).toHaveBeenCalledWith(404);
+
+    const invalidDocIndexRes = createMockRes();
+    await getDoctorVerificationDocument(
+      createMockReq({ params: { doctorId: '3', documentIndex: '-1' }, auth: { userId: 1, role: 'doctor' } }),
+      invalidDocIndexRes
+    );
+    expect(invalidDocIndexRes.status).toHaveBeenCalledWith(400);
+
+    doctorFindByPk.mockResolvedValueOnce({ id: 3, user_id: 1, verification_documents: ['r2:doc/key.pdf'] });
+    const r2NotConfiguredRes = createMockRes();
+    await getDoctorVerificationDocument(
+      createMockReq({ params: { doctorId: '3', documentIndex: '0' }, auth: { userId: 1, role: 'doctor' } }),
+      r2NotConfiguredRes
+    );
+    expect(r2NotConfiguredRes.status).toHaveBeenCalledWith(500);
+
+    doctorFindByPk.mockResolvedValueOnce({ id: 3, user_id: 1, verification_documents: ['/api/uploads/verification-docs/license.pdf'] });
+    const legacyRes = createMockRes();
+    legacyRes.sendFile = vi.fn();
+    await getDoctorVerificationDocument(
+      createMockReq({ params: { doctorId: '3', documentIndex: '0' }, auth: { userId: 1, role: 'doctor' } }),
+      legacyRes
+    );
+    expect(legacyRes.sendFile).toHaveBeenCalled();
   });
 
   it('resubmitDoctorVerification covers key rejection branches', async () => {
@@ -290,5 +397,30 @@ describe('userController profile/document/resubmission', () => {
       missingFieldsRes
     );
     expect(missingFieldsRes.status).toHaveBeenCalledWith(400);
+
+    const tx5 = makeTx();
+    transactionMock.mockResolvedValueOnce(tx5);
+    userFindByPk.mockResolvedValueOnce({ id: 1, role: 'doctor' });
+    doctorFindOne.mockResolvedValueOnce({
+      id: 10,
+      user_id: 1,
+      verification_status: 'denied',
+      update: vi.fn(async () => undefined),
+    });
+    const storageErrRes = createMockRes();
+    await resubmitDoctorVerification(
+      createMockReq({
+        auth: { userId: 1 },
+        body: {
+          fullName: 'Dr X',
+          specialty: 'ENT',
+          licenseNumber: 'LIC-1',
+          verificationDocuments: ['data:application/pdf;base64,QUJD'],
+        },
+      }),
+      storageErrRes
+    );
+    expect(storageErrRes.status).toHaveBeenCalledWith(400);
+
   });
 });

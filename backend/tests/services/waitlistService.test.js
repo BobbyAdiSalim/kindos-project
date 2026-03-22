@@ -69,6 +69,34 @@ describe('WaitlistService', () => {
     })).toThrow('appointment_type must be either "virtual" or "in-person".');
   });
 
+  it('validateJoinPayload rejects past date and non-future times', async () => {
+    const { default: waitlistService } = await import('../../services/WaitlistService.js');
+
+    expect(() =>
+      waitlistService.validateJoinPayload({
+        doctor_user_id: 2,
+        desired_date: '2000-01-01',
+        desired_start_time: '10:00',
+        desired_end_time: '10:30',
+        appointment_type: 'virtual',
+      })
+    ).toThrow('desired_date must be today or in the future.');
+
+    const now = new Date();
+    const today = now.toISOString().slice(0, 10);
+    const minute = String(now.getMinutes()).padStart(2, '0');
+    const hour = String(now.getHours()).padStart(2, '0');
+    expect(() =>
+      waitlistService.validateJoinPayload({
+        doctor_user_id: 2,
+        desired_date: today,
+        desired_start_time: `${hour}:${minute}`,
+        desired_end_time: `${hour}:${minute}`,
+        appointment_type: 'virtual',
+      })
+    ).toThrow('desired_start_time must be earlier than desired_end_time.');
+  });
+
   it('getQueueMetricsForEntry returns nulls for non-active entries', async () => {
     const { default: waitlistService } = await import('../../services/WaitlistService.js');
     const metrics = await waitlistService.getQueueMetricsForEntry({ status: 'removed' });
@@ -101,6 +129,28 @@ describe('WaitlistService', () => {
       },
       transaction: {},
     })).rejects.toMatchObject({ status: 409 });
+  });
+
+  it('joinWaitlist rejects when patient already holds occupied slot', async () => {
+    const { default: waitlistService } = await import('../../services/WaitlistService.js');
+
+    patientFindOne.mockResolvedValue({ id: 10, user_id: 7 });
+    doctorFindOne.mockResolvedValue({ id: 22, user_id: 9, verification_status: 'approved' });
+    appointmentFindOne.mockResolvedValue({ id: 33, patient_id: 10 });
+
+    await expect(
+      waitlistService.joinWaitlist({
+        patientUserId: 7,
+        payload: {
+          doctor_user_id: 9,
+          desired_date: '2099-01-01',
+          desired_start_time: '10:00',
+          desired_end_time: '10:30',
+          appointment_type: 'virtual',
+        },
+        transaction: {},
+      })
+    ).rejects.toMatchObject({ status: 409 });
   });
 
   it('notifyPatientsForCancellation returns zero when no active entries exist', async () => {
@@ -235,5 +285,70 @@ describe('WaitlistService', () => {
     expect(result).toEqual(expect.objectContaining({ assigned: true, waitlistEntryId: 80 }));
     expect(appointmentCreate).toHaveBeenCalled();
     expect(nextEntrySave).toHaveBeenCalled();
+  });
+
+  it('fulfillWaitlistForCancelledAppointment does not assign when slot is occupied', async () => {
+    const { default: waitlistService } = await import('../../services/WaitlistService.js');
+
+    waitlistFindOne.mockResolvedValueOnce({
+      id: 90,
+      patient_id: 15,
+      doctor_id: 2,
+      status: 'active',
+      save: vi.fn(),
+    });
+    appointmentFindOne.mockResolvedValueOnce({ id: 999, status: 'scheduled' });
+
+    const result = await waitlistService.fulfillWaitlistForCancelledAppointment({
+      cancelledAppointment: {
+        id: 1,
+        doctor_id: 2,
+        slot_id: 3,
+        appointment_date: '2099-01-01',
+        start_time: '10:00:00',
+        end_time: '10:30:00',
+        appointment_type: 'virtual',
+      },
+      cancelledByUserId: 25,
+      transaction: { LOCK: { UPDATE: 'UPDATE' } },
+    });
+
+    expect(result).toEqual({ assigned: false });
+    expect(appointmentCreate).not.toHaveBeenCalled();
+  });
+
+  it('notifyPatientsForCancellation skips entries lacking sender/receiver users', async () => {
+    const { default: waitlistService } = await import('../../services/WaitlistService.js');
+
+    const save1 = vi.fn(async () => undefined);
+    const save2 = vi.fn(async () => undefined);
+    waitlistFindAll.mockResolvedValue([
+      {
+        doctor: { user: { id: 21 } },
+        patient: { user: null },
+        save: save1,
+      },
+      {
+        doctor: { user: { id: 21 } },
+        patient: { user: { id: 31 } },
+        status: 'active',
+        save: save2,
+      },
+    ]);
+
+    const result = await waitlistService.notifyPatientsForCancellation({
+      doctorId: 2,
+      appointmentDate: '2099-01-01',
+      appointmentStartTime: '10:00:00',
+      appointmentEndTime: '10:30:00',
+      appointmentType: 'virtual',
+      cancelledAppointmentId: 15,
+      transaction: {},
+    });
+
+    expect(messageCreate).toHaveBeenCalledTimes(1);
+    expect(save1).not.toHaveBeenCalled();
+    expect(save2).toHaveBeenCalled();
+    expect(result).toEqual({ notifiedCount: 2 });
   });
 });

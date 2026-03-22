@@ -4,6 +4,9 @@ const sequelizeTransaction = vi.fn();
 const appointmentFindOne = vi.fn();
 const appointmentFindByPk = vi.fn();
 const doctorFindOne = vi.fn();
+const patientFindOne = vi.fn();
+const connectionFindOne = vi.fn();
+const connectionCreate = vi.fn();
 
 const waitlistFulfill = vi.fn();
 const sendDoctorApprovalEmail = vi.fn();
@@ -42,7 +45,13 @@ vi.mock('../../models/index.js', () => ({
   Doctor: {
     findOne: doctorFindOne,
   },
-  Patient: {},
+  Patient: {
+    findOne: patientFindOne,
+  },
+  Connection: {
+    findOne: connectionFindOne,
+    create: connectionCreate,
+  },
   User: {},
 }));
 
@@ -127,6 +136,9 @@ describe('cancelController additional coverage', () => {
     appointmentFindOne.mockReset();
     appointmentFindByPk.mockReset();
     doctorFindOne.mockReset();
+    patientFindOne.mockReset();
+    connectionFindOne.mockReset();
+    connectionCreate.mockReset();
     waitlistFulfill.mockReset();
     sendDoctorApprovalEmail.mockReset();
     sendDoctorCancellationEmail.mockReset();
@@ -210,8 +222,14 @@ describe('cancelController additional coverage', () => {
     const { updateAppointmentDecision } = await import('../../controllers/booking/cancelController.js');
 
     doctorFindOne.mockResolvedValue({ id: 11 });
-    const appointment = createAppointmentStub({ status: 'scheduled', notify_on_doctor_approval: true });
+    const appointment = createAppointmentStub({
+      status: 'scheduled',
+      notify_on_doctor_approval: true,
+      patient_id: 3,
+    });
     appointmentFindOne.mockResolvedValue(appointment);
+    patientFindOne.mockResolvedValue({ id: 3 });
+    connectionFindOne.mockResolvedValue(null);
     appointmentFindByPk.mockResolvedValue({
       id: 10,
       patient: { full_name: 'Patient A', user: { email: 'patient@example.com', username: 'pat' } },

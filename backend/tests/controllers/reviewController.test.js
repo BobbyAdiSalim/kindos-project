@@ -57,6 +57,19 @@ describe('reviewController', () => {
     expect(res.status).toHaveBeenCalledWith(400);
   });
 
+  it('upsertReview validates comment length', async () => {
+    const { upsertReview } = await import('../../controllers/other/reviewController.js');
+    const req = createMockReq({
+      auth: { userId: 1 },
+      body: { appointment_id: 1, rating: 5, comment: 'x'.repeat(2001) },
+    });
+    const res = createMockRes();
+
+    await upsertReview(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
   it('upsertReview creates a new review', async () => {
     const { upsertReview } = await import('../../controllers/other/reviewController.js');
 
@@ -130,6 +143,30 @@ describe('reviewController', () => {
 
     await getMyReviewForDoctor(req, res);
     expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  it('getMyReviewForDoctor returns 404 when patient profile missing', async () => {
+    const { getMyReviewForDoctor } = await import('../../controllers/other/reviewController.js');
+    patientFindOne.mockResolvedValueOnce(null);
+
+    const req = createMockReq({ auth: { userId: 1 }, params: { doctorId: '5' } });
+    const res = createMockRes();
+
+    await getMyReviewForDoctor(req, res);
+    expect(res.status).toHaveBeenCalledWith(404);
+  });
+
+  it('getDoctorReviews validates doctor id and non-approved doctor', async () => {
+    const { getDoctorReviews } = await import('../../controllers/other/reviewController.js');
+
+    const badIdRes = createMockRes();
+    await getDoctorReviews(createMockReq({ params: { doctorId: 'bad' } }), badIdRes);
+    expect(badIdRes.status).toHaveBeenCalledWith(400);
+
+    doctorFindByPk.mockResolvedValueOnce({ id: 3, verification_status: 'pending' });
+    const pendingRes = createMockRes();
+    await getDoctorReviews(createMockReq({ params: { doctorId: '3' } }), pendingRes);
+    expect(pendingRes.status).toHaveBeenCalledWith(404);
   });
 
   it('getDoctorReviews returns aggregate review payload', async () => {

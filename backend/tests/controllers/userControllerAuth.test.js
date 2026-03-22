@@ -7,6 +7,7 @@ const userCreate = vi.fn();
 const sequelizeTransaction = vi.fn();
 
 const patientFindOne = vi.fn();
+const patientCreate = vi.fn();
 const doctorFindOne = vi.fn();
 const doctorFindAndCountAll = vi.fn();
 
@@ -35,6 +36,7 @@ vi.mock('../../models/index.js', () => ({
   },
   Patient: {
     findOne: patientFindOne,
+    create: patientCreate,
   },
   Doctor: {
     findOne: doctorFindOne,
@@ -93,6 +95,7 @@ describe('userController auth endpoints', () => {
     userCreate.mockReset();
     sequelizeTransaction.mockReset();
     patientFindOne.mockReset();
+    patientCreate.mockReset();
     doctorFindOne.mockReset();
     doctorFindAndCountAll.mockReset();
     reviewFindAll.mockReset();
@@ -228,6 +231,21 @@ describe('userController auth endpoints', () => {
     expect(knownRes.status).toHaveBeenCalledWith(200);
   });
 
+  it('forgotPassword swallows unexpected errors and still returns generic response', async () => {
+    const { forgotPassword } = await import('../../controllers/roles/userController.js');
+
+    userFindOne.mockRejectedValueOnce(new Error('db down'));
+    const res = createMockRes();
+    await forgotPassword(createMockReq({ body: { email: 'known@example.com' } }), res);
+
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: 'If an account exists for this email, a password reset link has been sent.',
+      })
+    );
+  });
+
   it('validateResetToken and resetPassword enforce token and password rules', async () => {
     const { validateResetToken, resetPassword } = await import('../../controllers/roles/userController.js');
 
@@ -265,6 +283,44 @@ describe('userController auth endpoints', () => {
     await resetPassword(createMockReq({ body: { token: 'abc', newPassword: 'longenough' } }), okRes);
     expect(userUpdate).toHaveBeenCalled();
     expect(okRes.status).toHaveBeenCalledWith(200);
+  });
+
+  it('validateResetToken handles expired/used token and internal errors', async () => {
+    const { validateResetToken } = await import('../../controllers/roles/userController.js');
+
+    userFindOne.mockResolvedValueOnce({
+      reset_password_expires_at: new Date(Date.now() - 60_000),
+      reset_password_used_at: null,
+    });
+    const expiredRes = createMockRes();
+    await validateResetToken(createMockReq({ params: { token: 'expired' } }), expiredRes);
+    expect(expiredRes.status).toHaveBeenCalledWith(200);
+    expect(expiredRes.json).toHaveBeenCalledWith({ valid: false });
+
+    userFindOne.mockResolvedValueOnce({
+      reset_password_expires_at: new Date(Date.now() + 60_000),
+      reset_password_used_at: new Date(),
+    });
+    const usedRes = createMockRes();
+    await validateResetToken(createMockReq({ params: { token: 'used' } }), usedRes);
+    expect(usedRes.status).toHaveBeenCalledWith(200);
+    expect(usedRes.json).toHaveBeenCalledWith({ valid: false });
+
+    userFindOne.mockRejectedValueOnce(new Error('db fail'));
+    const errorRes = createMockRes();
+    await validateResetToken(createMockReq({ params: { token: 'boom' } }), errorRes);
+    expect(errorRes.status).toHaveBeenCalledWith(200);
+    expect(errorRes.json).toHaveBeenCalledWith({ valid: false });
+  });
+
+  it('resetPassword returns 500 when unexpected failure occurs', async () => {
+    const { resetPassword } = await import('../../controllers/roles/userController.js');
+
+    userFindOne.mockRejectedValueOnce(new Error('db failure'));
+    const res = createMockRes();
+    await resetPassword(createMockReq({ body: { token: 'abc', newPassword: 'longenough' } }), res);
+
+    expect(res.status).toHaveBeenCalledWith(500);
   });
 
   it('handles profile endpoints and role strategy failures', async () => {
@@ -424,9 +480,175 @@ describe('userController auth endpoints', () => {
     );
     expect(registerDoctorNoDocsRes.status).toHaveBeenCalledWith(400);
 
+    const registerTooLargeDocRes = createMockRes();
+    await registerUser(
+      createMockReq({
+        body: {
+          email: 'd@b.com',
+          password: 'longenough',
+          role: 'doctor',
+          name: 'Dr',
+          specialty: 'ENT',
+          licenseNumber: 'LIC',
+          verificationDocuments: ['data:application/pdf;base64,' + 'A'.repeat(8_000_000)],
+        },
+      }),
+      registerTooLargeDocRes
+    );
+    expect(registerTooLargeDocRes.status).toHaveBeenCalledWith(400);
+
+    userFindOne.mockResolvedValueOnce({ id: 99, email: 'used@example.com' });
+    const registerEmailConflictRes = createMockRes();
+    await registerUser(
+      createMockReq({
+        body: {
+          email: 'used@example.com',
+          password: 'longenough',
+          role: 'patient',
+          name: 'Used',
+        },
+      }),
+      registerEmailConflictRes
+    );
+    expect(registerEmailConflictRes.status).toHaveBeenCalledWith(409);
+
     userFindByPk.mockResolvedValueOnce(null);
     const updateMissingUserRes = createMockRes();
     await updateMyProfile(createMockReq({ auth: { userId: 99 }, body: {} }), updateMissingUserRes);
     expect(updateMissingUserRes.status).toHaveBeenCalledWith(404);
+  });
+
+  it('registerUser returns 500 when user creation fails unexpectedly', async () => {
+    const { registerUser } = await import('../../controllers/roles/userController.js');
+
+    userFindOne
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null);
+    userCreate.mockRejectedValueOnce(new Error('create failed'));
+
+    const res = createMockRes();
+    await registerUser(
+      createMockReq({
+        body: {
+          email: 'patient@example.com',
+          password: 'longenough',
+          role: 'patient',
+          name: 'Patient',
+          username: 'patient',
+        },
+      }),
+      res
+    );
+
+    expect(res.status).toHaveBeenCalledWith(500);
+  });
+
+  it('registerUser succeeds for patient and sets auth cookie', async () => {
+    const { registerUser } = await import('../../controllers/roles/userController.js');
+
+    const transaction = {
+      rollback: vi.fn(async () => undefined),
+      commit: vi.fn(async () => undefined),
+      finished: false,
+    };
+    sequelizeTransaction.mockResolvedValueOnce(transaction);
+
+    userFindOne
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null);
+    userCreate.mockResolvedValueOnce({
+      id: 7,
+      username: 'patient_7',
+      email: 'pat@example.com',
+      role: 'patient',
+    });
+    patientCreate.mockResolvedValueOnce({ id: 70, full_name: 'Patient Seven', profile_complete: false });
+
+    const req = createMockReq({
+      body: {
+        email: 'pat@example.com',
+        password: 'longenough',
+        role: 'patient',
+        name: 'Patient Seven',
+        username: 'patient_7',
+      },
+    });
+    const res = createMockRes();
+    res.cookie = vi.fn();
+
+    await registerUser(req, res);
+
+    expect(transaction.commit).toHaveBeenCalled();
+    expect(res.cookie).toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(201);
+  });
+
+  it('getDoctors and getDoctorById return 500 on unexpected errors', async () => {
+    const { getDoctors, getDoctorById } = await import('../../controllers/roles/userController.js');
+
+    doctorFindAndCountAll.mockRejectedValueOnce(new Error('db fail'));
+    const listRes = createMockRes();
+    await getDoctors(createMockReq({ query: {} }), listRes);
+    expect(listRes.status).toHaveBeenCalledWith(500);
+
+    doctorFindOne.mockRejectedValueOnce(new Error('db fail'));
+    const detailRes = createMockRes();
+    await getDoctorById(createMockReq({ params: { doctorId: '5' } }), detailRes);
+    expect(detailRes.status).toHaveBeenCalledWith(500);
+  });
+
+  it('getDoctors applies language/careType filters and handles empty ratings set', async () => {
+    const { getDoctors } = await import('../../controllers/roles/userController.js');
+
+    doctorFindAndCountAll.mockResolvedValueOnce({ count: 0, rows: [] });
+    const res = createMockRes();
+    await getDoctors(
+      createMockReq({
+        query: {
+          language: 'English',
+          careTypes: 'adult,pediatric',
+          appointmentType: 'in-person',
+          specialty: 'ENT',
+          limit: '5',
+          offset: '0',
+        },
+      }),
+      res
+    );
+
+    expect(doctorFindAndCountAll).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          verification_status: 'approved',
+          in_person_available: true,
+          specialty: expect.any(Object),
+          languages: expect.any(Object),
+          care_types: expect.any(Object),
+        }),
+      })
+    );
+    expect(reviewFindAll).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(200);
+  });
+
+  it('getDoctors applies virtual appointment filter branch', async () => {
+    const { getDoctors } = await import('../../controllers/roles/userController.js');
+
+    doctorFindAndCountAll.mockResolvedValueOnce({ count: 0, rows: [] });
+    const res = createMockRes();
+    await getDoctors(
+      createMockReq({ query: { appointmentType: 'virtual', limit: '5', offset: '0' } }),
+      res
+    );
+
+    expect(doctorFindAndCountAll).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          verification_status: 'approved',
+          virtual_available: true,
+        }),
+      })
+    );
+    expect(res.status).toHaveBeenCalledWith(200);
   });
 });

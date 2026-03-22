@@ -1,5 +1,3 @@
-import { createMockReq } from '../helpers/mockReqRes.js';
-
 const patientFindOne = vi.fn();
 const doctorFindOne = vi.fn();
 const adminLogFindOne = vi.fn();
@@ -51,7 +49,7 @@ describe('role strategy factory', () => {
       message: 'Unsupported role for appointment access.',
       status: 403,
     });
-    expect(strategy.getOtherConnectionUserId(createMockReq())).toBeNull();
+    expect(strategy.getOtherConnectionUserId({})).toBeNull();
     await expect(strategy.buildPrivateProfile()).resolves.toBeNull();
     await expect(strategy.buildPublicProfile()).resolves.toBeNull();
   });
