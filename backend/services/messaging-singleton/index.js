@@ -47,7 +47,7 @@ const verifyConnectionMembership = async (userId, connectionId) => {
     ],
   });
 
-  if (!connection || connection.status !== 'accepted') return false;
+  if (!connection) return false;
   return connection.patient?.user_id === userId || connection.doctor?.user_id === userId;
 };
 

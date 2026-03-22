@@ -17,7 +17,7 @@ export const CANCELLED_BY_PATIENT_REASON_PREFIX = 'Cancelled by patient';
 export const DOCTOR_REJECTION_REASON_OPTIONS = [
   { code: 'schedule_conflict', label: 'Schedule conflict' },
   { code: 'outside_specialty', label: 'Outside specialty' },
-  { code: 'insufficient_information', label: 'Insufficient information provided' },
+  { code: 'insufficient_information', label: 'Insufficient information' },
   { code: 'clinic_unavailable', label: 'Clinic unavailable' },
   { code: 'duplicate_booking', label: 'Duplicate booking' },
   { code: 'other', label: 'Other' },

@@ -210,7 +210,19 @@ export function Analytics() {
                 <YAxis allowDecimals={false} tickLine={false} axisLine={false} />
                 <ChartTooltip
                   cursor={false}
-                  content={<ChartTooltipContent labelKey="count" />}
+                  content={(
+                    <ChartTooltipContent
+                      labelFormatter={(_value, payload) => payload?.[0]?.payload?.reason || 'Decline reason'}
+                      formatter={(value) => (
+                        <div className="flex min-w-[8rem] items-center justify-between gap-3">
+                          <span className="text-muted-foreground">Count</span>
+                          <span className="font-mono font-medium tabular-nums text-foreground">
+                            {Number(value).toLocaleString()}
+                          </span>
+                        </div>
+                      )}
+                    />
+                  )}
                 />
                 <Bar
                   dataKey="count"

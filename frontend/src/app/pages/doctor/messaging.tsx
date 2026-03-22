@@ -30,6 +30,7 @@ export function DoctorMessaging() {
   const [activeConnection, setActiveConnection] = useState<ConnectionInfo | null>(null);
   const [messages, setMessages] = useState<MessageInfo[]>([]);
   const [messageInput, setMessageInput] = useState('');
+  const [pendingFile, setPendingFile] = useState<{ data: string; name: string; type: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const prevConnectionRef = useRef<number | null>(null);
@@ -63,7 +64,7 @@ export function DoctorMessaging() {
 
         if (initialConnectionIdRef.current) {
           const match = data.connections.find(
-            (c) => c.id === initialConnectionIdRef.current && c.status === 'accepted'
+            (c) => c.id === initialConnectionIdRef.current
           );
           if (match) setActiveConnection(match);
         }
@@ -95,7 +96,7 @@ export function DoctorMessaging() {
 
   // Load messages when active connection changes
   useEffect(() => {
-    if (!activeConnection || activeConnection.status !== 'accepted') return;
+    if (!activeConnection) return;
 
     if (prevConnectionRef.current && prevConnectionRef.current !== activeConnection.id) {
       leaveConversation(prevConnectionRef.current);
@@ -148,23 +149,24 @@ export function DoctorMessaging() {
   }, [activeConnection, token, currentUserId, updateConnectionPreview]);
 
   const handleSend = useCallback(async () => {
-    if (!messageInput.trim() || !activeConnection || sending) return;
+    if ((!messageInput.trim() && !pendingFile) || !activeConnection || sending) return;
 
     setSending(true);
     try {
-      const data = await sendMessageApi(token, activeConnection.id, messageInput.trim());
+      const data = await sendMessageApi(token, activeConnection.id, messageInput.trim(), pendingFile);
       setMessages((prev) => [...prev, data.message]);
       updateConnectionPreview(activeConnection.id, data.message, true);
       emitMessage(activeConnection.id, data.message);
       setMessageInput('');
+      setPendingFile(null);
     } catch (err: any) {
       toast.error(err.message);
     } finally {
       setSending(false);
     }
-  }, [messageInput, activeConnection, token, sending, updateConnectionPreview]);
+  }, [messageInput, pendingFile, activeConnection, token, sending, updateConnectionPreview]);
 
-  const acceptedConnections = connections.filter((c) => c.status === 'accepted');
+  const acceptedConnections = connections;
 
   if (loading) {
     return (
@@ -211,6 +213,10 @@ export function DoctorMessaging() {
               onMessageInputChange={setMessageInput}
               onSend={handleSend}
               sending={sending}
+              activeConnectionId={activeConnection.id}
+              pendingFile={pendingFile}
+              onFileSelect={setPendingFile}
+              allowFileUpload
             />
           ) : (
             <EmptyChatPanel />

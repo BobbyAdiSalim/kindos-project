@@ -138,6 +138,7 @@ const createRoleProfile = async (transaction, user, body) => {
         clinic_location: body.clinicAddress || null,
         time_zone: normalizeTimeZone(body.timeZone),
         verification_documents: body.verificationDocuments || [],
+        care_types: body.careTypes || [],
       },
       { transaction }
     );
@@ -751,6 +752,14 @@ export const updateMyProfile = async (req, res) => {
         doctorUpdates.languages = parsedLanguages;
       }
 
+      // 👇 ADD CARE TYPES SUPPORT
+      if (req.body.careTypes !== undefined) {
+        const parsedCareTypes = parseStringArray(req.body.careTypes);
+        if (parsedCareTypes !== undefined) {
+          doctorUpdates.care_types = parsedCareTypes;
+        }
+      }
+
       if (Object.prototype.hasOwnProperty.call(req.body, 'virtualAvailable')) {
         const normalizedVirtualAvailable = normalizeBoolean(req.body.virtualAvailable);
         if (normalizedVirtualAvailable !== undefined) {
@@ -1071,6 +1080,11 @@ export const getDoctors = async (req, res) => {
     // Filter by language
     if (language && language !== "all") {
       whereClause.languages = { [Op.contains]: [language] };
+    }
+
+    if (req.query.careTypes) {
+      const careTypes = req.query.careTypes.split(',');
+      whereClause.care_types = { [Op.overlap]: careTypes };
     }
 
     // Fetch doctors

@@ -1,5 +1,9 @@
 import bcrypt from 'bcrypt';
-import { sequelize, User, Patient, Doctor } from './models/index.js';
+import { sequelize, User, Patient, Doctor, Appointment } from './models/index.js';
+import {
+  DECLINED_BY_DOCTOR_REASON_PREFIX,
+  getDoctorRejectionReasonLabel,
+} from './controllers/booking/bookingShared.js';
 
 const PATIENT_COUNT = 10;
 const DOCTOR_COUNT = 10;
@@ -7,6 +11,141 @@ const ADMIN_EMAIL = 'administrator@gmail.com';
 const ADMIN_PASSWORD = 'administrator';
 const DEFAULT_PATIENT_PASSWORD = process.env.SEED_PATIENT_PASSWORD || 'patient123';
 const DEFAULT_DOCTOR_PASSWORD = process.env.SEED_DOCTOR_PASSWORD || 'doctor123';
+const SEEDED_ANALYTICS_APPOINTMENT_NOTE_PREFIX = '[dev-seed analytics decline]';
+
+const buildSeededDeclinedAppointments = (patients, doctors) => {
+  if (patients.length < 3 || doctors.length < 3) {
+    return [];
+  }
+
+  return [
+    {
+      key: 'last-7d-schedule-conflict',
+      patientId: patients[0].id,
+      doctorId: doctors[0].id,
+      doctorUserId: doctors[0].user_id,
+      appointmentDate: 2,
+      startTime: '09:00:00',
+      endTime: '09:30:00',
+      appointmentType: 'virtual',
+      reason: 'Follow-up consultation',
+      rejectionCode: 'schedule_conflict',
+      rejectionNote: null,
+    },
+    {
+      key: 'last-7d-outside-specialty',
+      patientId: patients[1].id,
+      doctorId: doctors[1].id,
+      doctorUserId: doctors[1].user_id,
+      appointmentDate: 6,
+      startTime: '11:00:00',
+      endTime: '11:30:00',
+      appointmentType: 'in-person',
+      reason: 'Hearing assessment consultation',
+      rejectionCode: 'outside_specialty',
+      rejectionNote: null,
+    },
+    {
+      key: 'last-30d-insufficient-information',
+      patientId: patients[2].id,
+      doctorId: doctors[2].id,
+      doctorUserId: doctors[2].user_id,
+      appointmentDate: 18,
+      startTime: '14:00:00',
+      endTime: '14:30:00',
+      appointmentType: 'virtual',
+      reason: 'New patient intake',
+      rejectionCode: 'insufficient_information',
+      rejectionNote: null,
+    },
+    {
+      key: 'older-than-30d-clinic-unavailable',
+      patientId: patients[0].id,
+      doctorId: doctors[1].id,
+      doctorUserId: doctors[1].user_id,
+      appointmentDate: 45,
+      startTime: '16:00:00',
+      endTime: '16:30:00',
+      appointmentType: 'in-person',
+      reason: 'Clinic visit request',
+      rejectionCode: 'clinic_unavailable',
+      rejectionNote: null,
+    },
+  ];
+};
+
+const buildTimestampDaysAgo = (daysAgo, time) => {
+  const [hours, minutes, seconds] = time.split(':').map((part) => Number(part));
+  const timestamp = new Date();
+  timestamp.setHours(hours, minutes, seconds || 0, 0);
+  timestamp.setDate(timestamp.getDate() - daysAgo);
+  return timestamp;
+};
+
+const seedAnalyticsDeclinedAppointments = async ({ transaction, summary }) => {
+  const patients = await Patient.findAll({
+    order: [['id', 'ASC']],
+    limit: 3,
+    transaction,
+  });
+  const doctors = await Doctor.findAll({
+    order: [['id', 'ASC']],
+    limit: 3,
+    transaction,
+  });
+  const seededAppointments = buildSeededDeclinedAppointments(patients, doctors);
+
+  summary.appointments = {
+    seeded: 0,
+    existing: 0,
+  };
+
+  for (const item of seededAppointments) {
+    const existing = await Appointment.findOne({
+      where: {
+        notes: `${SEEDED_ANALYTICS_APPOINTMENT_NOTE_PREFIX} ${item.key}`,
+      },
+      transaction,
+    });
+
+    if (existing) {
+      summary.appointments.existing += 1;
+      continue;
+    }
+
+    const cancelledAt = buildTimestampDaysAgo(item.appointmentDate, item.startTime);
+    const rejectionLabel = getDoctorRejectionReasonLabel(item.rejectionCode) || item.rejectionCode;
+    const displayReason = item.rejectionNote
+      ? `${rejectionLabel}: ${item.rejectionNote}`
+      : rejectionLabel;
+
+    await Appointment.create(
+      {
+        patient_id: item.patientId,
+        doctor_id: item.doctorId,
+        appointment_date: cancelledAt.toISOString().slice(0, 10),
+        start_time: item.startTime,
+        end_time: item.endTime,
+        appointment_type: item.appointmentType,
+        status: 'cancelled',
+        duration: 30,
+        reason: item.reason,
+        notes: `${SEEDED_ANALYTICS_APPOINTMENT_NOTE_PREFIX} ${item.key}`,
+        accessibility_needs: [],
+        cancelled_at: cancelledAt,
+        cancelled_by: item.doctorUserId,
+        cancellation_reason: `${DECLINED_BY_DOCTOR_REASON_PREFIX}: ${displayReason}`,
+        doctor_rejection_reason_code: item.rejectionCode,
+        doctor_rejection_reason_note: item.rejectionNote,
+        created_at: cancelledAt,
+        updated_at: cancelledAt,
+      },
+      { transaction }
+    );
+
+    summary.appointments.seeded += 1;
+  }
+};
 
 const isTruthyFlag = (value) => {
   if (value === undefined || value === null) return false;
@@ -75,6 +214,7 @@ export const seedDevelopmentData = async () => {
       existing: 0,
       rolesAdjusted: 0,
     },
+    appointments: { seeded: 0, existing: 0 },
   };
 
   try {
@@ -233,12 +373,15 @@ export const seedDevelopmentData = async () => {
       }
     }
 
+    await seedAnalyticsDeclinedAppointments({ transaction, summary });
+
     await transaction.commit();
 
     console.log('[seed] Development data seed completed.');
     console.log('[seed] Admin:', summary.admin);
     console.log('[seed] Patients:', summary.patients);
     console.log('[seed] Doctors:', summary.doctors);
+    console.log('[seed] Appointments:', summary.appointments);
 
     return summary;
   } catch (error) {
