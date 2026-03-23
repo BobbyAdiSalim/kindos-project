@@ -69,18 +69,19 @@ Note that these goals / tasks were the tasks that were finished before the demo 
     <img src="screenshots/patient-time-zone1.png" >
 
 7. **SCRUM-46** - *As a system administrator, I would like doctors to select a rejection reason from a dropdown…*
-    
+    <img src="screenshots/doctor-reason.png" >
 
 8. **SCRUM-42** - *As a patient, I would like to receive documents from my doctor through…*
-
+    <img src="screenshots/patient-document.png" >
 
 9. **SCRUM-43** - *As a doctor, I would like to send documents to patients…*
-
+    <img src="screenshots/doctor-document.png" >
 
 10. **SCRUM-49** - *Only doctor can initiate message…*
-
+    <img src="screenshots/doctor-start.png.png" >
 
 11. **SCRUM-41** - *As a doctor, I would like to see my appointment time in my local time zone…*
+    <img src="screenshots/doctor-timezone1.png.png" >
 
 
 #### Goals and/or tasks that were planned but not met/completed:
