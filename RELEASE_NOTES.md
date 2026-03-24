@@ -1,9 +1,17 @@
-# What's New 
+# What's New
+## v1.1.0
+- **Security Improvement:** Sensitive doctor information is no longer stored in clear text on the client side.
+- **Time Zone Support:** Patients and doctors are able to view appointment times in their local or selected time zone.
+- **Document Sharing in Messaging:** Doctors are able to send documents to patients, and patients are able to receive and review those documents in conversations.
+- **Messaging Control:** Only doctors are able to initiate new message threads to reduce spam.
+- **Care Type Selection:** Doctors are able to select provided care types during registration, and patients are able to select required care type (including "Don't know") in the questionnaire.
+- **Appointment Rejection Reasons:** Doctors are required to choose a predefined rejection reason when rejecting appointments.
+- **Testing Improvements:** A unit testing framework is set up, and critical unit tests are added for key features such as authentication and messaging.
 
 ## v1.0.0
 - **User Authentication:** All users are able to register and login to their account using their credentials.
 - **Doctor Verification:** Doctors are able to register and submit documents for verification, and system administrators are able to verify doctors.
-- **Availability Management:** Doctors are able to set their availability for patients’ appointments on intervals of time with fixed duration.
+- **Availability Management:** Doctors are able to set their availability for patients' appointments on intervals of time with fixed duration.
 - **Needs Questionnaire:** Patients are able to fill questionnaires about their needs, and the questionnaire progress bar is fixed to correctly show the current progress.
 - **Doctor Recommendation and Filtering:** Patients are able to view and filter the list of recommended doctors.
 - **Appointment Booking and Management:** Patients are able to book appointments, receive confirmation/reminder emails, and view and manage their upcoming and past appointments.
