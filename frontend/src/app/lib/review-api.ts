@@ -39,7 +39,6 @@ const withAuth = (token: string | null) => {
 
   return {
     'Content-Type': 'application/json',
-    Authorization: `Bearer ${token}`,
   };
 };
 
@@ -70,6 +69,7 @@ export const getMyReviewForDoctor = async (
 ): Promise<DoctorReviewResponse> => {
   const response = await fetch(`${API_BASE}/reviews/my/${doctorId}`, {
     headers: withAuth(token),
+    credentials: 'include',
   });
 
   const data = await parseJson(response);
@@ -83,6 +83,7 @@ export const upsertReview = async (
   const response = await fetch(`${API_BASE}/reviews`, {
     method: 'POST',
     headers: withAuth(token),
+    credentials: 'include',
     body: JSON.stringify(payload),
   });
 

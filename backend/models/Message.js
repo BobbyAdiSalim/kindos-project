@@ -41,7 +41,23 @@ const Message = sequelize.define(
     },
     content: {
       type: DataTypes.TEXT,
-      allowNull: false,
+      allowNull: true,
+    },
+    file_url: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    file_name: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    file_size: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    file_type: {
+      type: DataTypes.STRING,
+      allowNull: true,
     },
     read: {
       type: DataTypes.BOOLEAN,

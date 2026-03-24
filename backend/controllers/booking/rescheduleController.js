@@ -88,6 +88,8 @@ export const rescheduleAppointmentByPatient = async (req, res) => {
       appointment.cancelled_at = null;
       appointment.cancelled_by = null;
       appointment.cancellation_reason = null;
+      appointment.doctor_rejection_reason_code = null;
+      appointment.doctor_rejection_reason_note = null;
       clearPendingReschedule(appointment);
 
       await appointment.save({ transaction });
@@ -347,6 +349,8 @@ export const respondToDoctorReschedule = async (req, res) => {
         appointment.cancelled_at = null;
         appointment.cancelled_by = null;
         appointment.cancellation_reason = null;
+        appointment.doctor_rejection_reason_code = null;
+        appointment.doctor_rejection_reason_note = null;
         clearPendingReschedule(appointment);
 
         await appointment.save({ transaction });

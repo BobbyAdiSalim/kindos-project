@@ -13,6 +13,8 @@ interface AppointmentCardProps {
     patientName?: string;
     date: string;
     time: string;
+    dateLabel?: string;
+    timeLabel?: string;
     type: 'virtual' | 'in-person';
     status:
       | 'scheduled'
@@ -23,6 +25,7 @@ interface AppointmentCardProps {
       | 'no-show'
       | 'upcoming';
     reason: string;
+    declineReason?: string | null;
     hasReview?: boolean;
     pendingRescheduleRequestedByDoctor?: boolean;
   };
@@ -42,6 +45,8 @@ export function AppointmentCard({
   const appointmentDateValue = /^\d{4}-\d{2}-\d{2}$/.test(appointment.date)
     ? new Date(`${appointment.date}T00:00:00`)
     : new Date(appointment.date);
+  const displayedDate = appointment.dateLabel || format(appointmentDateValue, 'MMMM d, yyyy');
+  const displayedTime = appointment.timeLabel || appointment.time;
   const detailLink =
     userRole === 'patient'
       ? `/patient/appointment/${appointment.id}`
@@ -72,6 +77,9 @@ export function AppointmentCard({
                   {counterpartyName}
                 </h3>
                 <p className="text-sm text-muted-foreground mt-1">{appointment.reason}</p>
+                {appointment.status === 'declined' && appointment.declineReason ? (
+                  <p className="text-sm text-rose-700 mt-2">Decline reason: {appointment.declineReason}</p>
+                ) : null}
               </div>
               <div className="flex gap-2">
                 <AppointmentTypeBadge type={appointment.type} />
@@ -82,11 +90,11 @@ export function AppointmentCard({
             <div className="flex flex-wrap gap-4 text-sm">
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Calendar className="h-4 w-4" />
-                <span>{format(appointmentDateValue, 'MMMM d, yyyy')}</span>
+                <span>{displayedDate}</span>
               </div>
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Clock className="h-4 w-4" />
-                <span>{appointment.time}</span>
+                <span>{displayedTime}</span>
               </div>
             </div>
           </div>

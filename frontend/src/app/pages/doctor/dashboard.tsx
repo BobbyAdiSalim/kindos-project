@@ -8,11 +8,7 @@ import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
 import { Textarea } from '@/app/components/ui/textarea';
 import { AppointmentCard } from '@/app/components/appointment-card';
-import { Avatar, AvatarFallback } from '@/app/components/ui/avatar';
-import { Badge } from '@/app/components/ui/badge';
-import { Popover, PopoverContent, PopoverTrigger } from '@/app/components/ui/popover';
-import { ScrollArea } from '@/app/components/ui/scroll-area';
-import { Calendar, Settings, Clock, AlertCircle, MessageSquare, Check, X, UserPlus } from 'lucide-react';
+import { Calendar, Settings, Clock, AlertCircle, MessageSquare } from 'lucide-react';
 import { useAuth } from '@/app/lib/auth-context';
 import { toast } from 'sonner';
 import { formatTime24to12 } from '@/app/lib/availability-api';
@@ -21,11 +17,9 @@ import {
   updateAppointmentDecision,
   type AppointmentRecord,
 } from '@/app/lib/appointment-api';
-import {
-  getPendingRequests,
-  respondToConnection,
-  type ConnectionInfo,
-} from '@/app/lib/chat-api';
+import { DeclineAppointmentDialog, type DoctorRejectionReasonCode } from '@/app/components/doctor/decline-appointment-dialog';
+import { formatZonedDateTime, getDefaultPreferredTimeZone, resolveTimeZone } from '@/app/lib/timezone';
+import { usePreferredTimeZone } from '@/app/lib/use-preferred-timezone';
 
 const mapAppointmentStatus = (appointment: AppointmentRecord) => {
   if (appointment.status === 'cancelled' && appointment.declined_by_doctor) {
@@ -35,31 +29,59 @@ const mapAppointmentStatus = (appointment: AppointmentRecord) => {
   return appointment.status;
 };
 
-const toAppointmentCardData = (appointment: AppointmentRecord) => ({
-  id: String(appointment.id),
-  doctorName: appointment.doctor?.full_name || 'Doctor',
-  patientName: appointment.patient?.full_name || 'Patient',
-  date: appointment.appointment_date,
-  time: formatTime24to12(appointment.start_time),
-  type: appointment.appointment_type,
-  status: mapAppointmentStatus(appointment),
-  reason: appointment.reason,
-  pendingRescheduleRequestedByDoctor: appointment.pending_reschedule?.requested_by_role === 'doctor',
-});
+const toAppointmentCardData = (
+  appointment: AppointmentRecord,
+  preferredTimeZone: string,
+  systemTimeZone: string
+) => {
+  const sourceTimeZone = getDefaultPreferredTimeZone();
+  const targetTimeZone = resolveTimeZone(preferredTimeZone, systemTimeZone);
+  const dateLabel = formatZonedDateTime(
+    appointment.appointment_date,
+    appointment.start_time,
+    sourceTimeZone,
+    targetTimeZone,
+    { month: 'long', day: 'numeric', year: 'numeric' },
+    appointment.appointment_date
+  );
+  const timeLabel = formatZonedDateTime(
+    appointment.appointment_date,
+    appointment.start_time,
+    sourceTimeZone,
+    targetTimeZone,
+    { hour: 'numeric', minute: '2-digit', hour12: true, timeZoneName: 'short' },
+    formatTime24to12(appointment.start_time)
+  );
+
+  return {
+    id: String(appointment.id),
+    doctorName: appointment.doctor?.full_name || 'Doctor',
+    patientName: appointment.patient?.full_name || 'Patient',
+    date: appointment.appointment_date,
+    time: timeLabel,
+    dateLabel,
+    timeLabel,
+    type: appointment.appointment_type,
+    status: mapAppointmentStatus(appointment),
+    reason: appointment.reason,
+    pendingRescheduleRequestedByDoctor: appointment.pending_reschedule?.requested_by_role === 'doctor',
+  };
+};
 
 export function DoctorDashboard() {
   const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
   const { user, token, updateUser } = useAuth();
+  const { timeZone, timeZoneOptions, systemTimeZone } = usePreferredTimeZone();
   const isVerified = user?.verified === true;
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
   const [appointmentsLoading, setAppointmentsLoading] = useState(false);
   const [appointmentActionId, setAppointmentActionId] = useState<string | null>(null);
+  const [declineDialogOpen, setDeclineDialogOpen] = useState(false);
+  const [appointmentPendingDecline, setAppointmentPendingDecline] = useState<AppointmentRecord | null>(null);
   const [appointmentsError, setAppointmentsError] = useState('');
   const [appointments, setAppointments] = useState<AppointmentRecord[]>([]);
-  const [pendingRequests, setPendingRequests] = useState<ConnectionInfo[]>([]);
-  const [respondingId, setRespondingId] = useState<number | null>(null);
   const [formData, setFormData] = useState({
     fullName: '',
     specialty: '',
@@ -68,6 +90,8 @@ export function DoctorDashboard() {
   });
   const [verificationDocumentName, setVerificationDocumentName] = useState('');
   const [verificationDocumentDataUrl, setVerificationDocumentDataUrl] = useState('');
+  const displayTimeZone = resolveTimeZone(timeZone, systemTimeZone);
+  const displayTimeZoneLabel = timeZoneOptions.find((option) => option.value === displayTimeZone)?.label || displayTimeZone;
 
   const fileToDataUrl = (file: File) =>
     new Promise<string>((resolve, reject) => {
@@ -86,9 +110,7 @@ export function DoctorDashboard() {
 
       try {
         const response = await fetch('/api/profile/me', {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          credentials: 'include',
         });
         const data = await response.json();
 
@@ -141,33 +163,6 @@ export function DoctorDashboard() {
     loadAppointments();
   }, [token, isVerified]);
 
-  // Load pending connection requests
-  useEffect(() => {
-    const loadRequests = async () => {
-      if (!token || !isVerified) return;
-      try {
-        const data = await getPendingRequests(token);
-        setPendingRequests(data.requests);
-      } catch {
-        // Silently fail — not critical for dashboard
-      }
-    };
-    loadRequests();
-  }, [token, isVerified]);
-
-  const handleConnectionResponse = async (connectionId: number, status: 'accepted' | 'rejected') => {
-    setRespondingId(connectionId);
-    try {
-      await respondToConnection(token, connectionId, status);
-      setPendingRequests((prev) => prev.filter((r) => r.id !== connectionId));
-      toast.success(status === 'accepted' ? 'Connection accepted!' : 'Connection rejected.');
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to respond to connection.');
-    } finally {
-      setRespondingId(null);
-    }
-  };
-
   const handleVerificationDocumentChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) {
@@ -214,8 +209,8 @@ export function DoctorDashboard() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
         },
+        credentials: 'include',
         body: JSON.stringify({
           fullName: formData.fullName,
           specialty: formData.specialty,
@@ -265,29 +260,71 @@ export function DoctorDashboard() {
     }
   };
 
+  const openDeclineDialog = (appointmentId: string) => {
+    const selectedAppointment = appointments.find((appointment) => String(appointment.id) === appointmentId) || null;
+    if (!selectedAppointment) {
+      toast.error('Appointment not found.');
+      return;
+    }
+
+    setAppointmentPendingDecline(selectedAppointment);
+    setDeclineDialogOpen(true);
+  };
+
+  const handleDeclineConfirm = async ({
+    reasonCode,
+    reasonNote,
+  }: {
+    reasonCode: DoctorRejectionReasonCode;
+    reasonNote?: string;
+  }) => {
+    if (!appointmentPendingDecline || !token) {
+      toast.error('Authentication required.');
+      return;
+    }
+
+    try {
+      setAppointmentActionId(String(appointmentPendingDecline.id));
+      const updated = await updateAppointmentDecision(token, String(appointmentPendingDecline.id), 'decline', {
+        reasonCode,
+        reasonNote,
+      });
+      setAppointments((prev) => prev.map((appointment) => (
+        appointment.id === updated.id ? updated : appointment
+      )));
+      setDeclineDialogOpen(false);
+      setAppointmentPendingDecline(null);
+      toast.success('Booking declined.');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to update booking status.');
+    } finally {
+      setAppointmentActionId(null);
+    }
+  };
+
   const { requestAppointments, upcomingAppointments, pastAppointments } = useMemo(() => {
     const requests = appointments
       .filter((appointment) => appointment.status === 'scheduled')
-      .map(toAppointmentCardData);
+      .map((appointment) => toAppointmentCardData(appointment, timeZone, systemTimeZone));
     const upcoming = appointments
       .filter((appointment) => appointment.status === 'confirmed')
-      .map(toAppointmentCardData);
+      .map((appointment) => toAppointmentCardData(appointment, timeZone, systemTimeZone));
     const past = appointments
       .filter((appointment) => !['scheduled', 'confirmed'].includes(appointment.status))
       .sort((a, b) => {
-        const dateCompare = new Date(`${b.appointment_date}T00:00:00`).getTime() - 
+        const dateCompare = new Date(`${b.appointment_date}T00:00:00`).getTime() -
                           new Date(`${a.appointment_date}T00:00:00`).getTime();
         if (dateCompare !== 0) return dateCompare;
         return b.end_time.localeCompare(a.end_time);
       })
-      .map(toAppointmentCardData);
+      .map((appointment) => toAppointmentCardData(appointment, timeZone, systemTimeZone));
 
     return {
       requestAppointments: requests,
       upcomingAppointments: upcoming,
       pastAppointments: past,
     };
-  }, [appointments]);
+  }, [appointments, systemTimeZone, timeZone]);
 
   if (!isVerified) {
     const isDenied = user?.verificationStatus === 'denied';
@@ -387,6 +424,19 @@ export function DoctorDashboard() {
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-5xl">
+      <DeclineAppointmentDialog
+        open={declineDialogOpen}
+        onOpenChange={(open) => {
+          setDeclineDialogOpen(open);
+          if (!open) {
+            setAppointmentPendingDecline(null);
+          }
+        }}
+        onConfirm={handleDeclineConfirm}
+        loading={appointmentActionId === String(appointmentPendingDecline?.id || '')}
+        patientName={appointmentPendingDecline?.patient?.full_name || 'Patient'}
+      />
+
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
         <div>
           <h1 className="text-2xl md:text-3xl font-semibold mb-2">My Schedule</h1>
@@ -411,73 +461,15 @@ export function DoctorDashboard() {
               Profile
             </Button>
           </Link>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline" className="relative">
-                <UserPlus className="h-4 w-4 mr-2" />
-                Requests
-                {pendingRequests.length > 0 && (
-                  <Badge variant="destructive" className="absolute -top-2 -right-2 h-5 w-5 p-0 flex items-center justify-center text-xs">
-                    {pendingRequests.length}
-                  </Badge>
-                )}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent align="end" className="w-80 p-0">
-              <div className="p-3 border-b">
-                <h3 className="font-semibold text-sm">Connection Requests</h3>
-              </div>
-              {pendingRequests.length === 0 ? (
-                <div className="p-4 text-center text-sm text-muted-foreground">
-                  No pending requests
-                </div>
-              ) : (
-                <ScrollArea className="max-h-72">
-                  <div className="p-2 space-y-1">
-                    {pendingRequests.map((req) => {
-                      const patientName = req.patient?.full_name || 'Patient';
-                      const isResponding = respondingId === req.id;
-                      return (
-                        <div key={req.id} className="flex items-center gap-2 p-2 rounded-md hover:bg-muted/50">
-                          <Avatar className="h-8 w-8 flex-shrink-0">
-                            <AvatarFallback className="text-xs">{patientName[0] || '?'}</AvatarFallback>
-                          </Avatar>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium text-sm truncate">{patientName}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {new Date(req.created_at).toLocaleDateString()}
-                            </p>
-                          </div>
-                          <div className="flex gap-1 flex-shrink-0">
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-7 w-7 text-green-600 hover:text-green-700 hover:bg-green-50"
-                              onClick={() => handleConnectionResponse(req.id, 'accepted')}
-                              disabled={isResponding}
-                            >
-                              <Check className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-7 w-7 text-red-600 hover:text-red-700 hover:bg-red-50"
-                              onClick={() => handleConnectionResponse(req.id, 'rejected')}
-                              disabled={isResponding}
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </ScrollArea>
-              )}
-            </PopoverContent>
-          </Popover>
         </div>
       </div>
+      <p className="text-sm text-muted-foreground -mt-4 mb-6">
+        Times shown in <span className="font-medium text-foreground">{displayTimeZoneLabel}</span>. Change this in{' '}
+        <Link to="/doctor/profile" className="underline underline-offset-4">
+          Profile
+        </Link>
+        .
+      </p>
 
       <Tabs defaultValue="upcoming" className="w-full">
         <TabsList className="w-full md:w-auto">
@@ -522,7 +514,7 @@ export function DoctorDashboard() {
                   handleDecision(appointmentId, 'confirm');
                 }}
                 onDecline={(appointmentId) => {
-                  handleDecision(appointmentId, 'decline');
+                  openDeclineDialog(appointmentId);
                 }}
                 actionLoadingId={appointmentActionId}
               />

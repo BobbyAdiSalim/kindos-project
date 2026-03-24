@@ -7,7 +7,6 @@ const withAuth = (token: string | null) => {
 
   return {
     'Content-Type': 'application/json',
-    Authorization: `Bearer ${token}`,
   };
 };
 
@@ -15,7 +14,6 @@ export interface ConnectionInfo {
   id: number;
   patient_id: number;
   doctor_id: number;
-  status: 'pending' | 'accepted' | 'rejected';
   created_at: string;
   updated_at: string;
   doctor?: {
@@ -39,10 +37,14 @@ export interface MessageInfo {
   id: number;
   sender_id: number;
   receiver_id: number;
-  content: string;
+  content: string | null;
   read: boolean;
   read_at: string | null;
   created_at: string;
+  file_url?: string | null;
+  file_name?: string | null;
+  file_size?: number | null;
+  file_type?: string | null;
   sender?: {
     id: number;
     username: string;
@@ -50,68 +52,17 @@ export interface MessageInfo {
   };
 }
 
-export const sendConnectRequest = async (
-  token: string | null,
-  doctorId: number
-): Promise<{ message: string; connection: ConnectionInfo }> => {
-  const response = await fetch(`${API_BASE}/chat/connect`, {
-    method: 'POST',
-    headers: withAuth(token),
-    body: JSON.stringify({ doctorId }),
-  });
-
-  const data = await response.json();
-  if (!response.ok) {
-    throw new Error(data?.error || 'Failed to send connect request.');
-  }
-
-  return data;
-};
-
 export const getMyConnections = async (
   token: string | null
 ): Promise<{ connections: ConnectionInfo[] }> => {
   const response = await fetch(`${API_BASE}/chat/connections`, {
     headers: withAuth(token),
+    credentials: 'include',
   });
 
   const data = await response.json();
   if (!response.ok) {
     throw new Error(data?.error || 'Failed to load connections.');
-  }
-
-  return data;
-};
-
-export const getPendingRequests = async (
-  token: string | null
-): Promise<{ requests: ConnectionInfo[] }> => {
-  const response = await fetch(`${API_BASE}/chat/requests/pending`, {
-    headers: withAuth(token),
-  });
-
-  const data = await response.json();
-  if (!response.ok) {
-    throw new Error(data?.error || 'Failed to load pending requests.');
-  }
-
-  return data;
-};
-
-export const respondToConnection = async (
-  token: string | null,
-  connectionId: number,
-  status: 'accepted' | 'rejected'
-): Promise<{ message: string; connection: ConnectionInfo }> => {
-  const response = await fetch(`${API_BASE}/chat/connections/${connectionId}`, {
-    method: 'PATCH',
-    headers: withAuth(token),
-    body: JSON.stringify({ status }),
-  });
-
-  const data = await response.json();
-  if (!response.ok) {
-    throw new Error(data?.error || 'Failed to respond to connection.');
   }
 
   return data;
@@ -139,6 +90,7 @@ export const getConversation = async (
 
   const response = await fetch(url, {
     headers: withAuth(token),
+    credentials: 'include',
   });
 
   const data = await response.json();
@@ -152,12 +104,18 @@ export const getConversation = async (
 export const sendMessageApi = async (
   token: string | null,
   connectionId: number,
-  content: string
+  content: string,
+  file?: { data: string; name: string; type: string } | null
 ): Promise<{ message: MessageInfo }> => {
+  const body: Record<string, unknown> = {};
+  if (content) body.content = content;
+  if (file) body.file = file;
+
   const response = await fetch(`${API_BASE}/chat/messages/${connectionId}`, {
     method: 'POST',
     headers: withAuth(token),
-    body: JSON.stringify({ content }),
+    credentials: 'include',
+    body: JSON.stringify(body),
   });
 
   const data = await response.json();
@@ -168,6 +126,10 @@ export const sendMessageApi = async (
   return data;
 };
 
+export const getChatDocumentUrl = (connectionId: number, messageId: number): string => {
+  return `${API_BASE}/chat/messages/${connectionId}/document/${messageId}`;
+};
+
 export const markMessagesRead = async (
   token: string | null,
   connectionId: number
@@ -175,6 +137,7 @@ export const markMessagesRead = async (
   const response = await fetch(`${API_BASE}/chat/messages/${connectionId}/read`, {
     method: 'PATCH',
     headers: withAuth(token),
+    credentials: 'include',
   });
 
   const data = await response.json();

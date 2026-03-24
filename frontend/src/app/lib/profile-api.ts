@@ -11,6 +11,7 @@ export interface PatientProfile {
   id: number;
   full_name: string;
   profile_complete: boolean;
+  time_zone?: string | null;
   date_of_birth?: string | null;
   phone?: string | null;
   address?: string | null;
@@ -25,6 +26,7 @@ export interface DoctorProfile {
   specialty?: string;
   verification_status?: 'pending' | 'approved' | 'denied';
   profile_complete: boolean;
+  time_zone?: string | null;
   phone?: string | null;
   license_number?: string | null;
   bio?: string | null;
@@ -50,13 +52,13 @@ const withAuth = (token: string | null) => {
 
   return {
     'Content-Type': 'application/json',
-    Authorization: `Bearer ${token}`,
   };
 };
 
 export const getMyProfile = async (token: string | null): Promise<ProfileResponse> => {
   const response = await fetch(`${API_BASE}/profile/me`, {
     headers: withAuth(token),
+    credentials: 'include',
   });
 
   const data = await response.json();
@@ -74,6 +76,7 @@ export const updateMyProfile = async (
   const response = await fetch(`${API_BASE}/profile/me`, {
     method: 'PUT',
     headers: withAuth(token),
+    credentials: 'include',
     body: JSON.stringify(body),
   });
 

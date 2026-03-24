@@ -72,9 +72,7 @@ export function VerificationQueue() {
 
       try {
         const response = await fetch('/api/admin/doctors/unverified?status=pending', {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          credentials: 'include',
         });
         const data = await response.json();
 
@@ -102,9 +100,7 @@ export function VerificationQueue() {
 
       try {
         const response = await fetch('/api/admin/doctors/verification-history', {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          credentials: 'include',
         });
         const data = await response.json();
         if (!response.ok) {
@@ -125,7 +121,7 @@ export function VerificationQueue() {
     if (!token) return;
 
     const response = await fetch('/api/admin/doctors/verification-history', {
-      headers: { Authorization: `Bearer ${token}` },
+      credentials: 'include',
     });
     const data = await response.json();
     if (response.ok) {
@@ -143,8 +139,8 @@ export function VerificationQueue() {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
       },
+      credentials: 'include',
       body: JSON.stringify({ status, reason }),
     });
     const data = await response.json();
@@ -202,9 +198,7 @@ export function VerificationQueue() {
     try {
       newTab = window.open('', '_blank');
       const response = await fetch(`/api/doctor/verification/${doctor.id}/documents/0`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        credentials: 'include',
       });
 
       if (!response.ok) {

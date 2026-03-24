@@ -8,6 +8,7 @@ export interface WaitlistDoctor {
   user_id: number;
   full_name: string;
   specialty: string | null;
+  time_zone?: string | null;
   username: string | null;
 }
 
@@ -61,7 +62,6 @@ const withAuth = (token: string | null) => {
 
   return {
     'Content-Type': 'application/json',
-    Authorization: `Bearer ${token}`,
   };
 };
 
@@ -87,6 +87,7 @@ export const joinWaitlist = async (
   const response = await fetch(`${API_BASE}/waitlist`, {
     method: 'POST',
     headers: withAuth(token),
+    credentials: 'include',
     body: JSON.stringify(payload),
   });
 
@@ -97,6 +98,7 @@ export const joinWaitlist = async (
 export const getMyWaitlistEntries = async (token: string | null): Promise<WaitlistEntry[]> => {
   const response = await fetch(`${API_BASE}/waitlist/my`, {
     headers: withAuth(token),
+    credentials: 'include',
   });
 
   const data = await parseJsonResponse(response);
@@ -107,6 +109,7 @@ export const removeMyWaitlistEntry = async (token: string | null, waitlistEntryI
   const response = await fetch(`${API_BASE}/waitlist/${waitlistEntryId}`, {
     method: 'DELETE',
     headers: withAuth(token),
+    credentials: 'include',
   });
 
   await parseJsonResponse(response);

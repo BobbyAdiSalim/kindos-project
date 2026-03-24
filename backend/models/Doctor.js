@@ -51,9 +51,20 @@ const Doctor = sequelize.define(
       defaultValue: [],
       comment: 'e.g., [English, ASL, Spanish]',
     },
+    care_types: {
+      type: DataTypes.ARRAY(DataTypes.STRING),
+      allowNull: true,
+      defaultValue: [],
+      comment: 'e.g., [primary, mental-health, specialist, urgent-care]',
+    },
     clinic_location: {
       type: DataTypes.TEXT,
       allowNull: true,
+    },
+    time_zone: {
+      type: DataTypes.STRING(100),
+      allowNull: false,
+      defaultValue: 'America/New_York',
     },
     latitude: {
       type: DataTypes.DECIMAL(10, 8),

@@ -2,9 +2,6 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { Button } from '@/app/components/ui/button';
 import { Card, CardContent } from '@/app/components/ui/card';
-import { ScrollArea } from '@/app/components/ui/scroll-area';
-import { Avatar, AvatarFallback } from '@/app/components/ui/avatar';
-import { Badge } from '@/app/components/ui/badge';
 import { useAuth } from '@/app/lib/auth-context';
 import {
   getMyConnections,
@@ -66,7 +63,7 @@ export function Messaging() {
 
         if (initialConnectionIdRef.current) {
           const match = data.connections.find(
-            (c) => c.id === initialConnectionIdRef.current && c.status === 'accepted'
+            (c) => c.id === initialConnectionIdRef.current
           );
           if (match) setActiveConnection(match);
         }
@@ -83,7 +80,7 @@ export function Messaging() {
   // Connect socket
   useEffect(() => {
     if (!token) return;
-    getSocket(token);
+    getSocket();
   }, [token]);
 
   // Sync active connection id to URL
@@ -98,7 +95,7 @@ export function Messaging() {
 
   // Load messages when active connection changes
   useEffect(() => {
-    if (!activeConnection || activeConnection.status !== 'accepted') return;
+    if (!activeConnection) return;
 
     if (prevConnectionRef.current && prevConnectionRef.current !== activeConnection.id) {
       leaveConversation(prevConnectionRef.current);
@@ -128,7 +125,7 @@ export function Messaging() {
     joinConversation(activeConnection.id);
     prevConnectionRef.current = activeConnection.id;
 
-    const s = getSocket(token);
+    const s = getSocket();
     const handleReconnect = () => joinConversation(activeConnection.id);
     s.on('connect', handleReconnect);
     return () => {
@@ -167,9 +164,6 @@ export function Messaging() {
     }
   }, [messageInput, activeConnection, token, sending, updateConnectionPreview]);
 
-  const acceptedConnections = connections.filter((c) => c.status === 'accepted');
-  const pendingConnections = connections.filter((c) => c.status === 'pending');
-
   if (loading) {
     return (
       <div className="container mx-auto px-4 py-12 text-center">
@@ -196,39 +190,12 @@ export function Messaging() {
             <h2 className="font-semibold">Conversations</h2>
           </CardContent>
           <ConversationList
-            connections={acceptedConnections}
+            connections={connections}
             activeConnectionId={activeConnection?.id ?? null}
             onSelect={setActiveConnection}
             contactRole="doctor"
-            emptyMessage="No conversations yet. Connect with a doctor from their profile to start messaging."
+            emptyMessage="No conversations yet. Your doctor will reach out to you here."
           />
-          {/* Pending connections shown below */}
-          {pendingConnections.length > 0 && (
-            <div className="border-t">
-              <ScrollArea>
-                <div className="divide-y">
-                  {pendingConnections.map((conn) => {
-                    const doctorName = conn.doctor?.full_name || 'Doctor';
-                    return (
-                      <div key={conn.id} className="p-4 opacity-60">
-                        <div className="flex items-center gap-3">
-                          <Avatar className="h-10 w-10 flex-shrink-0">
-                            <AvatarFallback>{doctorName[0]}</AvatarFallback>
-                          </Avatar>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium truncate">{doctorName}</p>
-                            <Badge variant="outline" className="mt-1 text-xs">
-                              Pending
-                            </Badge>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </ScrollArea>
-            </div>
-          )}
         </Card>
 
         {/* Chat panel */}
@@ -243,6 +210,7 @@ export function Messaging() {
               onMessageInputChange={setMessageInput}
               onSend={handleSend}
               sending={sending}
+              activeConnectionId={activeConnection.id}
             />
           ) : (
             <EmptyChatPanel />

@@ -8,6 +8,8 @@ import { Bell, Plus, Calendar as CalendarIcon, MessageSquare } from 'lucide-reac
 import { useAuth } from '@/app/lib/auth-context';
 import { formatTime24to12 } from '@/app/lib/availability-api';
 import { getMyAppointments, type AppointmentRecord } from '@/app/lib/appointment-api';
+import { formatZonedDateTime, getDefaultPreferredTimeZone, resolveTimeZone } from '@/app/lib/timezone';
+import { usePreferredTimeZone } from '@/app/lib/use-preferred-timezone';
 
 const mapAppointmentStatus = (appointment: AppointmentRecord) => {
   if (appointment.status === 'cancelled' && appointment.declined_by_doctor) {
@@ -17,23 +19,14 @@ const mapAppointmentStatus = (appointment: AppointmentRecord) => {
   return appointment.status;
 };
 
-const toAppointmentCardData = (appointment: AppointmentRecord) => ({
-  id: String(appointment.id),
-  doctorName: appointment.doctor?.full_name || 'Doctor',
-  patientName: appointment.patient?.full_name || undefined,
-  date: appointment.appointment_date,
-  time: formatTime24to12(appointment.start_time),
-  type: appointment.appointment_type,
-  status: mapAppointmentStatus(appointment),
-  reason: appointment.reason,
-  hasReview: Boolean(appointment.review),
-});
-
 export function PatientDashboard() {
   const { token } = useAuth();
+  const { timeZone, timeZoneOptions, systemTimeZone } = usePreferredTimeZone();
   const [appointments, setAppointments] = useState<AppointmentRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const displayTimeZone = resolveTimeZone(timeZone, systemTimeZone);
+  const displayTimeZoneLabel = timeZoneOptions.find((option) => option.value === displayTimeZone)?.label || displayTimeZone;
 
   useEffect(() => {
     const loadAppointments = async () => {
@@ -60,6 +53,51 @@ export function PatientDashboard() {
   }, [token]);
 
   const { upcomingAppointments, pastAppointments } = useMemo(() => {
+    const toAppointmentCardData = (appointment: AppointmentRecord) => {
+      const sourceTimeZone = resolveTimeZone(
+        appointment.doctor?.time_zone,
+        getDefaultPreferredTimeZone()
+      );
+      const targetTimeZone = resolveTimeZone(timeZone, systemTimeZone);
+      const dateLabel = formatZonedDateTime(
+        appointment.appointment_date,
+        appointment.start_time,
+        sourceTimeZone,
+        targetTimeZone,
+        { month: 'long', day: 'numeric', year: 'numeric' },
+        appointment.appointment_date
+      );
+      const timeLabel = formatZonedDateTime(
+        appointment.appointment_date,
+        appointment.start_time,
+        sourceTimeZone,
+        targetTimeZone,
+        { hour: 'numeric', minute: '2-digit', hour12: true, timeZoneName: 'short' },
+        formatTime24to12(appointment.start_time)
+      );
+
+      return {
+        id: String(appointment.id),
+        doctorName: appointment.doctor?.full_name || 'Doctor',
+        patientName: appointment.patient?.full_name || undefined,
+        date: appointment.appointment_date,
+        time: timeLabel,
+        dateLabel,
+        timeLabel,
+        type: appointment.appointment_type,
+        status: mapAppointmentStatus(appointment),
+        reason: appointment.reason,
+        declineReason: appointment.declined_by_doctor
+          ? (
+              appointment.doctor_rejection_reason_note
+                ? `${appointment.doctor_rejection_reason_label || 'Other'}: ${appointment.doctor_rejection_reason_note}`
+                : appointment.doctor_rejection_reason_label
+            )
+          : null,
+        hasReview: Boolean(appointment.review),
+      };
+    };
+
     const upcoming = appointments
       .filter((appointment) => appointment.status === 'scheduled' || appointment.status === 'confirmed')
       .map(toAppointmentCardData);
@@ -74,7 +112,7 @@ export function PatientDashboard() {
       .map(toAppointmentCardData);
 
     return { upcomingAppointments: upcoming, pastAppointments: past };
-  }, [appointments]);
+  }, [appointments, systemTimeZone, timeZone]);
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-5xl">
@@ -104,6 +142,13 @@ export function PatientDashboard() {
           </Link>
         </div>
       </div>
+      <p className="text-sm text-muted-foreground -mt-4 mb-6">
+        Times shown in <span className="font-medium text-foreground">{displayTimeZoneLabel}</span>. Change this in{' '}
+        <Link to="/patient/profile" className="underline underline-offset-4">
+          Profile
+        </Link>
+        .
+      </p>
 
       <Tabs defaultValue="upcoming" className="w-full">
         <TabsList className="w-full md:w-auto">

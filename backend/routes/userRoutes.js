@@ -18,6 +18,7 @@ import {
   getUnverifiedDoctors,
   updateDoctorVerificationStatus,
   getDoctorVerificationHistory,
+  getAppointmentRejectionAnalytics,
 } from "../controllers/roles/adminController.js";
 import {
   getAvailabilityPatterns,
@@ -32,13 +33,11 @@ import {
   getBookableSlots,
 } from "../controllers/other/availabilityController.js";
 import {
-  sendConnectRequest,
   getMyConnections,
-  getPendingRequests,
-  respondToConnection,
   getConversation,
   sendMessage,
   markMessagesRead,
+  downloadChatDocument,
 } from "../controllers/other/chatController.js";
 import {
   createAppointmentBooking,
@@ -181,6 +180,10 @@ router.get("/admin/doctors/verification-history", requireAuth, requireRole("admi
   getDoctorVerificationHistory(req, res);
 });
 
+router.get("/admin/analytics/appointment-rejections", requireAuth, requireRole("admin"), (req, res) => {
+  getAppointmentRejectionAnalytics(req, res);
+});
+
 router.post("/doctor/verification/resubmit", requireAuth, requireRole("doctor"), (req, res) => {
   resubmitDoctorVerification(req, res);
 });
@@ -247,24 +250,9 @@ router.get("/availability/doctor/:doctorId", (req, res) => {
  * Chat Routes - Connection requests and messaging
  */
 
-// Send a connect request to a doctor (patient only)
-router.post("/chat/connect", requireAuth, requireRole("patient"), (req, res) => {
-  sendConnectRequest(req, res);
-});
-
 // Get all connections for the current user
 router.get("/chat/connections", requireAuth, requireRole("patient", "doctor"), (req, res) => {
   getMyConnections(req, res);
-});
-
-// Get pending connect requests (doctor only)
-router.get("/chat/requests/pending", requireAuth, requireRole("doctor"), (req, res) => {
-  getPendingRequests(req, res);
-});
-
-// Accept or reject a connection request (doctor only)
-router.patch("/chat/connections/:connectionId", requireAuth, requireRole("doctor"), (req, res) => {
-  respondToConnection(req, res);
 });
 
 // Get messages for a conversation
@@ -280,6 +268,11 @@ router.post("/chat/messages/:connectionId", requireAuth, requireRole("patient", 
 // Mark messages as read in a conversation
 router.patch("/chat/messages/:connectionId/read", requireAuth, requireRole("patient", "doctor"), (req, res) => {
   markMessagesRead(req, res);
+});
+
+// Download a chat document
+router.get("/chat/messages/:connectionId/document/:messageId", requireAuth, requireRole("patient", "doctor"), (req, res) => {
+  downloadChatDocument(req, res);
 });
 
 /*

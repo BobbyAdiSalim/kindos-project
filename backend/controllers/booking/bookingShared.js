@@ -14,6 +14,17 @@ const TIME_REGEX = /^([01]\d|2[0-3]):([0-5]\d)(:[0-5]\d)?$/;
 export const APPOINTMENT_TYPES = new Set(['virtual', 'in-person']);
 export const DECLINED_BY_DOCTOR_REASON_PREFIX = 'Declined by doctor';
 export const CANCELLED_BY_PATIENT_REASON_PREFIX = 'Cancelled by patient';
+export const DOCTOR_REJECTION_REASON_OPTIONS = [
+  { code: 'schedule_conflict', label: 'Schedule conflict' },
+  { code: 'outside_specialty', label: 'Outside specialty' },
+  { code: 'insufficient_information', label: 'Insufficient information' },
+  { code: 'clinic_unavailable', label: 'Clinic unavailable' },
+  { code: 'duplicate_booking', label: 'Duplicate booking' },
+  { code: 'other', label: 'Other' },
+];
+export const DOCTOR_REJECTION_REASON_CODES = new Set(
+  DOCTOR_REJECTION_REASON_OPTIONS.map((option) => option.code)
+);
 
 export class HttpError extends Error {
   constructor(status, message) {
@@ -120,6 +131,9 @@ const isDeclinedByDoctor = (appointment) => {
   return appointment.cancellation_reason.startsWith(DECLINED_BY_DOCTOR_REASON_PREFIX);
 };
 
+export const getDoctorRejectionReasonLabel = (code) =>
+  DOCTOR_REJECTION_REASON_OPTIONS.find((option) => option.code === code)?.label || null;
+
 export const hasPendingReschedule = (appointment) =>
   Boolean(
     appointment.pending_reschedule_date
@@ -161,6 +175,9 @@ export const serializeAppointment = (appointment) => {
     cancelled_at: appointment.cancelled_at,
     cancelled_by: appointment.cancelled_by,
     cancellation_reason: appointment.cancellation_reason,
+    doctor_rejection_reason_code: appointment.doctor_rejection_reason_code,
+    doctor_rejection_reason_note: appointment.doctor_rejection_reason_note,
+    doctor_rejection_reason_label: getDoctorRejectionReasonLabel(appointment.doctor_rejection_reason_code),
     notify_on_doctor_approval: appointment.notify_on_doctor_approval,
     declined_by_doctor: isDeclinedByDoctor(appointment),
     pending_reschedule: hasPendingReschedule(appointment)
@@ -182,6 +199,7 @@ export const serializeAppointment = (appointment) => {
           full_name: doctorProfile.full_name,
           specialty: doctorProfile.specialty,
           clinic_location: doctorProfile.clinic_location,
+          time_zone: doctorProfile.time_zone,
           virtual_available: doctorProfile.virtual_available,
           in_person_available: doctorProfile.in_person_available,
           username: doctorProfile.user?.username || null,

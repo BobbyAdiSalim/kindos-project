@@ -6,14 +6,20 @@ import { format } from 'date-fns';
 import { FileText } from 'lucide-react';
 import { useAuth } from '@/app/lib/auth-context';
 import { getPatientHistory, type PatientHistoryResponse } from '@/app/lib/appointment-api';
+import { formatTime24to12 } from '@/app/lib/availability-api';
+import { formatZonedDateTime, getDefaultPreferredTimeZone, resolveTimeZone } from '@/app/lib/timezone';
+import { usePreferredTimeZone } from '@/app/lib/use-preferred-timezone';
 
 export function PatientHistory() {
   const { patientId } = useParams();
   const navigate = useNavigate();
   const { token } = useAuth();
+  const { timeZone, timeZoneOptions, systemTimeZone } = usePreferredTimeZone();
   const [data, setData] = useState<PatientHistoryResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const displayTimeZone = resolveTimeZone(timeZone, systemTimeZone);
+  const displayTimeZoneLabel = timeZoneOptions.find((option) => option.value === displayTimeZone)?.label || displayTimeZone;
 
   useEffect(() => {
     const fetchPatientHistory = async () => {
@@ -56,6 +62,9 @@ export function PatientHistory() {
       </Button>
 
       <h1 className="text-2xl md:text-3xl font-semibold mb-6">Patient History</h1>
+      <p className="text-sm text-muted-foreground -mt-4 mb-6">
+        Appointment times shown in <span className="font-medium text-foreground">{displayTimeZoneLabel}</span>.
+      </p>
 
       <Card className="mb-6">
         <CardHeader>
@@ -97,46 +106,67 @@ export function PatientHistory() {
           </Card>
         ) : (
           [...appointments].sort((a, b) => {
-            const dateCompare = new Date(`${b.appointment_date}T00:00:00`).getTime() - 
+            const dateCompare = new Date(`${b.appointment_date}T00:00:00`).getTime() -
                               new Date(`${a.appointment_date}T00:00:00`).getTime();
             if (dateCompare !== 0) return dateCompare;
             return b.end_time.localeCompare(a.end_time);
           }).map((appointment) => (
-            <Card key={appointment.id}>
-              <CardContent className="p-6">
-                <div className="space-y-3">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <p className="font-medium text-lg">
-                        {format(new Date(`${appointment.appointment_date}T00:00:00`), 'MMMM d, yyyy')}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {appointment.doctor?.full_name || 'Unknown Doctor'}
-                        {appointment.doctor?.specialty && ` - ${appointment.doctor.specialty}`}
-                      </p>
+            (() => {
+              const sourceTimeZone = getDefaultPreferredTimeZone();
+              const dateLabel = formatZonedDateTime(
+                appointment.appointment_date,
+                appointment.start_time,
+                sourceTimeZone,
+                displayTimeZone,
+                { month: 'long', day: 'numeric', year: 'numeric' },
+                format(new Date(`${appointment.appointment_date}T00:00:00`), 'MMMM d, yyyy')
+              );
+              const timeLabel = formatZonedDateTime(
+                appointment.appointment_date,
+                appointment.start_time,
+                sourceTimeZone,
+                displayTimeZone,
+                { hour: 'numeric', minute: '2-digit', hour12: true, timeZoneName: 'short' },
+                formatTime24to12(appointment.start_time)
+              );
+
+              return (
+                <Card key={appointment.id}>
+                  <CardContent className="p-6">
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <p className="font-medium text-lg">{dateLabel}</p>
+                          <p className="text-sm text-muted-foreground">{timeLabel}</p>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            {appointment.doctor?.full_name || 'Unknown Doctor'}
+                            {appointment.doctor?.specialty && ` - ${appointment.doctor.specialty}`}
+                          </p>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => navigate(`/doctor/appointment/${appointment.id}`)}
+                        >
+                          <FileText className="h-4 w-4 mr-2" />
+                          View Details
+                        </Button>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">Reason for Visit</p>
+                        <p className="text-sm mt-1">{appointment.reason}</p>
+                      </div>
+                      {appointment.summary && (
+                        <div className="bg-muted/50 p-3 rounded-lg">
+                          <p className="text-sm font-medium text-muted-foreground mb-1">Visit Summary</p>
+                          <p className="text-sm">{appointment.summary}</p>
+                        </div>
+                      )}
                     </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => navigate(`/doctor/appointment/${appointment.id}`)}
-                    >
-                      <FileText className="h-4 w-4 mr-2" />
-                      View Details
-                    </Button>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Reason for Visit</p>
-                    <p className="text-sm mt-1">{appointment.reason}</p>
-                  </div>
-                  {appointment.summary && (
-                    <div className="bg-muted/50 p-3 rounded-lg">
-                      <p className="text-sm font-medium text-muted-foreground mb-1">Visit Summary</p>
-                      <p className="text-sm">{appointment.summary}</p>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+                  </CardContent>
+                </Card>
+              );
+            })()
           ))
         )}
       </div>

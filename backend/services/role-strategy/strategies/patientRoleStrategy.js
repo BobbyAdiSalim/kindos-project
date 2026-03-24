@@ -28,6 +28,7 @@ const buildPatientProfileResponse = (profile, includePrivateFields = false) => {
     id: profile.id,
     full_name: profile.full_name,
     profile_complete: profile.profile_complete,
+    time_zone: profile.time_zone || 'America/New_York',
   };
 
   if (!includePrivateFields) {

@@ -3,13 +3,13 @@ import type { MessageInfo } from './chat-api';
 
 let socket: Socket | null = null;
 
-export const getSocket = (token: string): Socket => {
+export const getSocket = (): Socket => {
   if (socket?.connected) {
     return socket;
   }
 
   socket = io(window.location.origin, {
-    auth: { token },
+    withCredentials: true,
     transports: ['websocket', 'polling'],
   });
 

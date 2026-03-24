@@ -6,16 +6,36 @@ import { Check, Calendar, MapPin, Video } from 'lucide-react';
 import { format } from 'date-fns';
 import { formatTime24to12 } from '@/app/lib/availability-api';
 import { type AppointmentRecord } from '@/app/lib/appointment-api';
+import { TimeZoneSelector } from '@/app/components/time-zone-selector';
+import { formatZonedDateTime, getDefaultPreferredTimeZone, resolveTimeZone } from '@/app/lib/timezone';
+import { usePreferredTimeZone } from '@/app/lib/use-preferred-timezone';
 
 export function BookingConfirmation() {
   const location = useLocation();
   const appointment = (location.state as { appointment?: AppointmentRecord } | null)?.appointment;
+  const { timeZone, timeZoneOptions, setTimeZone, systemTimeZone } = usePreferredTimeZone();
+  const sourceTimeZone = resolveTimeZone(appointment?.doctor?.time_zone, getDefaultPreferredTimeZone());
+  const targetTimeZone = resolveTimeZone(timeZone, systemTimeZone);
 
   const appointmentDateLabel = appointment
-    ? format(new Date(`${appointment.appointment_date}T00:00:00`), 'MMMM d, yyyy')
+    ? formatZonedDateTime(
+        appointment.appointment_date,
+        appointment.start_time,
+        sourceTimeZone,
+        targetTimeZone,
+        { month: 'long', day: 'numeric', year: 'numeric' },
+        format(new Date(`${appointment.appointment_date}T00:00:00`), 'MMMM d, yyyy')
+      )
     : 'Appointment date';
   const appointmentTimeLabel = appointment
-    ? formatTime24to12(appointment.start_time)
+    ? formatZonedDateTime(
+        appointment.appointment_date,
+        appointment.start_time,
+        sourceTimeZone,
+        targetTimeZone,
+        { hour: 'numeric', minute: '2-digit', hour12: true, timeZoneName: 'short' },
+        formatTime24to12(appointment.start_time)
+      )
     : 'Appointment time';
   const durationLabel = appointment?.duration ? `${appointment.duration} minutes` : 'Duration not available';
   const doctorName = appointment?.doctor?.full_name || 'Assigned Doctor';
@@ -40,6 +60,17 @@ export function BookingConfirmation() {
               Your provider will confirm or decline this request soon.
             </p>
           </div>
+
+          <Card className="border-none">
+            <CardContent className="p-0 text-left">
+              <TimeZoneSelector
+                value={timeZone}
+                options={timeZoneOptions}
+                onChange={setTimeZone}
+                label="Show Appointment Times In"
+              />
+            </CardContent>
+          </Card>
 
           <Card className="bg-muted/30 border-none">
             <CardContent className="p-6 space-y-4 text-left">

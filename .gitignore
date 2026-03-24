@@ -10,6 +10,7 @@ node_modules/
 # build outputs
 */dist
 */build
+*/coverage
 
 # logs
 *.log

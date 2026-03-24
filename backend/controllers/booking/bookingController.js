@@ -2,7 +2,6 @@ import { Op } from 'sequelize';
 import {
   sequelize,
   Appointment,
-  Connection,
   Doctor,
   Patient,
   User,
@@ -65,21 +64,6 @@ export const createAppointmentBooking = async (req, res) => {
         },
         { transaction }
       );
-
-      const existingConnection = await Connection.findOne({
-        where: { patient_id: patient.id, doctor_id: doctor.id },
-        transaction,
-      });
-
-      if (!existingConnection) {
-        await Connection.create(
-          { patient_id: patient.id, doctor_id: doctor.id, status: 'accepted' },
-          { transaction }
-        );
-      } else if (existingConnection.status !== 'accepted') {
-        existingConnection.status = 'accepted';
-        await existingConnection.save({ transaction });
-      }
 
       const hydratedAppointment = await Appointment.findByPk(createdAppointment.id, {
         include: appointmentInclude,
@@ -273,6 +257,7 @@ export const getPatientHistory = async (req, res) => {
             full_name: apt.doctor.full_name,
             specialty: apt.doctor.specialty,
             clinic_location: apt.doctor.clinic_location,
+            time_zone: apt.doctor.time_zone,
             username: apt.doctor.user?.username || null,
           }
         : null,

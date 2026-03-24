@@ -44,6 +44,119 @@ function isFutureDateTime(dateStr, timeStr) {
   return dateTime.getTime() > Date.now();
 }
 
+function isValidTimeZone(timeZone) {
+  if (!timeZone || typeof timeZone !== 'string') return false;
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function resolveDoctorTimeZone(timeZone) {
+  return isValidTimeZone(timeZone) ? timeZone : 'America/New_York';
+}
+
+function parseDateParts(dateStr) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateStr || ''));
+  if (!match) return null;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return null;
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+
+  return { year, month, day };
+}
+
+function parseTimeParts(timeStr) {
+  const match = /^(\d{2}):(\d{2})(?::(\d{2}))?$/.exec(String(timeStr || ''));
+  if (!match) return null;
+
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  const second = match[3] ? Number(match[3]) : 0;
+
+  if (!Number.isInteger(hour) || !Number.isInteger(minute) || !Number.isInteger(second)) return null;
+  if (hour < 0 || hour > 23 || minute < 0 || minute > 59 || second < 0 || second > 59) return null;
+
+  return { hour, minute, second };
+}
+
+function getPartNumber(parts, type) {
+  const raw = parts.find((part) => part.type === type)?.value;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : NaN;
+}
+
+function getTimeZoneOffsetMs(timeZone, utcTimestampMs) {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  });
+
+  const parts = formatter.formatToParts(new Date(utcTimestampMs));
+  const year = getPartNumber(parts, 'year');
+  const month = getPartNumber(parts, 'month');
+  const day = getPartNumber(parts, 'day');
+  const hour = getPartNumber(parts, 'hour');
+  const minute = getPartNumber(parts, 'minute');
+  const second = getPartNumber(parts, 'second');
+
+  if ([year, month, day, hour, minute, second].some((value) => Number.isNaN(value))) return null;
+
+  const interpretedAsUtc = Date.UTC(year, month - 1, day, hour, minute, second);
+  return interpretedAsUtc - utcTimestampMs;
+}
+
+function zonedDateTimeToUtcDate(dateStr, timeStr, sourceTimeZone) {
+  const parsedDate = parseDateParts(dateStr);
+  const parsedTime = parseTimeParts(timeStr);
+  if (!parsedDate || !parsedTime) return null;
+
+  const resolvedSourceTimeZone = resolveDoctorTimeZone(sourceTimeZone);
+  const utcGuess = Date.UTC(
+    parsedDate.year,
+    parsedDate.month - 1,
+    parsedDate.day,
+    parsedTime.hour,
+    parsedTime.minute,
+    parsedTime.second
+  );
+
+  const firstOffset = getTimeZoneOffsetMs(resolvedSourceTimeZone, utcGuess);
+  if (firstOffset === null) return null;
+
+  let resolvedUtc = utcGuess - firstOffset;
+  const secondOffset = getTimeZoneOffsetMs(resolvedSourceTimeZone, resolvedUtc);
+  if (secondOffset !== null && secondOffset !== firstOffset) {
+    resolvedUtc = utcGuess - secondOffset;
+  }
+
+  return new Date(resolvedUtc);
+}
+
+function isFutureDateTimeInTimeZone(dateStr, timeStr, sourceTimeZone) {
+  const utcDate = zonedDateTimeToUtcDate(dateStr, timeStr, sourceTimeZone);
+  if (!utcDate) return false;
+  return utcDate.getTime() > Date.now();
+}
+
+function getDayOfWeekFromDateString(dateStr) {
+  const parsed = parseDateParts(dateStr);
+  if (!parsed) return null;
+  return new Date(Date.UTC(parsed.year, parsed.month - 1, parsed.day)).getUTCDay();
+}
+
 /**
  * Convert minutes since midnight to "HH:MM" string.
  */
@@ -273,7 +386,7 @@ export const getAvailabilitySlots = async (req, res) => {
     }
 
     const whereClause = { doctor_id: doctor.id };
-    
+
     if (startDate && endDate) {
       whereClause.slot_date = {
         [Op.between]: [startDate, endDate],
@@ -529,8 +642,11 @@ export const getBookableSlots = async (req, res) => {
       return res.status(404).json({ message: 'Doctor not found' });
     }
 
-    const requestedDate = new Date(date + 'T00:00:00');
-    const dayOfWeek = requestedDate.getDay();
+    const doctorTimeZone = resolveDoctorTimeZone(doctor.time_zone);
+    const dayOfWeek = getDayOfWeekFromDateString(date);
+    if (!Number.isInteger(dayOfWeek)) {
+      return res.status(400).json({ message: 'Valid date parameter required (YYYY-MM-DD)' });
+    }
 
     // 1. Get active patterns for this day of week
     const patterns = await AvailabilityPattern.findAll({
@@ -591,8 +707,12 @@ export const getBookableSlots = async (req, res) => {
     }
 
     // Exclude slots that are already in the past at request time.
-    availableSlots = availableSlots.filter((slot) => isFutureDateTime(date, slot.startTime));
-    bookedSlots = bookedSlots.filter((slot) => isFutureDateTime(date, slot.startTime));
+    availableSlots = availableSlots.filter((slot) =>
+      isFutureDateTimeInTimeZone(date, slot.startTime, doctorTimeZone)
+    );
+    bookedSlots = bookedSlots.filter((slot) =>
+      isFutureDateTimeInTimeZone(date, slot.startTime, doctorTimeZone)
+    );
 
     // 7. Optionally filter by appointment type
     if (appointmentType) {
@@ -612,6 +732,7 @@ export const getBookableSlots = async (req, res) => {
     res.json({
       date,
       doctor_id: doctor.id,
+      doctor_time_zone: doctorTimeZone,
       slots: availableSlots.map((slot) => ({
         start_time: slot.startTime,
         end_time: slot.endTime,
@@ -645,17 +766,18 @@ export const getDoctorsWithAvailability = async (req, res) => {
       date,
       timeOfDay,
       language,
+      careType,
       limit = 50,
       offset = 0
     } = req.query;
 
-    console.log('Fetching doctors with availability filters:', { appointmentType, specialty, date, timeOfDay, language });
+    console.log('Fetching doctors with availability filters:', { appointmentType, specialty, date, timeOfDay, language, careType });
 
     const {
       slotWhereClause,
       patternWhereClause,
       doctorWhereClause,
-    } = buildAvailabilityFilterClauses({ date, appointmentType, timeOfDay, language });
+    } = buildAvailabilityFilterClauses({ date, appointmentType, timeOfDay, language, careType });
 
     console.log('Slot where clause:', JSON.stringify(slotWhereClause, null, 2));
     console.log('Pattern where clause:', JSON.stringify(patternWhereClause, null, 2));
@@ -728,6 +850,7 @@ export const getDoctorsWithAvailability = async (req, res) => {
       phone: doctor.phone,
       bio: doctor.bio,
       languages: doctor.languages || [],
+      careType: doctor.care_types || [],
       clinic_location: doctor.clinic_location,
       latitude: doctor.latitude,
       longitude: doctor.longitude,
@@ -784,23 +907,23 @@ export const getDoctorAvailableSlotsByDate = async (req, res) => {
     const { date } = req.query;
 
     if (!date) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "Date is required" 
+      return res.status(400).json({
+        success: false,
+        message: "Date is required"
       });
     }
 
     const doctor = await Doctor.findByPk(doctorId);
     if (!doctor) {
-      return res.status(404).json({ 
-        success: false, 
-        message: "Doctor not found" 
+      return res.status(404).json({
+        success: false,
+        message: "Doctor not found"
       });
     }
 
     // Get slots for the specific date
     const slots = await AvailabilitySlot.findAll({
-      where: { 
+      where: {
         doctor_id: doctorId,
         slot_date: date,
         is_available: true

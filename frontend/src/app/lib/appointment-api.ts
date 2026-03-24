@@ -13,6 +13,7 @@ export interface AppointmentPerson {
 export interface AppointmentDoctor extends AppointmentPerson {
   specialty: string | null;
   clinic_location: string | null;
+  time_zone?: string | null;
   virtual_available: boolean;
   in_person_available: boolean;
 }
@@ -33,6 +34,9 @@ export interface AppointmentRecord {
   cancelled_at: string | null;
   cancelled_by: number | null;
   cancellation_reason: string | null;
+  doctor_rejection_reason_code: string | null;
+  doctor_rejection_reason_note: string | null;
+  doctor_rejection_reason_label: string | null;
   notify_on_doctor_approval: boolean;
   declined_by_doctor: boolean;
   pending_reschedule: {
@@ -95,7 +99,6 @@ const withAuth = (token: string | null) => {
 
   return {
     'Content-Type': 'application/json',
-    Authorization: `Bearer ${token}`,
   };
 };
 
@@ -121,6 +124,7 @@ export const createAppointmentBooking = async (
   const response = await fetch(`${API_BASE}/appointments`, {
     method: 'POST',
     headers: withAuth(token),
+    credentials: 'include',
     body: JSON.stringify(payload),
   });
 
@@ -131,6 +135,7 @@ export const createAppointmentBooking = async (
 export const getMyAppointments = async (token: string | null): Promise<AppointmentRecord[]> => {
   const response = await fetch(`${API_BASE}/appointments/my`, {
     headers: withAuth(token),
+    credentials: 'include',
   });
 
   const data = await parseJsonResponse(response);
@@ -143,6 +148,7 @@ export const getAppointmentById = async (
 ): Promise<AppointmentRecord> => {
   const response = await fetch(`${API_BASE}/appointments/${appointmentId}`, {
     headers: withAuth(token),
+    credentials: 'include',
   });
 
   const data = await parseJsonResponse(response);
@@ -153,14 +159,19 @@ export const updateAppointmentDecision = async (
   token: string | null,
   appointmentId: string,
   action: 'confirm' | 'decline',
-  reason?: string
+  options?: {
+    reasonCode?: string;
+    reasonNote?: string;
+  }
 ): Promise<AppointmentRecord> => {
   const response = await fetch(`${API_BASE}/appointments/${appointmentId}/status`, {
     method: 'PATCH',
     headers: withAuth(token),
+    credentials: 'include',
     body: JSON.stringify({
       action,
-      ...(reason ? { reason } : {}),
+      ...(options?.reasonCode ? { reasonCode: options.reasonCode } : {}),
+      ...(options?.reasonNote ? { reasonNote: options.reasonNote } : {}),
     }),
   });
 
@@ -176,6 +187,7 @@ export const cancelAppointment = async (
   const response = await fetch(`${API_BASE}/appointments/${appointmentId}/cancel`, {
     method: 'PATCH',
     headers: withAuth(token),
+    credentials: 'include',
     body: JSON.stringify({
       ...(reason ? { reason } : {}),
     }),
@@ -193,6 +205,7 @@ export const rescheduleAppointment = async (
   const response = await fetch(`${API_BASE}/appointments/${appointmentId}/reschedule`, {
     method: 'PATCH',
     headers: withAuth(token),
+    credentials: 'include',
     body: JSON.stringify(payload),
   });
 
@@ -208,6 +221,7 @@ export const respondToDoctorReschedule = async (
   const response = await fetch(`${API_BASE}/appointments/${appointmentId}/reschedule/response`, {
     method: 'PATCH',
     headers: withAuth(token),
+    credentials: 'include',
     body: JSON.stringify({ action }),
   });
 
@@ -251,6 +265,7 @@ export const getPatientHistory = async (
 ): Promise<PatientHistoryResponse> => {
   const response = await fetch(`${API_BASE}/patients/${patientId}/history`, {
     headers: withAuth(token),
+    credentials: 'include',
   });
 
   const data = await parseJsonResponse(response);
@@ -265,6 +280,7 @@ export const saveSummary = async (
   const response = await fetch(`${API_BASE}/appointments/${appointmentId}/summary`, {
     method: 'PATCH',
     headers: withAuth(token),
+    credentials: 'include',
     body: JSON.stringify({ summary }),
   });
 
@@ -279,6 +295,7 @@ export const markAppointmentComplete = async (
   const response = await fetch(`${API_BASE}/appointments/${appointmentId}/complete`, {
     method: 'PATCH',
     headers: withAuth(token),
+    credentials: 'include',
   });
 
   const data = await parseJsonResponse(response);

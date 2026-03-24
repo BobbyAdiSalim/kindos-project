@@ -34,10 +34,21 @@ const __dirname = path.dirname(__filename);
 const UPLOADS_DIR = path.join(__dirname, '..', 'uploads', 'verification-docs');
 const LEGACY_UPLOADS_PREFIX = '/api/uploads/verification-docs/';
 const R2_DOCUMENT_PREFIX = 'r2:';
+const AUTH_COOKIE_NAME = 'utlwa_auth';
 
 const isR2Configured = Boolean(
   R2_BUCKET_NAME && R2_ENDPOINT && R2_ACCESS_KEY_ID && R2_SECRET_ACCESS_KEY
 );
+
+const isProduction = cleanEnv(process.env.NODE_ENV) === 'production';
+
+const getAuthCookieOptions = () => ({
+  httpOnly: true,
+  secure: isProduction,
+  sameSite: 'lax',
+  path: '/',
+  maxAge: 60 * 60 * 1000,
+});
 
 let r2Client = null;
 
@@ -106,6 +117,7 @@ const createRoleProfile = async (transaction, user, body) => {
       {
         user_id: user.id,
         full_name: body.name,
+        time_zone: normalizeTimeZone(body.timeZone),
       },
       { transaction }
     );
@@ -124,7 +136,9 @@ const createRoleProfile = async (transaction, user, body) => {
         specialty: body.specialty,
         license_number: body.licenseNumber,
         clinic_location: body.clinicAddress || null,
+        time_zone: normalizeTimeZone(body.timeZone),
         verification_documents: body.verificationDocuments || [],
+        care_types: body.careTypes || [],
       },
       { transaction }
     );
@@ -326,6 +340,17 @@ const normalizeBoolean = (value) => {
   return undefined;
 };
 
+const normalizeTimeZone = (value, fallback = 'America/New_York') => {
+  if (typeof value !== 'string' || !value.trim()) return fallback;
+  const candidate = value.trim();
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: candidate });
+    return candidate;
+  } catch {
+    return fallback;
+  }
+};
+
 export const registerUser = async (req, res) => {
   const transaction = await sequelize.transaction();
   let persistedVerificationDocuments = [];
@@ -413,9 +438,10 @@ export const registerUser = async (req, res) => {
       expiresIn: JWT_EXPIRES_IN,
     });
 
+    res.cookie(AUTH_COOKIE_NAME, token, getAuthCookieOptions());
+
     return res.status(201).json({
       message: 'User registered successfully.',
-      token,
       user: sanitizeUser(user, profile),
     });
   } catch (error) {
@@ -489,9 +515,10 @@ export const loginUser = async (req, res) => {
       expiresIn: JWT_EXPIRES_IN,
     });
 
+    res.cookie(AUTH_COOKIE_NAME, token, getAuthCookieOptions());
+
     return res.json({
       message: 'User logged in successfully.',
-      token,
       user: sanitizeUser(user, profile),
     });
   } catch (error) {
@@ -500,6 +527,12 @@ export const loginUser = async (req, res) => {
 };
 
 export const logoutUser = async (_req, res) => {
+  res.clearCookie(AUTH_COOKIE_NAME, {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: 'lax',
+    path: '/',
+  });
   return res.status(200).json({ message: 'User logged out successfully.' });
 };
 
@@ -666,6 +699,9 @@ export const updateMyProfile = async (req, res) => {
       if (typeof req.body.dateOfBirth === 'string') patientUpdates.date_of_birth = req.body.dateOfBirth || null;
       if (typeof req.body.phone === 'string') patientUpdates.phone = req.body.phone.trim() || null;
       if (typeof req.body.address === 'string') patientUpdates.address = req.body.address.trim() || null;
+      if (Object.prototype.hasOwnProperty.call(req.body, 'timeZone')) {
+        patientUpdates.time_zone = normalizeTimeZone(req.body.timeZone);
+      }
       if (typeof req.body.emergencyContactName === 'string') {
         patientUpdates.emergency_contact_name = req.body.emergencyContactName.trim() || null;
       }
@@ -707,10 +743,21 @@ export const updateMyProfile = async (req, res) => {
       if (typeof req.body.clinicLocation === 'string') {
         doctorUpdates.clinic_location = req.body.clinicLocation.trim() || null;
       }
+      if (Object.prototype.hasOwnProperty.call(req.body, 'timeZone')) {
+        doctorUpdates.time_zone = normalizeTimeZone(req.body.timeZone);
+      }
 
       const parsedLanguages = parseStringArray(req.body.languages);
       if (parsedLanguages !== undefined) {
         doctorUpdates.languages = parsedLanguages;
+      }
+
+      // 👇 ADD CARE TYPES SUPPORT
+      if (req.body.careTypes !== undefined) {
+        const parsedCareTypes = parseStringArray(req.body.careTypes);
+        if (parsedCareTypes !== undefined) {
+          doctorUpdates.care_types = parsedCareTypes;
+        }
       }
 
       if (Object.prototype.hasOwnProperty.call(req.body, 'virtualAvailable')) {
@@ -906,6 +953,7 @@ export const resubmitDoctorVerification = async (req, res) => {
     const specialty = String(req.body.specialty || '').trim();
     const licenseNumber = String(req.body.licenseNumber || '').trim();
     const clinicLocation = String(req.body.clinicAddress || '').trim();
+    const timeZone = normalizeTimeZone(req.body.timeZone);
     const verificationDocuments = normalizeVerificationDocuments(req.body.verificationDocuments);
 
     if (!fullName || !specialty || !licenseNumber || verificationDocuments.length === 0) {
@@ -931,6 +979,7 @@ export const resubmitDoctorVerification = async (req, res) => {
         specialty,
         license_number: licenseNumber,
         clinic_location: clinicLocation || null,
+        time_zone: timeZone,
         verification_documents: persistedVerificationDocuments,
         verification_status: 'pending',
         verified_by: null,
@@ -1031,6 +1080,11 @@ export const getDoctors = async (req, res) => {
     // Filter by language
     if (language && language !== "all") {
       whereClause.languages = { [Op.contains]: [language] };
+    }
+
+    if (req.query.careTypes) {
+      const careTypes = req.query.careTypes.split(',');
+      whereClause.care_types = { [Op.overlap]: careTypes };
     }
 
     // Fetch doctors

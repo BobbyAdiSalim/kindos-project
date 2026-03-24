@@ -30,10 +30,16 @@ export function ConversationList({
     );
   }
 
+  const sorted = [...connections].sort((a, b) => {
+    const timeA = a.lastMessage?.created_at || a.created_at;
+    const timeB = b.lastMessage?.created_at || b.created_at;
+    return new Date(timeB).getTime() - new Date(timeA).getTime();
+  });
+
   return (
     <ScrollArea className="h-full">
       <div className="divide-y">
-        {connections.map((conn) => {
+        {sorted.map((conn) => {
           const name =
             contactRole === 'doctor'
               ? conn.doctor?.full_name || 'Doctor'

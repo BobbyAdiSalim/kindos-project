@@ -12,6 +12,9 @@ import {
   type WaitlistEntry,
 } from '@/app/lib/waitlist-api';
 import { formatTime24to12 } from '@/app/lib/availability-api';
+import { TimeZoneSelector } from '@/app/components/time-zone-selector';
+import { formatZonedDateTime, getDefaultPreferredTimeZone, resolveTimeZone } from '@/app/lib/timezone';
+import { usePreferredTimeZone } from '@/app/lib/use-preferred-timezone';
 import { toast } from 'sonner';
 
 const waitlistStatusStyles: Record<string, string> = {
@@ -33,6 +36,7 @@ const parseDateOnlyLocal = (value: string) => new Date(`${value}T00:00:00`);
 export function JoinWaitlist() {
   const navigate = useNavigate();
   const { token } = useAuth();
+  const { timeZone, timeZoneOptions, setTimeZone, systemTimeZone } = usePreferredTimeZone();
   const [entries, setEntries] = useState<WaitlistEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [removingEntryId, setRemovingEntryId] = useState<number | null>(null);
@@ -77,6 +81,24 @@ export function JoinWaitlist() {
     }
   };
 
+  const formatWaitlistDate = (entry: WaitlistEntry) => formatZonedDateTime(
+    entry.desired_date,
+    entry.desired_start_time,
+    resolveTimeZone(entry.doctor?.time_zone, getDefaultPreferredTimeZone()),
+    resolveTimeZone(timeZone, systemTimeZone),
+    { month: 'long', day: 'numeric', year: 'numeric' },
+    format(parseDateOnlyLocal(entry.desired_date), 'MMMM d, yyyy')
+  );
+
+  const formatWaitlistTime = (entry: WaitlistEntry) => formatZonedDateTime(
+    entry.desired_date,
+    entry.desired_start_time,
+    resolveTimeZone(entry.doctor?.time_zone, getDefaultPreferredTimeZone()),
+    resolveTimeZone(timeZone, systemTimeZone),
+    { hour: 'numeric', minute: '2-digit', hour12: true, timeZoneName: 'short' },
+    formatTime24to12(entry.desired_start_time)
+  );
+
   return (
     <div className="container mx-auto max-w-4xl px-4 py-8">
       <Button variant="ghost" onClick={() => navigate('/patient/dashboard')} className="mb-4">
@@ -92,6 +114,16 @@ export function JoinWaitlist() {
         </CardHeader>
         <CardContent className="text-sm text-amber-900">
           When a matching patient appointment is cancelled, the earliest active waitlist request is auto-booked.
+        </CardContent>
+      </Card>
+      <Card className="mb-6">
+        <CardContent className="p-4">
+          <TimeZoneSelector
+            value={timeZone}
+            options={timeZoneOptions}
+            onChange={setTimeZone}
+            label="Show Waitlist Times In"
+          />
         </CardContent>
       </Card>
 
@@ -143,11 +175,11 @@ export function JoinWaitlist() {
                     <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
                       <span className="inline-flex items-center gap-1">
                         <Calendar className="h-4 w-4" />
-                        {format(parseDateOnlyLocal(entry.desired_date), 'MMMM d, yyyy')}
+                        {formatWaitlistDate(entry)}
                       </span>
                       <span className="inline-flex items-center gap-1">
                         <Clock className="h-4 w-4" />
-                        {formatTime24to12(entry.desired_start_time)}
+                        {formatWaitlistTime(entry)}
                       </span>
                       {entry.status === 'active'
                         && typeof entry.queue_position === 'number'

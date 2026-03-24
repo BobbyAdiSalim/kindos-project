@@ -8,9 +8,45 @@ import { Switch } from '@/app/components/ui/switch';
 import { useAuth } from '@/app/lib/auth-context';
 import { useNavigate } from 'react-router';
 import { DoctorProfile, getMyProfile, updateMyProfile } from '@/app/lib/profile-api';
+import {
+  getStoredPreferredTimeZone,
+  getTimeZoneOptions,
+  setStoredPreferredTimeZone,
+} from '@/app/lib/timezone';
 import { toast } from 'sonner';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { Check } from 'lucide-react';
+
+const timeZoneOptions = getTimeZoneOptions();
+
+// Care types options
+const CARE_TYPES = [
+  { 
+    id: 'primary', 
+    label: 'Primary Care', 
+    description: 'General health concerns, checkups, and preventive care',
+    icon: '🏥'
+  },
+  { 
+    id: 'mental-health', 
+    label: 'Mental Health', 
+    description: 'Counseling, therapy, and mental wellness support',
+    icon: '🧠'
+  },
+  { 
+    id: 'specialist', 
+    label: 'Specialist Care', 
+    description: 'Specific medical conditions requiring specialized expertise',
+    icon: '🩺'
+  },
+  { 
+    id: 'urgent-care', 
+    label: 'Urgent Care', 
+    description: 'Non-emergency conditions needing prompt attention',
+    icon: '⚡'
+  },
+];
 
 // Fix for default markers in Leaflet with Next.js/React
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -50,7 +86,8 @@ export function DoctorProfileEdit() {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedLocation, setSelectedLocation] = useState<LocationData | null>(null);
   const [viewBounds, setViewBounds] = useState<{ minlat?: number; maxlat?: number; minlon?: number; maxlon?: number }>({});
-  
+  const [selectedCareTypes, setSelectedCareTypes] = useState<string[]>([]);
+
   const [formData, setFormData] = useState({
     username: '',
     email: '',
@@ -63,6 +100,7 @@ export function DoctorProfileEdit() {
     longitude: '',
     phone: '',
     languages: '',
+    timeZone: getStoredPreferredTimeZone(),
     virtualAvailable: true,
     inPersonAvailable: true,
   });
@@ -91,6 +129,15 @@ export function DoctorProfileEdit() {
     }
   }, []);
 
+  // Handle care type toggle
+  const handleCareTypeToggle = (careTypeId: string) => {
+    setSelectedCareTypes(prev => 
+      prev.includes(careTypeId)
+        ? prev.filter(id => id !== careTypeId)
+        : [...prev, careTypeId]
+    );
+  };
+
   // Debounced address search for autocomplete - BEST BALANCE
   const searchAddressAutocomplete = useCallback(async (query: string) => {
     if (!query || query.length < 3) {
@@ -100,28 +147,28 @@ export function DoctorProfileEdit() {
 
     try {
       let url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=8&addressdetails=1`;
-      
+
       url += `&countrycodes=us,ca,mx`; // Change this to your country
-      
+
       if (viewBounds.minlat && viewBounds.maxlat && viewBounds.minlon && viewBounds.maxlon) {
         const latRange = viewBounds.maxlat - viewBounds.minlat;
         const lonRange = viewBounds.maxlon - viewBounds.minlon;
-        
+
         const expandedBounds = {
           minlat: viewBounds.minlat - latRange * 3,
           maxlat: viewBounds.maxlat + latRange * 3,
           minlon: viewBounds.minlon - lonRange * 3,
           maxlon: viewBounds.maxlon + lonRange * 3
         };
-        
+
         url += `&viewbox=${expandedBounds.minlon},${expandedBounds.minlat},${expandedBounds.maxlon},${expandedBounds.maxlat}`;
       }
-      
+
       url += `&accept-language=en`;
 
       const response = await fetch(url);
       const data = await response.json();
-      
+
       setSuggestions(data);
       setShowSuggestions(true);
     } catch (error) {
@@ -133,12 +180,12 @@ export function DoctorProfileEdit() {
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setSearchAddress(value);
-    
+
     // Clear previous timeout
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
     }
-    
+
     // Set new timeout for debounce
     searchTimeoutRef.current = setTimeout(() => {
       searchAddressAutocomplete(value);
@@ -149,10 +196,10 @@ export function DoctorProfileEdit() {
   const handleSuggestionSelect = (suggestion: Suggestion) => {
     const lat = parseFloat(suggestion.lat);
     const lng = parseFloat(suggestion.lon);
-    
+
     setSearchAddress(suggestion.display_name);
     setShowSuggestions(false);
-    
+
     if (mapRef.current) {
       mapRef.current.setView([lat, lng], 18);
       placeMarker(lat, lng);
@@ -174,13 +221,13 @@ export function DoctorProfileEdit() {
       // Default to NYC or existing location
       const defaultLat = selectedLocation?.lat || (formData.latitude ? parseFloat(formData.latitude) : 43.6548);
       const defaultLng = selectedLocation?.lng || (formData.longitude ? parseFloat(formData.longitude) : -79.3884);
-      
+
       const map = L.map('map').setView([defaultLat, defaultLng], 13);
-      
+
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© OpenStreetMap contributors'
       }).addTo(map);
-      
+
       // Add click handler
       map.on('click', (e: L.LeafletMouseEvent) => {
         const { lat, lng } = e.latlng;
@@ -191,12 +238,12 @@ export function DoctorProfileEdit() {
       // Update bounds when map moves
       map.on('moveend', updateMapBounds);
       map.on('zoomend', updateMapBounds);
-      
+
       mapRef.current = map;
-      
+
       // Initial bounds update
       setTimeout(updateMapBounds, 100);
-      
+
       // If there's an existing location, show it
       if (selectedLocation) {
         placeMarker(selectedLocation.lat, selectedLocation.lng);
@@ -213,7 +260,7 @@ export function DoctorProfileEdit() {
         map.setView([lat, lng], 15);
       }
     }
-    
+
     return () => {
       if (mapRef.current) {
         mapRef.current.off('moveend', updateMapBounds);
@@ -226,30 +273,30 @@ export function DoctorProfileEdit() {
 
   const placeMarker = (lat: number, lng: number) => {
     if (!mapRef.current) return;
-    
+
     // Remove existing marker
     if (markerRef.current) {
       markerRef.current.remove();
     }
-    
+
     // Add new marker (draggable)
     const marker = L.marker([lat, lng], { draggable: true }).addTo(mapRef.current);
-    
+
     // Handle drag end
     marker.on('dragend', (e) => {
       const position = e.target.getLatLng();
       getAddressFromLatLng(position.lat, position.lng);
     });
-    
+
     markerRef.current = marker;
-    
+
     // Update form data
     setSelectedLocation(prev => ({
       lat,
       lng,
       address: prev?.address || 'Loading address...'
     }));
-    
+
     setFormData(prev => ({
       ...prev,
       latitude: lat.toString(),
@@ -263,11 +310,11 @@ export function DoctorProfileEdit() {
         `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&accept-language=en&zoom=18&addressdetails=1`
       );
       const data = await response.json();
-      
+
       if (data && data.display_name) {
         // Try to get a shorter, cleaner address
         let cleanAddress = data.display_name;
-        
+
         // If we have address details, we can format it nicer
         if (data.address) {
           const parts = [];
@@ -278,23 +325,23 @@ export function DoctorProfileEdit() {
           }
           if (data.address.state) parts.push(data.address.state);
           if (data.address.country) parts.push(data.address.country);
-          
+
           if (parts.length > 0) {
             cleanAddress = parts.join(', ');
           }
         }
-        
+
         setSelectedLocation({
           lat,
           lng,
           address: cleanAddress
         });
-        
+
         setFormData(prev => ({
           ...prev,
           clinicLocation: cleanAddress
         }));
-        
+
         setSearchAddress(cleanAddress);
         toast.success('Location updated!');
       }
@@ -310,22 +357,22 @@ export function DoctorProfileEdit() {
 
   const searchLocation = async () => {
     if (!searchAddress || !mapRef.current) return;
-    
+
     try {
       let url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchAddress)}&limit=1&addressdetails=1`;
-      
+
       // Add viewbox to prioritize current area
       if (viewBounds.minlat && viewBounds.maxlat && viewBounds.minlon && viewBounds.maxlon) {
         url += `&viewbox=${viewBounds.minlon},${viewBounds.minlat},${viewBounds.maxlon},${viewBounds.maxlat}`;
       }
-      
+
       const response = await fetch(url);
       const data = await response.json();
-      
+
       if (data && data.length > 0) {
         const lat = parseFloat(data[0].lat);
         const lng = parseFloat(data[0].lon);
-        
+
         mapRef.current.setView([lat, lng], 18);
         placeMarker(lat, lng);
         setSelectedLocation({
@@ -373,9 +420,17 @@ export function DoctorProfileEdit() {
           longitude: profile.longitude || '',
           phone: profile.phone || '',
           languages: (profile.languages || []).join(', '),
+          timeZone: profile.time_zone || getStoredPreferredTimeZone(),
           virtualAvailable: profile.virtual_available ?? true,
           inPersonAvailable: profile.in_person_available ?? true,
         });
+
+        // Load care types
+        setSelectedCareTypes(profile.care_types || []);
+
+        if (profile.time_zone) {
+          setStoredPreferredTimeZone(profile.time_zone);
+        }
 
         if (profile.latitude && profile.longitude) {
           setSelectedLocation({
@@ -415,9 +470,13 @@ export function DoctorProfileEdit() {
         longitude: formData.longitude,
         phone: formData.phone,
         languages: languagesArray,
+        timeZone: formData.timeZone,
         virtualAvailable: formData.virtualAvailable,
         inPersonAvailable: formData.inPersonAvailable,
+        careTypes: selectedCareTypes,
       });
+
+      setStoredPreferredTimeZone(formData.timeZone);
 
       updateUser({
         username: data.user.username,
@@ -529,6 +588,22 @@ export function DoctorProfileEdit() {
                 placeholder="e.g., English, Spanish, ASL"
               />
             </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="timeZone">Preferred Time Zone</Label>
+              <select
+                id="timeZone"
+                value={formData.timeZone}
+                onChange={(e) => setFormData({ ...formData, timeZone: e.target.value })}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              >
+                {timeZoneOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
           </CardContent>
         </Card>
 
@@ -547,15 +622,15 @@ export function DoctorProfileEdit() {
                   )}
                 </p>
               </div>
-              <Button 
-                type="button" 
+              <Button
+                type="button"
                 variant={showMap ? "default" : "outline"}
                 onClick={() => setShowMap(!showMap)}
               >
                 {showMap ? 'Hide Map' : (formData.latitude && formData.longitude ? 'Edit on Map' : 'Set on Map')}
               </Button>
             </div>
-            
+
             <div className="space-y-2">
               <Label htmlFor="address">Clinic Address</Label>
               <Textarea
@@ -581,10 +656,10 @@ export function DoctorProfileEdit() {
                         onKeyPress={(e) => e.key === 'Enter' && searchLocation()}
                         onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
                       />
-                      
+
                       {/* Autocomplete suggestions dropdown */}
                       {showSuggestions && suggestions.length > 0 && (
-                        <div 
+                        <div
                           ref={suggestionsRef}
                           className="absolute z-50 w-full mt-1 bg-background border rounded-md shadow-lg max-h-60 overflow-auto"
                         >
@@ -612,9 +687,9 @@ export function DoctorProfileEdit() {
                     {viewBounds.minlat ? '📍 Showing results near current map area' : '📍 Pan the map to focus search results'}
                   </p>
                 </div>
-                
+
                 <div id="map" style={{ height: '400px', width: '100%', borderRadius: '8px', zIndex: 1 }} />
-                
+
                 {(selectedLocation || (formData.latitude && formData.longitude)) && (
                   <div className="bg-background p-4 rounded-lg border space-y-3">
                     <h4 className="font-semibold">Selected Location</h4>
@@ -657,12 +732,63 @@ export function DoctorProfileEdit() {
                     </div>
                   </div>
                 )}
-                
+
                 <p className="text-xs text-muted-foreground text-center">
                   Click on the map to set your clinic location • Drag the marker to adjust • Search will prioritize current map area
                 </p>
               </div>
             )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Care Types</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-base font-semibold">Care Types You Provide</Label>
+              <p className="text-sm text-muted-foreground mb-2">
+                Select the types of care you offer. Patients will use these to find you.
+              </p>
+              
+              <div className="flex flex-wrap gap-2">
+                {CARE_TYPES.map(careType => (
+                  <button
+                    key={careType.id}
+                    type="button"
+                    onClick={() => handleCareTypeToggle(careType.id)}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg border transition-all ${
+                      selectedCareTypes.includes(careType.id)
+                        ? 'border-primary bg-primary/10 text-primary'
+                        : 'border-input hover:border-primary/50'
+                    }`}
+                  >
+                    <span className="text-lg">{careType.icon}</span>
+                    <div className="text-left">
+                      <div className="font-medium text-sm">{careType.label}</div>
+                      <div className="text-xs text-muted-foreground">{careType.description}</div>
+                    </div>
+                    {selectedCareTypes.includes(careType.id) && (
+                      <Check className="h-4 w-4 ml-1" />
+                    )}
+                  </button>
+                ))}
+              </div>
+              
+              {selectedCareTypes.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {selectedCareTypes.map(id => {
+                    const careType = CARE_TYPES.find(c => c.id === id);
+                    return careType ? (
+                      <span key={id} className="inline-flex items-center gap-1 bg-primary/10 text-primary rounded-full px-2 py-0.5 text-sm">
+                        {careType.icon} {careType.label}
+                      </span>
+                    ) : null;
+                  })}
+                </div>
+              )}
+            </div>
           </CardContent>
         </Card>
 
@@ -711,10 +837,10 @@ export function DoctorProfileEdit() {
           >
             Cancel
           </Button>
-          <Button 
-            onClick={handleSave} 
-            size="lg" 
-            className="flex-1" 
+          <Button
+            onClick={handleSave}
+            size="lg"
+            className="flex-1"
             disabled={saving}
           >
             {saving ? 'Saving...' : 'Save Changes'}
