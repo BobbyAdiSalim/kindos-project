@@ -1,13 +1,14 @@
-name: Build and Push Backend Image
+name: Build and Push Backend Image (Develop)
 
 on:
   workflow_run:
     workflows:
       - CI
     branches:
-      - main
+      - develop
     types:
       - completed
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
@@ -16,9 +17,12 @@ env:
 jobs:
   docker:
     if: |
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.event == 'push' &&
-      github.event.workflow_run.head_branch == 'main'
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.head_branch == 'develop'
+      )
     name: Build and Push
     runs-on: ubuntu-latest
     permissions:
@@ -29,7 +33,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -47,8 +51,8 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=raw,value=latest
-            type=sha,format=short,prefix=sha-
+            type=raw,value=develop
+            type=sha,format=short,prefix=develop-sha-
 
       - name: Build and push Docker image
         id: push
@@ -65,7 +69,7 @@ jobs:
       - name: Summarize published artifact
         run: |
           {
-            echo "### Published Docker image"
+            echo "### Published Docker image (Develop)"
             echo ""
             echo "- Image: \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}\`"
             echo "- Tags: \`${{ steps.meta.outputs.tags }}\`"
