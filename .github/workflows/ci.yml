@@ -2,6 +2,13 @@ name: CI
 
 on:
   pull_request:
+  workflow_dispatch:
+    inputs:
+      force_security_failure:
+        description: "Force the security-scan job to fail (for demo/evidence runs)"
+        required: false
+        default: false
+        type: boolean
   push:
     branches:
       - main
@@ -56,9 +63,29 @@ jobs:
       - run: npm test
 
   security-scan:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: |
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
     steps:
       - uses: actions/checkout@v4
-      - name: TODO add security scan
-        run: 'echo "TODO: add the repo''s security scan command or action."'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install backend dependencies
+        run: npm ci
+      - name: Scan backend dependencies for vulnerabilities
+        run: npm audit --omit=dev --audit-level=high
+      - name: Demonstrate deliberate security-scan failure (optional)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          if [ "${{ inputs.force_security_failure }}" = "true" ]; then
+            echo "Intentional security-scan failure for CI evidence."
+            exit 1
+          fi
+          echo "Demo flag is false; no forced failure."
