@@ -1,6 +1,9 @@
 name: Build and Push Backend Image (Develop)
 
 on:
+  push:
+    branches:
+      - develop
   workflow_run:
     workflows:
       - CI
@@ -17,6 +20,7 @@ env:
 jobs:
   docker:
     if: |
+      github.event_name == 'push' ||
       github.event_name == 'workflow_dispatch' ||
       (
         github.event.workflow_run.conclusion == 'success' &&
