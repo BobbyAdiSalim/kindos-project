@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package-dir:
+          - frontend
+          - backend
+    defaults:
+      run:
+        working-directory: ${{ matrix.package-dir }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            backend/package-lock.json
+      - run: npm ci
+      - name: TODO add lint command
+        run: 'echo "TODO: add a lint script/config for ${{ matrix.package-dir }} and replace this placeholder."'
+
+  unit-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package-dir:
+          - frontend
+          - backend
+    defaults:
+      run:
+        working-directory: ${{ matrix.package-dir }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            backend/package-lock.json
+      - run: npm ci
+      - run: npm test
+
+  security-scan:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: TODO add security scan
+        run: 'echo "TODO: add the repo''s security scan command or action."'
+
+  docker-build:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: TODO add Docker build
+        run: 'echo "TODO: add Docker build steps after a Dockerfile or image definition exists."'
