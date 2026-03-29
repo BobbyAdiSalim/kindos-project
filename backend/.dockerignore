@@ -1,0 +1,25 @@
+# Dependency directories
+node_modules
+
+# Test and coverage artifacts
+tests
+coverage
+
+# Logs and local runtime files
+*.log
+npm-debug.log*
+
+# Environment and local config
+.env
+.env.*
+
+# VCS and editor artifacts
+.git
+.gitignore
+.DS_Store
+.vscode
+.idea
+
+# Documentation and non-runtime files
+README.md
+SETUP.md

@@ -61,11 +61,3 @@ jobs:
       - uses: actions/checkout@v4
       - name: TODO add security scan
         run: 'echo "TODO: add the repo''s security scan command or action."'
-
-  docker-build:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: TODO add Docker build
-        run: 'echo "TODO: add Docker build steps after a Dockerfile or image definition exists."'
