@@ -38,3 +38,4 @@ backend/uploads/**
 !backend/uploads/.gitkeep
 !backend/uploads/verification-docs/.gitkeep
 
+.codex
