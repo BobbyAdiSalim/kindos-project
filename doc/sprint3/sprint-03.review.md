@@ -78,10 +78,10 @@ Note that these goals / tasks were the tasks that were finished before the demo 
     <img src="screenshots/doctor-document.png" >
 
 10. **SCRUM-49** - *Only doctor can initiate message…*
-    <img src="screenshots/doctor-start.png.png" >
+    <img src="screenshots/doctor-start.png" >
 
 11. **SCRUM-41** - *As a doctor, I would like to see my appointment time in my local time zone…*
-    <img src="screenshots/doctor-timezone1.png.png" >
+    <img src="screenshots/doctor-timezone1.png" >
 
 
 #### Goals and/or tasks that were planned but not met/completed:
