@@ -36,6 +36,7 @@ import { DoctorMessaging } from '@/app/pages/doctor/messaging';
 import { AdminDashboard } from '@/app/pages/admin/dashboard';
 import { VerificationQueue } from '@/app/pages/admin/verification-queue';
 import { Analytics } from '@/app/pages/admin/analytics';
+import { BookingAnalytics } from '@/app/pages/admin/booking-analytics';
 
 // Design system
 import { ComponentLibrary } from '@/app/pages/components';
@@ -100,6 +101,7 @@ export const router = createBrowserRouter([
           { path: 'dashboard', Component: AdminDashboard },
           { path: 'verification', Component: VerificationQueue },
           { path: 'analytics', Component: Analytics },
+          { path: 'booking-analytics', Component: BookingAnalytics },
         ],
       },
 
