@@ -2,6 +2,8 @@ import { Op, fn, col, literal } from 'sequelize';
 import { AdminLog, Appointment, Doctor, Patient, User } from '../../models/index.js';
 import {
   DOCTOR_REJECTION_REASON_OPTIONS,
+  DECLINED_BY_DOCTOR_REASON_PREFIX,
+  CANCELLED_BY_PATIENT_REASON_PREFIX,
   getDoctorRejectionReasonLabel,
 } from '../booking/bookingShared.js';
 import { sendEmailByType } from '../../services/email-strategy/index.js';
@@ -291,7 +293,8 @@ export const getBookingAnalytics = async (req, res) => {
       where,
       attributes: [
         'id', 'status', 'appointment_type', 'appointment_date',
-        'duration', 'doctor_id', 'created_at',
+        'start_time', 'duration', 'doctor_id', 'created_at',
+        'cancellation_reason', 'doctor_rejection_reason_code',
       ],
       include: [
         {
@@ -351,6 +354,67 @@ export const getBookingAnalytics = async (req, res) => {
       .sort((a, b) => b.total - a.total)
       .slice(0, 10);
 
+    // Peak hours (group by hour extracted from start_time)
+    const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const hourCounts = new Array(24).fill(0);
+    const dayCounts = new Array(7).fill(0);
+    for (const apt of appointments) {
+      if (apt.start_time) {
+        const hour = parseInt(apt.start_time.split(':')[0], 10);
+        if (hour >= 0 && hour < 24) hourCounts[hour]++;
+      }
+      if (apt.appointment_date) {
+        const d = new Date(apt.appointment_date + 'T00:00:00');
+        if (!Number.isNaN(d.getTime())) dayCounts[d.getDay()]++;
+      }
+    }
+    const peakHours = hourCounts.map((count, hour) => ({
+      hour,
+      label: `${hour.toString().padStart(2, '0')}:00`,
+      count,
+    }));
+    const peakDays = dayCounts.map((count, dayIndex) => ({
+      day: dayIndex,
+      label: DAY_NAMES[dayIndex],
+      count,
+    }));
+
+    // Cancellation insights
+    const cancelledAppointments = appointments.filter((apt) => apt.status === 'cancelled');
+    let cancelledByPatient = 0;
+    let cancelledByDoctor = 0;
+    let cancelledByUnknown = 0;
+    const rejectionReasonCounts = {};
+
+    for (const apt of cancelledAppointments) {
+      const reason = apt.cancellation_reason || '';
+      if (reason.startsWith(DECLINED_BY_DOCTOR_REASON_PREFIX)) {
+        cancelledByDoctor++;
+      } else if (reason.startsWith(CANCELLED_BY_PATIENT_REASON_PREFIX)) {
+        cancelledByPatient++;
+      } else {
+        cancelledByUnknown++;
+      }
+
+      if (apt.doctor_rejection_reason_code) {
+        const code = apt.doctor_rejection_reason_code;
+        const label = getDoctorRejectionReasonLabel(code) || code;
+        rejectionReasonCounts[label] = (rejectionReasonCounts[label] || 0) + 1;
+      }
+    }
+
+    const cancellationInsights = {
+      total_cancelled: cancelledAppointments.length,
+      by_role: [
+        { role: 'Patient', count: cancelledByPatient },
+        { role: 'Doctor', count: cancelledByDoctor },
+        { role: 'Unknown', count: cancelledByUnknown },
+      ].filter((entry) => entry.count > 0),
+      doctor_rejection_reasons: Object.entries(rejectionReasonCounts)
+        .map(([reason, count]) => ({ reason, count }))
+        .sort((a, b) => b.count - a.count),
+    };
+
     // Summary rates
     const completionRate = totalAppointments > 0
       ? Math.round((statusCounts.completed / totalAppointments) * 100)
@@ -381,6 +445,9 @@ export const getBookingAnalytics = async (req, res) => {
       })),
       daily_trends: dailyTrends,
       top_doctors: topDoctors,
+      peak_hours: peakHours,
+      peak_days: peakDays,
+      cancellation_insights: cancellationInsights,
     });
   } catch (error) {
     return res.status(500).json({ error: error.message });

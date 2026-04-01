@@ -56,6 +56,34 @@ interface TopDoctor {
   completed: number;
 }
 
+interface PeakHour {
+  hour: number;
+  label: string;
+  count: number;
+}
+
+interface PeakDay {
+  day: number;
+  label: string;
+  count: number;
+}
+
+interface CancellationByRole {
+  role: string;
+  count: number;
+}
+
+interface RejectionReason {
+  reason: string;
+  count: number;
+}
+
+interface CancellationInsights {
+  total_cancelled: number;
+  by_role: CancellationByRole[];
+  doctor_rejection_reasons: RejectionReason[];
+}
+
 interface BookingAnalyticsResponse {
   timeframe: TimeframeOption;
   date_range: { start: string; end: string } | null;
@@ -69,6 +97,9 @@ interface BookingAnalyticsResponse {
   type_breakdown: TypeBreakdown[];
   daily_trends: DailyTrend[];
   top_doctors: TopDoctor[];
+  peak_hours: PeakHour[];
+  peak_days: PeakDay[];
+  cancellation_insights: CancellationInsights;
 }
 
 const timeframeLabels: Record<TimeframeOption, string> = {
@@ -116,6 +147,31 @@ const typeChartConfig = {
   count: { label: 'Appointments' },
   virtual: { label: 'Virtual', color: TYPE_COLORS[0] },
   'in-person': { label: 'In-person', color: TYPE_COLORS[1] },
+} satisfies ChartConfig;
+
+const peakHoursChartConfig = {
+  count: { label: 'Appointments', color: '#6366f1' },
+} satisfies ChartConfig;
+
+const peakDaysChartConfig = {
+  count: { label: 'Appointments', color: '#8b5cf6' },
+} satisfies ChartConfig;
+
+const ROLE_COLORS: Record<string, string> = {
+  Patient: '#f59e0b',
+  Doctor: '#ef4444',
+  Unknown: '#94a3b8',
+};
+
+const cancellationByRoleConfig = {
+  count: { label: 'Cancellations' },
+  Patient: { label: 'Patient', color: ROLE_COLORS.Patient },
+  Doctor: { label: 'Doctor', color: ROLE_COLORS.Doctor },
+  Unknown: { label: 'Unknown', color: ROLE_COLORS.Unknown },
+} satisfies ChartConfig;
+
+const rejectionReasonConfig = {
+  count: { label: 'Count', color: '#ef4444' },
 } satisfies ChartConfig;
 
 export function BookingAnalytics() {
@@ -441,6 +497,197 @@ export function BookingAnalytics() {
               )}
             </CardContent>
           </Card>
+
+          {/* Peak booking hours + Peak booking days row */}
+          <div className="grid lg:grid-cols-2 gap-6 mb-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Peak Booking Hours</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Appointment volume by hour of day.
+                </p>
+              </CardHeader>
+              <CardContent>
+                {(analytics?.peak_hours || []).every((d) => d.count === 0) ? (
+                  <div className="h-[280px] flex items-center justify-center text-sm text-muted-foreground">
+                    No appointment data for {timeframeLabels[timeframe].toLowerCase()}.
+                  </div>
+                ) : (
+                  <ChartContainer config={peakHoursChartConfig} className="h-[280px] w-full">
+                    <BarChart
+                      data={(analytics?.peak_hours || []).filter((h) => h.hour >= 6 && h.hour <= 21)}
+                      margin={{ left: 12, right: 12, top: 12 }}
+                    >
+                      <CartesianGrid vertical={false} />
+                      <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={12} />
+                      <YAxis allowDecimals={false} tickLine={false} axisLine={false} />
+                      <ChartTooltip
+                        cursor={false}
+                        content={
+                          <ChartTooltipContent
+                            formatter={(value) => (
+                              <div className="flex min-w-[8rem] items-center justify-between gap-3">
+                                <span className="text-muted-foreground">Appointments</span>
+                                <span className="font-mono font-medium tabular-nums text-foreground">
+                                  {Number(value).toLocaleString()}
+                                </span>
+                              </div>
+                            )}
+                          />
+                        }
+                      />
+                      <Bar dataKey="count" fill="var(--color-count)" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ChartContainer>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Peak Booking Days</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Appointment volume by day of week.
+                </p>
+              </CardHeader>
+              <CardContent>
+                {(analytics?.peak_days || []).every((d) => d.count === 0) ? (
+                  <div className="h-[280px] flex items-center justify-center text-sm text-muted-foreground">
+                    No appointment data for {timeframeLabels[timeframe].toLowerCase()}.
+                  </div>
+                ) : (
+                  <ChartContainer config={peakDaysChartConfig} className="h-[280px] w-full">
+                    <BarChart data={analytics?.peak_days || []} margin={{ left: 12, right: 12, top: 12 }}>
+                      <CartesianGrid vertical={false} />
+                      <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={12} />
+                      <YAxis allowDecimals={false} tickLine={false} axisLine={false} />
+                      <ChartTooltip
+                        cursor={false}
+                        content={
+                          <ChartTooltipContent
+                            formatter={(value) => (
+                              <div className="flex min-w-[8rem] items-center justify-between gap-3">
+                                <span className="text-muted-foreground">Appointments</span>
+                                <span className="font-mono font-medium tabular-nums text-foreground">
+                                  {Number(value).toLocaleString()}
+                                </span>
+                              </div>
+                            )}
+                          />
+                        }
+                      />
+                      <Bar dataKey="count" fill="var(--color-count)" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ChartContainer>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Cancellation insights row */}
+          <div className="grid lg:grid-cols-2 gap-6 mb-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Cancellations by Role</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Who is cancelling appointments — patients or doctors.
+                </p>
+              </CardHeader>
+              <CardContent>
+                {!analytics?.cancellation_insights?.by_role?.length ? (
+                  <div className="h-[280px] flex items-center justify-center text-sm text-muted-foreground">
+                    No cancellations for {timeframeLabels[timeframe].toLowerCase()}.
+                  </div>
+                ) : (
+                  <ChartContainer config={cancellationByRoleConfig} className="h-[280px] w-full">
+                    <PieChart>
+                      <Pie
+                        data={analytics.cancellation_insights.by_role.map((entry) => ({
+                          ...entry,
+                          fill: ROLE_COLORS[entry.role] || '#94a3b8',
+                        }))}
+                        dataKey="count"
+                        nameKey="role"
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={100}
+                        label={({ role, count }) => `${role}: ${count}`}
+                      >
+                        {analytics.cancellation_insights.by_role.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={ROLE_COLORS[entry.role] || '#94a3b8'} />
+                        ))}
+                      </Pie>
+                      <ChartTooltip
+                        content={
+                          <ChartTooltipContent
+                            formatter={(value) => (
+                              <div className="flex min-w-[8rem] items-center justify-between gap-3">
+                                <span className="text-muted-foreground">Cancellations</span>
+                                <span className="font-mono font-medium tabular-nums text-foreground">
+                                  {Number(value).toLocaleString()}
+                                </span>
+                              </div>
+                            )}
+                          />
+                        }
+                      />
+                    </PieChart>
+                  </ChartContainer>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Doctor Rejection Reasons</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Why doctors decline appointment requests.
+                </p>
+              </CardHeader>
+              <CardContent>
+                {!analytics?.cancellation_insights?.doctor_rejection_reasons?.length ? (
+                  <div className="h-[280px] flex items-center justify-center text-sm text-muted-foreground">
+                    No doctor rejections for {timeframeLabels[timeframe].toLowerCase()}.
+                  </div>
+                ) : (
+                  <ChartContainer config={rejectionReasonConfig} className="h-[280px] w-full">
+                    <BarChart
+                      data={analytics.cancellation_insights.doctor_rejection_reasons}
+                      layout="vertical"
+                      margin={{ left: 20, right: 12, top: 12 }}
+                    >
+                      <CartesianGrid horizontal={false} />
+                      <XAxis type="number" allowDecimals={false} tickLine={false} axisLine={false} />
+                      <YAxis
+                        dataKey="reason"
+                        type="category"
+                        tickLine={false}
+                        axisLine={false}
+                        width={140}
+                        fontSize={12}
+                      />
+                      <ChartTooltip
+                        cursor={false}
+                        content={
+                          <ChartTooltipContent
+                            formatter={(value) => (
+                              <div className="flex min-w-[8rem] items-center justify-between gap-3">
+                                <span className="text-muted-foreground">Count</span>
+                                <span className="font-mono font-medium tabular-nums text-foreground">
+                                  {Number(value).toLocaleString()}
+                                </span>
+                              </div>
+                            )}
+                          />
+                        }
+                      />
+                      <Bar dataKey="count" fill="var(--color-count)" radius={[0, 4, 4, 0]} />
+                    </BarChart>
+                  </ChartContainer>
+                )}
+              </CardContent>
+            </Card>
+          </div>
 
           {/* Top doctors table */}
           <Card>
