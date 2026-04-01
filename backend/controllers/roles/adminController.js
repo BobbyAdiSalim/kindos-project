@@ -294,7 +294,7 @@ export const getBookingAnalytics = async (req, res) => {
       attributes: [
         'id', 'status', 'appointment_type', 'appointment_date',
         'start_time', 'duration', 'doctor_id', 'created_at',
-        'cancellation_reason', 'doctor_rejection_reason_code',
+        'cancellation_reason',
       ],
       include: [
         {
@@ -384,8 +384,6 @@ export const getBookingAnalytics = async (req, res) => {
     let cancelledByPatient = 0;
     let cancelledByDoctor = 0;
     let cancelledByUnknown = 0;
-    const rejectionReasonCounts = {};
-
     for (const apt of cancelledAppointments) {
       const reason = apt.cancellation_reason || '';
       if (reason.startsWith(DECLINED_BY_DOCTOR_REASON_PREFIX)) {
@@ -394,12 +392,6 @@ export const getBookingAnalytics = async (req, res) => {
         cancelledByPatient++;
       } else {
         cancelledByUnknown++;
-      }
-
-      if (apt.doctor_rejection_reason_code) {
-        const code = apt.doctor_rejection_reason_code;
-        const label = getDoctorRejectionReasonLabel(code) || code;
-        rejectionReasonCounts[label] = (rejectionReasonCounts[label] || 0) + 1;
       }
     }
 
@@ -410,9 +402,6 @@ export const getBookingAnalytics = async (req, res) => {
         { role: 'Doctor', count: cancelledByDoctor },
         { role: 'Unknown', count: cancelledByUnknown },
       ].filter((entry) => entry.count > 0),
-      doctor_rejection_reasons: Object.entries(rejectionReasonCounts)
-        .map(([reason, count]) => ({ reason, count }))
-        .sort((a, b) => b.count - a.count),
     };
 
     // Summary rates
