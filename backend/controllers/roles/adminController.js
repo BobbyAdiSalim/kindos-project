@@ -282,7 +282,7 @@ export const getBookingAnalytics = async (req, res) => {
       startDate.setHours(0, 0, 0, 0);
       startDate.setDate(startDate.getDate() - (days - 1));
 
-      where.created_at = { [Op.gte]: startDate };
+      where.appointment_date = { [Op.gte]: toIsoDate(startDate) };
       dateRange = {
         start: toIsoDate(startDate),
         end: toIsoDate(endDate),
