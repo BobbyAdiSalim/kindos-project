@@ -135,9 +135,14 @@ export function AdminDashboard() {
             <p className="text-muted-foreground mb-4">
               View booking statistics and platform analytics
             </p>
-            <Link to="/admin/analytics">
-              <Button variant="outline">View Analytics</Button>
-            </Link>
+            <div className="flex flex-wrap gap-2">
+              <Link to="/admin/booking-analytics">
+                <Button>Booking Analytics</Button>
+              </Link>
+              <Link to="/admin/analytics">
+                <Button variant="outline">Rejection Analytics</Button>
+              </Link>
+            </div>
           </CardContent>
         </Card>
       </div>

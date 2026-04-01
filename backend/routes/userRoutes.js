@@ -19,6 +19,7 @@ import {
   updateDoctorVerificationStatus,
   getDoctorVerificationHistory,
   getAppointmentRejectionAnalytics,
+  getBookingAnalytics,
 } from "../controllers/roles/adminController.js";
 import {
   getAvailabilityPatterns,
@@ -182,6 +183,10 @@ router.get("/admin/doctors/verification-history", requireAuth, requireRole("admi
 
 router.get("/admin/analytics/appointment-rejections", requireAuth, requireRole("admin"), (req, res) => {
   getAppointmentRejectionAnalytics(req, res);
+});
+
+router.get("/admin/analytics/bookings", requireAuth, requireRole("admin"), (req, res) => {
+  getBookingAnalytics(req, res);
 });
 
 router.post("/doctor/verification/resubmit", requireAuth, requireRole("doctor"), (req, res) => {

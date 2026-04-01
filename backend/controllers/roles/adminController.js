@@ -1,7 +1,9 @@
-import { Op } from 'sequelize';
-import { AdminLog, Appointment, Doctor, User } from '../../models/index.js';
+import { Op, fn, col, literal } from 'sequelize';
+import { AdminLog, Appointment, Doctor, Patient, User } from '../../models/index.js';
 import {
   DOCTOR_REJECTION_REASON_OPTIONS,
+  DECLINED_BY_DOCTOR_REASON_PREFIX,
+  CANCELLED_BY_PATIENT_REASON_PREFIX,
   getDoctorRejectionReasonLabel,
 } from '../booking/bookingShared.js';
 import { sendEmailByType } from '../../services/email-strategy/index.js';
@@ -257,6 +259,184 @@ export const getAppointmentRejectionAnalytics = async (req, res) => {
         top_reason: topReason,
       },
       reasons,
+    });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+export const getBookingAnalytics = async (req, res) => {
+  try {
+    const requestedTimeframe = String(req.query.timeframe || '30d').trim().toLowerCase();
+    const timeframe = Object.prototype.hasOwnProperty.call(TIMEFRAME_TO_DAYS, requestedTimeframe)
+      ? requestedTimeframe
+      : '30d';
+    const days = TIMEFRAME_TO_DAYS[timeframe];
+
+    const where = {};
+    let dateRange = null;
+
+    if (days) {
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setHours(0, 0, 0, 0);
+      startDate.setDate(startDate.getDate() - (days - 1));
+
+      where.appointment_date = { [Op.gte]: toIsoDate(startDate) };
+      dateRange = {
+        start: toIsoDate(startDate),
+        end: toIsoDate(endDate),
+      };
+    }
+
+    const appointments = await Appointment.findAll({
+      where,
+      attributes: [
+        'id', 'status', 'appointment_type', 'appointment_date',
+        'start_time', 'duration', 'doctor_id', 'created_at',
+        'cancellation_reason',
+      ],
+      include: [
+        {
+          model: Doctor,
+          as: 'doctor',
+          attributes: ['id', 'full_name', 'specialty'],
+        },
+      ],
+      order: [['created_at', 'ASC']],
+    });
+
+    // Status breakdown
+    const statusCounts = { scheduled: 0, confirmed: 0, completed: 0, cancelled: 0, 'no-show': 0 };
+    for (const apt of appointments) {
+      if (apt.status in statusCounts) statusCounts[apt.status]++;
+    }
+    const totalAppointments = appointments.length;
+
+    // Type breakdown (virtual vs in-person)
+    const typeCounts = { virtual: 0, 'in-person': 0 };
+    for (const apt of appointments) {
+      if (apt.appointment_type in typeCounts) typeCounts[apt.appointment_type]++;
+    }
+
+    // Daily trends
+    const dailyMap = new Map();
+    for (const apt of appointments) {
+      const date = apt.appointment_date || toIsoDate(apt.created_at);
+      if (!dailyMap.has(date)) {
+        dailyMap.set(date, { date, total: 0, completed: 0, cancelled: 0 });
+      }
+      const entry = dailyMap.get(date);
+      entry.total++;
+      if (apt.status === 'completed') entry.completed++;
+      if (apt.status === 'cancelled') entry.cancelled++;
+    }
+    const dailyTrends = Array.from(dailyMap.values()).sort((a, b) => a.date.localeCompare(b.date));
+
+    // Top doctors by appointment count
+    const doctorMap = new Map();
+    for (const apt of appointments) {
+      const docId = apt.doctor_id;
+      if (!doctorMap.has(docId)) {
+        doctorMap.set(docId, {
+          doctor_id: docId,
+          full_name: apt.doctor?.full_name || 'Unknown',
+          specialty: apt.doctor?.specialty || '',
+          total: 0,
+          completed: 0,
+        });
+      }
+      const entry = doctorMap.get(docId);
+      entry.total++;
+      if (apt.status === 'completed') entry.completed++;
+    }
+    const topDoctors = Array.from(doctorMap.values())
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 10);
+
+    // Peak hours (group by hour extracted from start_time)
+    const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const hourCounts = new Array(24).fill(0);
+    const dayCounts = new Array(7).fill(0);
+    for (const apt of appointments) {
+      if (apt.start_time) {
+        const hour = parseInt(apt.start_time.split(':')[0], 10);
+        if (hour >= 0 && hour < 24) hourCounts[hour]++;
+      }
+      if (apt.appointment_date) {
+        const d = new Date(apt.appointment_date + 'T00:00:00');
+        if (!Number.isNaN(d.getTime())) dayCounts[d.getDay()]++;
+      }
+    }
+    const peakHours = hourCounts.map((count, hour) => ({
+      hour,
+      label: `${hour.toString().padStart(2, '0')}:00`,
+      count,
+    }));
+    const peakDays = dayCounts.map((count, dayIndex) => ({
+      day: dayIndex,
+      label: DAY_NAMES[dayIndex],
+      count,
+    }));
+
+    // Cancellation insights
+    const cancelledAppointments = appointments.filter((apt) => apt.status === 'cancelled');
+    let cancelledByPatient = 0;
+    let cancelledByDoctor = 0;
+    let cancelledByUnknown = 0;
+    for (const apt of cancelledAppointments) {
+      const reason = apt.cancellation_reason || '';
+      if (reason.startsWith(DECLINED_BY_DOCTOR_REASON_PREFIX)) {
+        cancelledByDoctor++;
+      } else if (reason.startsWith(CANCELLED_BY_PATIENT_REASON_PREFIX)) {
+        cancelledByPatient++;
+      } else {
+        cancelledByUnknown++;
+      }
+    }
+
+    const cancellationInsights = {
+      total_cancelled: cancelledAppointments.length,
+      by_role: [
+        { role: 'Patient', count: cancelledByPatient },
+        { role: 'Doctor', count: cancelledByDoctor },
+        { role: 'Unknown', count: cancelledByUnknown },
+      ].filter((entry) => entry.count > 0),
+    };
+
+    // Summary rates
+    const completionRate = totalAppointments > 0
+      ? Math.round((statusCounts.completed / totalAppointments) * 100)
+      : 0;
+    const cancellationRate = totalAppointments > 0
+      ? Math.round((statusCounts.cancelled / totalAppointments) * 100)
+      : 0;
+    const noShowRate = totalAppointments > 0
+      ? Math.round((statusCounts['no-show'] / totalAppointments) * 100)
+      : 0;
+
+    return res.status(200).json({
+      timeframe,
+      date_range: dateRange,
+      summary: {
+        total_appointments: totalAppointments,
+        completion_rate: completionRate,
+        cancellation_rate: cancellationRate,
+        no_show_rate: noShowRate,
+      },
+      status_breakdown: Object.entries(statusCounts).map(([status, count]) => ({
+        status,
+        count,
+      })),
+      type_breakdown: Object.entries(typeCounts).map(([type, count]) => ({
+        type,
+        count,
+      })),
+      daily_trends: dailyTrends,
+      top_doctors: topDoctors,
+      peak_hours: peakHours,
+      peak_days: peakDays,
+      cancellation_insights: cancellationInsights,
     });
   } catch (error) {
     return res.status(500).json({ error: error.message });
