@@ -4,6 +4,11 @@ on:
   pull_request:
   workflow_dispatch:
     inputs:
+      force_lint_failure:
+        description: "Force the lint job to fail (for demo/evidence runs)"
+        required: false
+        default: false
+        type: boolean
       force_security_failure:
         description: "Force the security-scan job to fail (for demo/evidence runs)"
         required: false
@@ -36,8 +41,19 @@ jobs:
             frontend/package-lock.json
             backend/package-lock.json
       - run: npm ci
-      - name: TODO add lint command
-        run: 'echo "TODO: add a lint script/config for ${{ matrix.package-dir }} and replace this placeholder."'
+      - name: Inject deliberate lint error (optional)
+        if: github.event_name == 'workflow_dispatch' && inputs.force_lint_failure == true
+        run: |
+          if [ "${{ matrix.package-dir }}" = "frontend" ]; then
+            echo "const __lint_fail_unused: number = 1;" > __lint_fail_test.ts
+          else
+            echo "var __lint_fail_unused = 1;" > __lint_fail_test.js
+          fi
+      - name: Run linter
+        run: npm run lint
+      - name: Clean up lint failure file
+        if: always()
+        run: rm -f __lint_fail_test.js __lint_fail_test.ts
 
   unit-tests:
     runs-on: ubuntu-latest
