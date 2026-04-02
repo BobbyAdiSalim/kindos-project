@@ -1,6 +1,6 @@
 import React from 'react';
 import { Calendar } from '@/app/components/ui/calendar';
-import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card';
+import { Card, CardContent } from '@/app/components/ui/card';
 import { AppointmentCard } from '@/app/components/appointment-card';
 import { mockAppointments } from '@/app/lib/mock-data';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/app/components/ui/tabs';

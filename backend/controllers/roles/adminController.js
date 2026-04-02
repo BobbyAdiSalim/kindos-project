@@ -1,5 +1,5 @@
-import { Op, fn, col, literal } from 'sequelize';
-import { AdminLog, Appointment, Doctor, Patient, User } from '../../models/index.js';
+import { Op } from 'sequelize';
+import { AdminLog, Appointment, Doctor, User } from '../../models/index.js';
 import {
   DOCTOR_REJECTION_REASON_OPTIONS,
   DECLINED_BY_DOCTOR_REASON_PREFIX,

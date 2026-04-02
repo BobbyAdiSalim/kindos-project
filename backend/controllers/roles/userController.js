@@ -570,7 +570,7 @@ export const forgotPassword = async (req, res) => {
     await sendPasswordResetEmail({ to: user.email, resetLink });
 
     return res.status(200).json(genericResponse);
-  } catch (error) {
+  } catch {
     return res.status(200).json(genericResponse);
   }
 };

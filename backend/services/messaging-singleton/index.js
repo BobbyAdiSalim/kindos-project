@@ -117,7 +117,7 @@ export const initMessagingIO = (httpServer, { frontendUrl, jwtSecret }) => {
 
       socket.auth = { userId: user.id, role: user.role };
       next();
-    } catch (_error) {
+    } catch {
       next(new Error('Invalid or expired token.'));
     }
   });

@@ -68,23 +68,6 @@ export function AppointmentSummary() {
     }
   };
 
-  const handleMarkComplete = async () => {
-    if (!token || !id) {
-      toast.error('Unable to mark appointment as complete.');
-      return;
-    }
-
-    try {
-      setSaving(true);
-      await markAppointmentComplete(token, id);
-      toast.success('Appointment marked as complete.');
-      navigate('/doctor/dashboard');
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to mark appointment as complete.');
-    } finally {
-      setSaving(false);
-    }
-  };
 
   if (loading) {
     return <div className="container mx-auto px-4 py-12 text-center">Loading appointment details...</div>;

@@ -47,7 +47,7 @@ export function Register() {
   const [verificationDocumentName, setVerificationDocumentName] = useState('');
   const [verificationDocumentDataUrl, setVerificationDocumentDataUrl] = useState('');
   const [selectedCareTypes, setSelectedCareTypes] = useState<string[]>([]);
-  const [showCareTypesDropdown, setShowCareTypesDropdown] = useState(false);
+  const [, ] = useState(false);
   
   const [formData, setFormData] = useState({
     name: '',
