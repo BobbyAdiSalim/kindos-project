@@ -1,5 +1,3 @@
-# CSCC01 Lab 2
-
 # dependencies
 */node_modules
 node_modules/
@@ -39,3 +37,6 @@ backend/uploads/**
 !backend/uploads/verification-docs/.gitkeep
 
 .codex
+
+# Firebase
+.firebase/
