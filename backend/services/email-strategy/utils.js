@@ -38,7 +38,7 @@ export const toPrettyTime = (timeValue) => {
 };
 
 export const formatAppointmentType = (value) =>
-  String(value || '').trim() === 'in-person' ? 'In-Person' : 'Virtual';
+  String(value || '').trim() === 'in_person' ? 'In-Person' : 'Virtual';
 
 export const cardHtml = ({ title, intro, fields = [], cta = null, footer = '' }) => {
   const fieldRows = fields
