@@ -11,7 +11,7 @@ FROM node:22-alpine AS runtime
 WORKDIR /app
 
 ENV NODE_ENV=production
-ENV PORT=4000
+ENV PORT=8080
 
 # Copy production node_modules from deps stage.
 COPY --from=deps /app/node_modules ./node_modules
@@ -22,6 +22,6 @@ COPY . .
 RUN addgroup -S nodejs && adduser -S nodeuser -G nodejs
 USER nodeuser
 
-EXPOSE 4000
+EXPOSE 8080
 
 CMD ["node", "server.js"]
