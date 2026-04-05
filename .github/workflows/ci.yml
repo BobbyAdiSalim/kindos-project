@@ -2,6 +2,7 @@ name: CI
 
 on:
   pull_request:
+  workflow_dispatch:
   push:
     branches:
       - master
@@ -55,7 +56,9 @@ jobs:
       - run: npm test
 
   security-scan:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    if: |
+      (github.event_name == 'push' && github.ref == 'refs/heads/master') ||
+      github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -73,7 +76,9 @@ jobs:
         run: npm audit --omit=dev --audit-level=high
 
   container-build-push:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    if: |
+      (github.event_name == 'push' && github.ref == 'refs/heads/master') ||
+      github.event_name == 'workflow_dispatch'
     needs:
       - lint
       - unit-tests

@@ -8,6 +8,18 @@ on:
       - master
     types:
       - completed
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: Branch to deploy from
+        required: true
+        default: master
+        type: string
+      image_tag:
+        description: Image tag to deploy (e.g. latest or commit SHA)
+        required: true
+        default: latest
+        type: string
 
 env:
   REGISTRY_REGION: us-central1
@@ -19,10 +31,12 @@ env:
 jobs:
   deploy-backend:
     if: |
-      github.event_name == 'workflow_run' &&
-      github.event.workflow_run.event == 'push' &&
-      github.event.workflow_run.head_branch == 'master' &&
-      github.event.workflow_run.conclusion == 'success'
+      (
+        github.event_name == 'workflow_run' &&
+        github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.head_branch == 'master' &&
+        github.event.workflow_run.conclusion == 'success'
+      ) || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     environment: deployment
     permissions:
@@ -33,7 +47,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || inputs.branch }}
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
@@ -46,7 +60,11 @@ jobs:
       - name: Resolve image tag
         id: image-tag
         run: |
-          echo "tag=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            echo "tag=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${{ inputs.image_tag }}" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Deploy to Cloud Run
         run: |

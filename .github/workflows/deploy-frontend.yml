@@ -8,14 +8,23 @@ on:
       - master
     types:
       - completed
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: Branch to deploy frontend from
+        required: true
+        default: master
+        type: string
 
 jobs:
   deploy-frontend:
     if: |
-      github.event_name == 'workflow_run' &&
-      github.event.workflow_run.event == 'push' &&
-      github.event.workflow_run.head_branch == 'master' &&
-      github.event.workflow_run.conclusion == 'success'
+      (
+        github.event_name == 'workflow_run' &&
+        github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.head_branch == 'master' &&
+        github.event.workflow_run.conclusion == 'success'
+      ) || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     environment: deployment
     permissions:
@@ -26,7 +35,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || inputs.branch }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
