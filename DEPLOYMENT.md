@@ -1,6 +1,56 @@
 # Deployment Guide
 
-This document is the start-to-finish deployment runbook for UTLWA. It is organized by deployment stage so you can jump to the step you need instead of re-reading the whole process.
+## ⚡ Quick Start: Automated Deployment
+
+**Most deployments are now automated via GitHub Actions!**
+
+### For developers: Just push code to `develop` or `main`
+
+1. Make changes in a feature branch
+2. Open a pull request to `develop` or `main`
+3. GitHub Actions CI runs automatically (lint, test, security checks)
+4. Once CI passes and PR is merged:
+   - **Backend** automatically builds, pushes to Artifact Registry, and deploys to Cloud Run
+   - **Frontend** automatically builds and deploys to Firebase Hosting
+   - **Database migrations** run automatically as part of backend deployment
+
+### One-time setup required:
+
+Before automated deployments can start, you need to configure GitHub Actions secrets:
+
+1. **GCP Service Account**: Follow [GCP_SERVICE_ACCOUNT_SETUP.md](.github/workflows/GCP_SERVICE_ACCOUNT_SETUP.md)
+   - Creates service account with minimal permissions
+   - Generates JSON key and stores it in GitHub Secrets
+2. **Firebase Token**: Follow [FIREBASE_AUTH_SETUP.md](.github/workflows/FIREBASE_AUTH_SETUP.md)
+   - Generates Firebase CLI token for hosting deployments
+   - Stores token in GitHub Secrets
+
+After setup, you never need to run manual deployment commands again. 🎉
+
+### View deployment status:
+
+All deployment runs are visible in the **Actions** tab of your GitHub repository:
+- Click on a workflow run to see logs
+- Check deployment summaries in **Step Summary** section
+
+### Related documentation:
+
+- [.github/workflows/README.md](.github/workflows/README.md) — Workflow architecture and troubleshooting
+- [GCP_SERVICE_ACCOUNT_SETUP.md](.github/workflows/GCP_SERVICE_ACCOUNT_SETUP.md) — Create GCP service account
+- [FIREBASE_AUTH_SETUP.md](.github/workflows/FIREBASE_AUTH_SETUP.md) — Generate Firebase token
+
+---
+
+## Manual Deployment (Advanced / First-Time Setup)
+
+The sections below describe **manual deployment steps**. These are:
+- **Optional** if you've set up CI/CD (you probably don't need them)
+- **Necessary** for initial infrastructure setup (Cloud SQL, Artifact Registry, etc.)
+- **Useful** for debugging or emergency fixes
+
+If you're just updating code: stop here, push to `develop` or `main`, and let GitHub Actions handle it.
+
+---
 
 ## 1. Before You Deploy
 
@@ -261,7 +311,7 @@ gcloud run deploy utlwa-backend `
   --platform managed `
   --max-instances=1 `
   --set-cloudsql-instances "${PROJECT_ID}:us-central1:utlwa-postgres" `
-  --set-env-vars "NODE_ENV=production,PG_HOST=/cloudsql/${PROJECT_ID}:us-central1:utlwa-postgres,PG_PORT=5432,PG_USER=utlwa_app,PG_DATABASE=utlwa_db,FRONTEND_URL=https://YOUR_FRONTEND_DOMAIN" `
+  --set-env-vars "NODE_ENV=production,PG_HOST=/cloudsql/${PROJECT_ID}:us-central1:utlwa-postgres,PG_PORT=5432,PG_USER=utlwa_app,PG_DATABASE=utlwa_db,FRONTEND_URL=https://YOUR_FRONTEND_DOMAIN,R2_ACCOUNT_ID=5ffb2565a9160f63abccb1bcebb49f23,R2_ACCESS_KEY_ID=fb88b984f34183141d3d7ba6e3c6f17c,R2_SECRET_ACCESS_KEY=b50c6aabcd9e66beb958d48a719262aabe8bdea1e18daf1a536014684caa466d,R2_BUCKET_NAME=utlwa-verification-docs,R2_ENDPOINT=https://5ffb2565a9160f63abccb1bcebb49f23.r2.cloudflarestorage.com,R2_PUBLIC_BASE_URL=" `
   --set-secrets "JWT_SECRET=JWT_SECRET:latest,PG_PWD=PG_PWD:latest"
 ```
 

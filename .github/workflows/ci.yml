@@ -3,21 +3,9 @@ name: CI
 on:
   pull_request:
   workflow_dispatch:
-    inputs:
-      force_lint_failure:
-        description: "Force the lint job to fail (for demo/evidence runs)"
-        required: false
-        default: false
-        type: boolean
-      force_security_failure:
-        description: "Force the security-scan job to fail (for demo/evidence runs)"
-        required: false
-        default: false
-        type: boolean
   push:
     branches:
-      - main
-      - develop
+      - master
 
 jobs:
   lint:
@@ -32,28 +20,17 @@ jobs:
       run:
         working-directory: ${{ matrix.package-dir }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           cache-dependency-path: |
             frontend/package-lock.json
             backend/package-lock.json
       - run: npm ci
-      - name: Inject deliberate lint error (optional)
-        if: github.event_name == 'workflow_dispatch' && inputs.force_lint_failure == true
-        run: |
-          if [ "${{ matrix.package-dir }}" = "frontend" ]; then
-            echo "const __lint_fail_unused: number = 1;" > __lint_fail_test.ts
-          else
-            echo "var __lint_fail_unused = 1;" > __lint_fail_test.js
-          fi
       - name: Run linter
         run: npm run lint
-      - name: Clean up lint failure file
-        if: always()
-        run: rm -f __lint_fail_test.js __lint_fail_test.ts
 
   unit-tests:
     runs-on: ubuntu-latest
@@ -67,10 +44,10 @@ jobs:
       run:
         working-directory: ${{ matrix.package-dir }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           cache-dependency-path: |
             frontend/package-lock.json
@@ -80,29 +57,56 @@ jobs:
 
   security-scan:
     if: |
-      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-      github.event_name == 'workflow_dispatch' ||
-      github.event_name == 'push' && github.ref == 'refs/heads/develop'
+      (github.event_name == 'push' && github.ref == 'refs/heads/master') ||
+      github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: backend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           cache-dependency-path: backend/package-lock.json
       - name: Install backend dependencies
         run: npm ci
       - name: Scan backend dependencies for vulnerabilities
         run: npm audit --omit=dev --audit-level=high
-      - name: Demonstrate deliberate security-scan failure (optional)
-        if: github.event_name == 'workflow_dispatch'
+
+  container-build-push:
+    if: |
+      (github.event_name == 'push' && github.ref == 'refs/heads/master') ||
+      github.event_name == 'workflow_dispatch'
+    needs:
+      - lint
+      - unit-tests
+      - security-scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      REGISTRY_REGION: us-central1
+      REGISTRY_REPO: utlwa-backend
+    steps:
+      - uses: actions/checkout@v5
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGISTRY_REGION }}-docker.pkg.dev
+      - name: Build Docker image
         run: |
-          if [ "${{ inputs.force_security_failure }}" = "true" ]; then
-            echo "Intentional security-scan failure for CI evidence."
-            exit 1
-          fi
-          echo "Demo flag is false; no forced failure."
+          docker build \
+            -t "${{ env.REGISTRY_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ env.REGISTRY_REPO }}/backend:${{ github.sha }}" \
+            -t "${{ env.REGISTRY_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ env.REGISTRY_REPO }}/backend:latest" \
+            ./backend
+      - name: Push Docker image to Artifact Registry
+        run: |
+          docker push "${{ env.REGISTRY_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ env.REGISTRY_REPO }}/backend:${{ github.sha }}"
+          docker push "${{ env.REGISTRY_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ env.REGISTRY_REPO }}/backend:latest"

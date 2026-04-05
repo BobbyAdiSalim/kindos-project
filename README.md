@@ -238,6 +238,77 @@ npm run test:coverage
 
 Coverage reports are generated in `frontend/coverage/`, and the HTML report is available at `frontend/coverage/index.html`.
 
+## CI/CD & Automated Deployment
+
+This project uses **GitHub Actions** for automated testing and deployment.
+
+### Continuous Integration (CI)
+
+Every push and pull request runs:
+- **Linting** (ESLint on both frontend and backend)
+- **Unit Tests** (Vitest on both frontend and backend)
+- **Security Scan** (npm audit on backend, high-severity only)
+
+**CI gates all deployments** — code must pass all checks before it can be deployed.
+
+### Continuous Deployment (CD)
+
+When CI passes and code is merged to `develop` or `main`:
+- **Backend** automatically builds as a Docker image, pushes to Google Artifact Registry, and deploys to Google Cloud Run
+- **Frontend** automatically builds and deploys to Firebase Hosting
+- **Database migrations** run automatically as part of the backend deployment
+
+### One-Time Setup
+
+Before automated deployments can work, you need to set up two things:
+
+1. **GCP Service Account** — See [.github/workflows/GCP_SERVICE_ACCOUNT_SETUP.md](.github/workflows/GCP_SERVICE_ACCOUNT_SETUP.md)
+   - Grants GitHub Actions permission to deploy to Google Cloud
+   - Create service account, assign roles, and store credentials in GitHub Secrets
+
+2. **Firebase CLI Token** — See [.github/workflows/FIREBASE_AUTH_SETUP.md](.github/workflows/FIREBASE_AUTH_SETUP.md)
+   - Allows GitHub Actions to deploy the frontend to Firebase Hosting
+   - Generate token locally and store in GitHub Secrets
+
+### Workflow Architecture
+
+```
+Code Push to develop/main
+         ↓
+    [CI Workflow]
+  • Lint (frontend, backend)
+  • Test (frontend, backend)
+  • Security Scan (backend)
+         ↓ (if all pass)
+   [Backend Deploy] ────┐
+  • Build Docker image  │
+  • Push to AR          │  Run in parallel
+  • Deploy to Cloud Run │
+  • Run migrations      │
+                        ├→ [Frontend Deploy]
+                        │  • Build frontend
+                        │  • Deploy to Firebase
+                        │
+                        └→ Services live
+```
+
+### View CI/CD Status
+
+All workflow runs are visible in the **Actions** tab of the GitHub repository. Click on any workflow run to see:
+- Individual job logs
+- Deployment summaries
+- Any errors or failures
+
+### Manual Deployment (if needed)
+
+For emergency or testing purposes, you can manually trigger deployments via GitHub Actions **workflow_dispatch** feature without pushing code.
+
+For full deployment documentation, see [DEPLOYMENT.md](DEPLOYMENT.md).
+
+For detailed workflow architecture and troubleshooting, see [.github/workflows/README.md](.github/workflows/README.md).
+
+---
+
 ## Database Models
 
 The backend uses Sequelize ORM with the following models:

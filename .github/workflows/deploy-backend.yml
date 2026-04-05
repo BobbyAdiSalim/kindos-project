@@ -1,0 +1,131 @@
+name: Deploy Backend
+
+on:
+  workflow_run:
+    workflows:
+      - CI
+    branches:
+      - master
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: Branch to deploy from
+        required: true
+        default: master
+        type: string
+      image_tag:
+        description: Image tag to deploy (e.g. latest or commit SHA)
+        required: true
+        default: latest
+        type: string
+
+env:
+  REGISTRY_REGION: us-central1
+  REGISTRY_REPO: utlwa-backend
+  RUN_SERVICE: utlwa-backend
+  SQL_INSTANCE: utlwa-postgres
+  SQL_REGION: us-central1
+
+jobs:
+  deploy-backend:
+    if: |
+      (
+        github.event_name == 'workflow_run' &&
+        github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.head_branch == 'master' &&
+        github.event.workflow_run.conclusion == 'success'
+      ) || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment: deployment
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || inputs.branch }}
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Resolve image tag
+        id: image-tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            echo "tag=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${{ inputs.image_tag }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy ${{ env.RUN_SERVICE }} \
+            --image "${{ env.REGISTRY_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ env.REGISTRY_REPO }}/backend:${{ steps.image-tag.outputs.tag }}" \
+            --region ${{ env.REGISTRY_REGION }} \
+            --platform managed \
+            --allow-unauthenticated \
+            --max-instances=10 \
+            --set-cloudsql-instances "${{ vars.GCP_PROJECT_ID }}:${{ env.SQL_REGION }}:${{ env.SQL_INSTANCE }}" \
+            --set-env-vars "\
+              NODE_ENV=production,\
+              PG_HOST=/cloudsql/${{ vars.GCP_PROJECT_ID }}:${{ env.SQL_REGION }}:${{ env.SQL_INSTANCE }},\
+              PG_PORT=5432,\
+              PG_USER=utlwa_app,\
+              PG_DATABASE=utlwa_db,\
+              FRONTEND_URL=${{ vars.FRONTEND_URL }},\
+              R2_ACCOUNT_ID=${{ vars.R2_ACCOUNT_ID }},\
+              R2_ACCESS_KEY_ID=${{ secrets.R2_ACCESS_KEY_ID }},\
+              R2_SECRET_ACCESS_KEY=${{ secrets.R2_SECRET_ACCESS_KEY }},\
+              R2_BUCKET_NAME=${{ vars.R2_BUCKET_NAME }},\
+              R2_ENDPOINT=${{ vars.R2_ENDPOINT }},\
+              R2_PUBLIC_BASE_URL=${{ vars.R2_PUBLIC_BASE_URL }}" \
+            --set-secrets "JWT_SECRET=JWT_SECRET:latest,PG_PWD=PG_PWD:latest"
+
+      - name: Run database migrations
+        run: |
+          gcloud run jobs create utlwa-db-migrate \
+            --image "${{ env.REGISTRY_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ env.REGISTRY_REPO }}/backend:${{ steps.image-tag.outputs.tag }}" \
+            --region ${{ env.REGISTRY_REGION }} \
+            --set-cloudsql-instances "${{ vars.GCP_PROJECT_ID }}:${{ env.SQL_REGION }}:${{ env.SQL_INSTANCE }}" \
+            --set-env-vars "\
+              NODE_ENV=production,\
+              PG_HOST=/cloudsql/${{ vars.GCP_PROJECT_ID }}:${{ env.SQL_REGION }}:${{ env.SQL_INSTANCE }},\
+              PG_PORT=5432,\
+              PG_USER=utlwa_app,\
+              PG_DATABASE=utlwa_db" \
+            --set-secrets "PG_PWD=PG_PWD:latest" \
+            --args "run,migrate" \
+            --command npm \
+            --no-gen2 \
+            2>/dev/null || true
+          
+          gcloud run jobs execute utlwa-db-migrate \
+            --region ${{ env.REGISTRY_REGION }} \
+            --wait
+
+      - name: Verify Cloud Run service
+        run: |
+          gcloud run services describe ${{ env.RUN_SERVICE }} \
+            --region ${{ env.REGISTRY_REGION }} \
+            --format='value(status.url)'
+
+      - name: Create deployment summary
+        run: |
+          {
+            echo "### Backend Deployment Successful"
+            echo ""
+            echo "**Service**: \`${{ env.RUN_SERVICE }}\`"
+            echo "**Region**: \`${{ env.REGISTRY_REGION }}\`"
+            echo "**Image Tag**: \`${{ steps.image-tag.outputs.tag }}\`"
+            echo "**Branch**: \`${{ github.ref_name }}\`"
+            echo "**Commit**: \`${{ github.sha }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
