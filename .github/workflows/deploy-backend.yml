@@ -25,6 +25,7 @@ env:
   REGISTRY_REGION: us-central1
   REGISTRY_REPO: utlwa-backend
   RUN_SERVICE: utlwa-backend
+  CANARY_TAG: canary
   SQL_INSTANCE: utlwa-postgres
   SQL_REGION: us-central1
 
@@ -66,13 +67,39 @@ jobs:
             echo "tag=${{ inputs.image_tag }}" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Deploy to Cloud Run
+      - name: Set release metadata
+        id: release-meta
+        run: |
+          IMAGE_URI="${{ env.REGISTRY_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ env.REGISTRY_REPO }}/backend:${{ steps.image-tag.outputs.tag }}"
+          REV_SUFFIX="canary-$(echo "${{ steps.image-tag.outputs.tag }}" | cut -c1-12 | tr '[:upper:]' '[:lower:]')"
+          echo "image_uri=$IMAGE_URI" >> "$GITHUB_OUTPUT"
+          echo "revision_suffix=$REV_SUFFIX" >> "$GITHUB_OUTPUT"
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGISTRY_REGION }}-docker.pkg.dev
+
+      - name: Pull image built by CI
+        run: docker pull "${{ steps.release-meta.outputs.image_uri }}"
+
+      - name: Capture current stable revision (for reporting)
+        id: stable-revision
+        run: |
+          STABLE_REVISION=$(gcloud run services describe ${{ env.RUN_SERVICE }} \
+            --region ${{ env.REGISTRY_REGION }} \
+            --format='value(status.traffic[0].revisionName)')
+          echo "stable_revision=$STABLE_REVISION" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy canary revision with no production traffic
+        id: deploy-canary
         run: |
           gcloud run deploy ${{ env.RUN_SERVICE }} \
-            --image "${{ env.REGISTRY_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ env.REGISTRY_REPO }}/backend:${{ steps.image-tag.outputs.tag }}" \
+            --image "${{ steps.release-meta.outputs.image_uri }}" \
+            --revision-suffix "${{ steps.release-meta.outputs.revision_suffix }}" \
             --region ${{ env.REGISTRY_REGION }} \
             --platform managed \
             --allow-unauthenticated \
+            --no-traffic \
+            --tag ${{ env.CANARY_TAG }} \
             --max-instances=10 \
             --set-cloudsql-instances "${{ vars.GCP_PROJECT_ID }}:${{ env.SQL_REGION }}:${{ env.SQL_INSTANCE }}" \
             --set-env-vars "\
@@ -90,10 +117,66 @@ jobs:
               R2_PUBLIC_BASE_URL=${{ vars.R2_PUBLIC_BASE_URL }}" \
             --set-secrets "JWT_SECRET=JWT_SECRET:latest,PG_PWD=PG_PWD:latest"
 
+      - name: Resolve canary revision and URL
+        id: canary-meta
+        run: |
+          SERVICE_JSON=$(gcloud run services describe ${{ env.RUN_SERVICE }} --region ${{ env.REGISTRY_REGION }} --format=json)
+          CANARY_REVISION=$(echo "$SERVICE_JSON" | python3 -c "import json,sys;d=json.load(sys.stdin);t=next((x for x in d.get('status',{}).get('traffic',[]) if x.get('tag')=='${{ env.CANARY_TAG }}'),None);print((t or {}).get('revisionName',''))")
+          CANARY_URL=$(echo "$SERVICE_JSON" | python3 -c "import json,sys;d=json.load(sys.stdin);t=next((x for x in d.get('status',{}).get('traffic',[]) if x.get('tag')=='${{ env.CANARY_TAG }}'),None);print((t or {}).get('url',''))")
+
+          if [ -z "$CANARY_REVISION" ] || [ -z "$CANARY_URL" ]; then
+            echo "Failed to resolve canary metadata from Cloud Run traffic tags."
+            exit 1
+          fi
+
+          echo "canary_revision=$CANARY_REVISION" >> "$GITHUB_OUTPUT"
+          echo "canary_url=$CANARY_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Canary analysis - revision ready
+        run: |
+          READY=$(gcloud run revisions describe "${{ steps.canary-meta.outputs.canary_revision }}" \
+            --region "${{ env.REGISTRY_REGION }}" \
+            --format="value(status.conditions[?type='Ready'].status)")
+          if [ "$READY" != "True" ]; then
+            echo "Canary revision is not Ready."
+            exit 1
+          fi
+
+      - name: Canary analysis - health endpoint
+        run: |
+          curl --fail --silent --show-error --retry 5 --retry-delay 3 \
+            "${{ steps.canary-meta.outputs.canary_url }}/"
+
+      - name: Canary analysis - smoke API tests
+        run: |
+          curl --fail --silent --show-error --retry 5 --retry-delay 3 \
+            "${{ steps.canary-meta.outputs.canary_url }}/api/doctors"
+          curl --fail --silent --show-error --retry 5 --retry-delay 3 \
+            "${{ steps.canary-meta.outputs.canary_url }}/api/doctors/with-availability"
+
+      - name: Canary analysis - short error log scan
+        run: |
+          ERROR_COUNT=$(gcloud logging read \
+            "resource.type=cloud_run_revision AND resource.labels.service_name='${{ env.RUN_SERVICE }}' AND resource.labels.revision_name='${{ steps.canary-meta.outputs.canary_revision }}' AND severity>=ERROR" \
+            --freshness=10m \
+            --limit=20 \
+            --format='value(insertId)' | wc -l)
+
+          if [ "$ERROR_COUNT" -gt 0 ]; then
+            echo "Canary analysis failed: found $ERROR_COUNT error log entries for revision ${{ steps.canary-meta.outputs.canary_revision }}."
+            exit 1
+          fi
+
+      - name: Promote canary to full traffic
+        run: |
+          gcloud run services update-traffic ${{ env.RUN_SERVICE }} \
+            --region ${{ env.REGISTRY_REGION }} \
+            --to-tags ${{ env.CANARY_TAG }}=100
+
       - name: Run database migrations
         run: |
           gcloud run jobs create utlwa-db-migrate \
-            --image "${{ env.REGISTRY_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ env.REGISTRY_REPO }}/backend:${{ steps.image-tag.outputs.tag }}" \
+            --image "${{ steps.release-meta.outputs.image_uri }}" \
             --region ${{ env.REGISTRY_REGION }} \
             --set-cloudsql-instances "${{ vars.GCP_PROJECT_ID }}:${{ env.SQL_REGION }}:${{ env.SQL_INSTANCE }}" \
             --set-env-vars "\
@@ -119,13 +202,33 @@ jobs:
             --format='value(status.url)'
 
       - name: Create deployment summary
+        if: success()
         run: |
           {
-            echo "### Backend Deployment Successful"
+            echo "### Backend Canary Deployment Promoted"
             echo ""
             echo "**Service**: \`${{ env.RUN_SERVICE }}\`"
             echo "**Region**: \`${{ env.REGISTRY_REGION }}\`"
             echo "**Image Tag**: \`${{ steps.image-tag.outputs.tag }}\`"
+            echo "**Image URI**: \`${{ steps.release-meta.outputs.image_uri }}\`"
+            echo "**Previous Stable Revision**: \`${{ steps.stable-revision.outputs.stable_revision }}\`"
+            echo "**Canary Revision**: \`${{ steps.canary-meta.outputs.canary_revision }}\`"
+            echo "**Canary URL**: ${{ steps.canary-meta.outputs.canary_url }}"
+            echo "**Canary Analysis Checks**: revision Ready, health endpoint, smoke API, error-log scan"
             echo "**Branch**: \`${{ github.ref_name }}\`"
             echo "**Commit**: \`${{ github.sha }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Create canary failure summary
+        if: failure()
+        run: |
+          {
+            echo "### Backend Canary Deployment Rejected"
+            echo ""
+            echo "Canary analysis failed. Promotion to full traffic was not executed."
+            echo ""
+            echo "**Service**: \`${{ env.RUN_SERVICE }}\`"
+            echo "**Region**: \`${{ env.REGISTRY_REGION }}\`"
+            echo "**Image Tag**: \`${{ steps.image-tag.outputs.tag }}\`"
+            echo "**Canary Tag**: \`${{ env.CANARY_TAG }}\`"
           } >> "$GITHUB_STEP_SUMMARY"

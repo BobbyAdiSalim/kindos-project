@@ -7,7 +7,7 @@ This document describes the GitHub Actions CI/CD workflows for the UTLWA project
 The project uses a **gated deployment model**: 
 1. **CI workflow** runs tests, linting, and security scans on every push and pull request
 2. **Deploy workflows** only trigger when CI succeeds
-3. Deployments are automatic on push to `develop` and `main` branches
+3. Deployments are automatic on push to `master`
 
 ```
 Code Push
@@ -37,7 +37,7 @@ Code Push
 - **`unit-tests`** — Run Vitest on `frontend/` and `backend/`
   - Same matrix and caching as lint
 - **`security-scan`** — Run `npm audit` on backend dependencies
-  - Only runs on pushes to `develop`/`main` or manual workflow dispatch
+  - Only runs on pushes to `master` or manual workflow dispatch
   - Checks for high-severity vulnerabilities (`--audit-level=high`)
   - Omits dev dependencies (`--omit=dev`)
 
@@ -58,22 +58,29 @@ If CI fails, deploy workflows will not trigger automatically.
 ### 2. `deploy-backend.yml` — Backend Deployment
 
 **Trigger**: 
-- Automatically when CI succeeds on push to `develop` or `main`
-- Or manually via `workflow_dispatch` (allows selecting branch: develop | main)
+- Automatically when CI succeeds on push to `master`
+- Or manually via `workflow_dispatch`
 
 **Jobs**:
-- **`deploy-backend`** (single job, runs sequentially with migration job):
+- **`deploy-backend`** (single job, canary-gated deployment):
   1. **Authenticate to GCP** using `GCP_SA_KEY` secret
-  2. **Build Docker image** from `backend/Dockerfile`
-     - Tags: `us-central1-docker.pkg.dev/{PROJECT_ID}/utlwa-backend/backend:{branch}-{sha}` and `:branch-latest`
-  3. **Push to Artifact Registry** in Google Cloud
-  4. **Deploy to Cloud Run**
+  2. **Resolve image from CI output** using commit SHA tag (or manual input tag)
+  3. **Pull image from Artifact Registry**
+  4. **Deploy canary revision with no production traffic**
      - Service name: `utlwa-backend`
      - Region: `us-central1` 
      - Attaches Cloud SQL instance: `utlwa-postgres`
      - Sets environment variables (NODE_ENV, DB config, API keys, etc.)
      - Binds secrets from Google Secret Manager (JWT_SECRET, PG_PWD)
-  5. **Run database migrations**
+  5. **Run canary analysis checks**
+    - Revision reaches `Ready` state
+    - Health endpoint success (`GET /`)
+    - Smoke API checks (`/api/doctors`, `/api/doctors/with-availability`)
+    - Short error-log scan for canary revision
+  6. **Promote or reject**
+    - On pass: promote canary tag to 100% traffic
+    - On fail: stop workflow and report canary rejection
+  7. **Run database migrations after successful promotion**
      - Creates/updates Cloud Run Job `utlwa-db-migrate`
      - Executes `npm run migrate` with same DB config
      - Waits for job to complete before marking workflow as done
@@ -101,7 +108,7 @@ If CI fails, deploy workflows will not trigger automatically.
 ### 3. `deploy-frontend.yml` — Frontend Deployment
 
 **Trigger**: 
-- Automatically when CI succeeds on push to `develop` or `main`
+- Automatically when CI succeeds on push to `master`
 - Or manually via `workflow_dispatch`
 
 **Jobs**:
@@ -151,10 +158,8 @@ Both services live
 - **Repository**: `utlwa-backend`
 - **Image naming**: `us-central1-docker.pkg.dev/{PROJECT_ID}/utlwa-backend/backend`
 - **Tags**:
-  - `develop-{commit_sha}` — Every develop push
-  - `develop-latest` — Latest develop commit
-  - `main-{commit_sha}` — Every main push
-  - `main-latest` — Latest production commit
+  - `{commit_sha}` — Every master push
+  - `latest` — Latest production commit
 
 ### Frontend Build
 - **Output directory**: `frontend/dist/`
@@ -240,7 +245,7 @@ See [GCP Service Account Setup](#) and [Firebase Authentication Setup](#) for in
 ## Troubleshooting
 
 ### Deploy workflow won't trigger after CI success
-- **Check**: Are you pushing to `develop` or `main`? (workflow_run triggers only on these branches)
+- **Check**: Are you pushing to `master`? (workflow_run triggers only on this branch)
 - **Check**: Did CI actually pass? (look at CI workflow run first)
 - **Fix**: Manual trigger via `workflow_dispatch` to debug
 
