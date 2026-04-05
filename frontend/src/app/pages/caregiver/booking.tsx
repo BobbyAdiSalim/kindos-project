@@ -26,13 +26,13 @@ import { ArrowLeft, Clock, Loader2 } from 'lucide-react';
 export function CaregiverBooking() {
   const { patientId } = useParams<{ patientId: string }>();
   const navigate = useNavigate();
-  const { token } = useAuth();
+  const { token: _token } = useAuth();
   const numericPatientId = Number(patientId);
 
   const [patient, setPatient] = useState<LinkedPatient | null>(null);
   const [doctors, setDoctors] = useState<any[]>([]);
   const [selectedDoctorId, setSelectedDoctorId] = useState<number | null>(null);
-  const [doctor, setDoctor] = useState<DoctorProfile | null>(null);
+  const [_doctor, setDoctor] = useState<DoctorProfile | null>(null);
 
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [selectedTime, setSelectedTime] = useState('');

@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 import { useAuth } from '@/app/lib/auth-context';
 
 export function CaregiverProfile() {
-  const { user, updateUser } = useAuth();
+  const { user: _user, updateUser } = useAuth();
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
