@@ -51,12 +51,12 @@ jobs:
           ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || inputs.branch }}
 
       - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
+        uses: google-github-actions/auth@v3
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
       - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
+        uses: google-github-actions/setup-gcloud@v3
 
       - name: Resolve image tag
         id: image-tag
@@ -134,11 +134,36 @@ jobs:
 
       - name: Canary analysis - revision ready
         run: |
-          READY=$(gcloud run revisions describe "${{ steps.canary-meta.outputs.canary_revision }}" \
-            --region "${{ env.REGISTRY_REGION }}" \
-            --format="value(status.conditions[?type='Ready'].status)")
-          if [ "$READY" != "True" ]; then
-            echo "Canary revision is not Ready."
+          REVISION="${{ steps.canary-meta.outputs.canary_revision }}"
+          REGION="${{ env.REGISTRY_REGION }}"
+
+          # Wait for Cloud Run to settle the revision state before deciding pass/fail.
+          MAX_ATTEMPTS=24
+          SLEEP_SECONDS=5
+          ATTEMPT=1
+          READY_STATUS=""
+
+          while [ "$ATTEMPT" -le "$MAX_ATTEMPTS" ]; do
+            READY_STATUS=$(gcloud run revisions describe "$REVISION" \
+              --region "$REGION" \
+              --format="value(status.conditions[?type='Ready'].status)")
+
+            if [ "$READY_STATUS" = "True" ]; then
+              echo "Canary revision is Ready."
+              break
+            fi
+
+            echo "Attempt $ATTEMPT/$MAX_ATTEMPTS: revision Ready status='$READY_STATUS'. Waiting $SLEEP_SECONDS seconds..."
+            ATTEMPT=$((ATTEMPT + 1))
+            sleep "$SLEEP_SECONDS"
+          done
+
+          if [ "$READY_STATUS" != "True" ]; then
+            echo "Canary revision is not Ready after polling."
+            echo "Revision condition details:"
+            gcloud run revisions describe "$REVISION" \
+              --region "$REGION" \
+              --format="table(status.conditions[].type,status.conditions[].status,status.conditions[].reason,status.conditions[].message)"
             exit 1
           fi
 
