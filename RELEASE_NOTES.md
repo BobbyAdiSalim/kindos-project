@@ -1,4 +1,7 @@
 # What's New
+## v1.2.1
+- **Canary CD Pipeline:** Backend deployments now use a canary release flow with readiness, health, smoke, and log-based analysis before promotion to full traffic.
+
 ## v1.2.0
 - **Automated CI Pipeline:** Pull requests and pushes now run linting, unit tests, and security checks automatically to catch issues before deployment.
 - **Parallel CI Jobs and Caching:** Independent CI jobs run in parallel with caching improvements to reduce feedback time and keep pipeline runs efficient.
