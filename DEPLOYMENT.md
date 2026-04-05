@@ -4,13 +4,13 @@
 
 **Most deployments are now automated via GitHub Actions!**
 
-### For developers: Just push code to `develop` or `main`
+### For developers: Just push code to `master`
 
 1. Make changes in a feature branch
-2. Open a pull request to `develop` or `main`
+2. Open a pull request to `master`
 3. GitHub Actions CI runs automatically (lint, test, security checks)
 4. Once CI passes and PR is merged:
-   - **Backend** automatically builds, pushes to Artifact Registry, and deploys to Cloud Run
+  - **Backend** automatically builds, pushes to Artifact Registry, deploys a canary revision, runs canary analysis, and promotes only on success
    - **Frontend** automatically builds and deploys to Firebase Hosting
    - **Database migrations** run automatically as part of backend deployment
 
@@ -48,7 +48,7 @@ The sections below describe **manual deployment steps**. These are:
 - **Necessary** for initial infrastructure setup (Cloud SQL, Artifact Registry, etc.)
 - **Useful** for debugging or emergency fixes
 
-If you're just updating code: stop here, push to `develop` or `main`, and let GitHub Actions handle it.
+If you're just updating code: stop here, push to `master`, and let GitHub Actions handle it.
 
 ---
 
