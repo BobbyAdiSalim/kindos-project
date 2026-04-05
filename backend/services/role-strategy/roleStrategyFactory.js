@@ -18,6 +18,7 @@ one place instead of updating many files.
 */
 
 import adminRoleStrategy from './strategies/adminRoleStrategy.js';
+import caregiverRoleStrategy from './strategies/caregiverRoleStrategy.js';
 import doctorRoleStrategy from './strategies/doctorRoleStrategy.js';
 import patientRoleStrategy from './strategies/patientRoleStrategy.js';
 
@@ -25,6 +26,7 @@ const STRATEGIES = {
   patient: patientRoleStrategy,
   doctor: doctorRoleStrategy,
   admin: adminRoleStrategy,
+  caregiver: caregiverRoleStrategy,
 };
 
 export const getRoleStrategy = (role) => {

@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { disconnectSocket } from './socket';
 
-export type UserRole = 'patient' | 'doctor' | 'admin';
+export type UserRole = 'patient' | 'doctor' | 'admin' | 'caregiver';
 
 export interface User {
   id: string;
@@ -69,6 +69,7 @@ const mapApiUserToUser = (apiUser: AuthApiResponse['user']): User => ({
 export const getDashboardPath = (role: UserRole) => {
   if (role === 'patient') return '/patient/dashboard';
   if (role === 'doctor') return '/doctor/dashboard';
+  if (role === 'caregiver') return '/caregiver/dashboard';
   return '/admin/dashboard';
 };
 

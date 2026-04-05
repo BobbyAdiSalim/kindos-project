@@ -7,7 +7,7 @@ import { fileURLToPath } from 'url';
 import { Readable } from 'stream';
 import { Op } from 'sequelize';
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
-import { sequelize, User, Patient, Doctor, Review, AdminLog } from '../../models/index.js';
+import { sequelize, User, Patient, Doctor, Review, AdminLog, Caregiver } from '../../models/index.js';
 import { getRoleStrategy } from '../../services/role-strategy/index.js';
 import { sendEmailByType } from '../../services/email-strategy/index.js';
 
@@ -21,7 +21,7 @@ const JWT_EXPIRES_IN = cleanEnv(process.env.JWT_EXPIRES_IN, '1h');
 const MIN_PASSWORD_LENGTH = 8;
 const RESET_TOKEN_EXPIRES_MINUTES = Number(cleanEnv(process.env.RESET_TOKEN_EXPIRES_MINUTES, '60'));
 const FRONTEND_URL = cleanEnv(process.env.FRONTEND_URL, 'http://localhost:5173');
-const REGISTRABLE_ROLES = new Set(['patient', 'doctor']);
+const REGISTRABLE_ROLES = new Set(['patient', 'doctor', 'caregiver']);
 const MAX_VERIFICATION_DOCUMENT_BYTES = 5 * 1024 * 1024;
 const R2_BUCKET_NAME = cleanEnv(process.env.R2_BUCKET_NAME);
 const R2_ENDPOINT = cleanEnv(process.env.R2_ENDPOINT);
@@ -148,6 +148,21 @@ const createRoleProfile = async (transaction, user, body) => {
       specialty: profile.specialty,
       verification_status: profile.verification_status,
       profile_complete: profile.profile_complete,
+    };
+  }
+
+  if (user.role === 'caregiver') {
+    const profile = await Caregiver.create(
+      {
+        user_id: user.id,
+        full_name: body.name,
+        time_zone: normalizeTimeZone(body.timeZone),
+      },
+      { transaction }
+    );
+    return {
+      id: profile.id,
+      full_name: profile.full_name,
     };
   }
 
@@ -375,7 +390,7 @@ export const registerUser = async (req, res) => {
 
     if (!REGISTRABLE_ROLES.has(role)) {
       await transaction.rollback();
-      return res.status(400).json({ error: "Role must be either 'patient' or 'doctor'." });
+      return res.status(400).json({ error: "Role must be 'patient', 'doctor', or 'caregiver'." });
     }
 
     if (role === 'doctor' && (!specialty || !licenseNumber)) {
@@ -507,6 +522,16 @@ export const loginUser = async (req, res) => {
             specialty: doctor.specialty,
             verification_status: doctor.verification_status,
             profile_complete: doctor.profile_complete,
+          }
+        : null;
+    }
+
+    if (user.role === 'caregiver') {
+      const caregiver = await Caregiver.findOne({ where: { user_id: user.id } });
+      profile = caregiver
+        ? {
+            id: caregiver.id,
+            full_name: caregiver.full_name,
           }
         : null;
     }
@@ -790,6 +815,24 @@ export const updateMyProfile = async (req, res) => {
 
       if (Object.keys(doctorUpdates).length > 0) {
         await doctor.update(doctorUpdates, { transaction });
+      }
+    } else if (user.role === 'caregiver') {
+      const caregiver = await Caregiver.findOne({ where: { user_id: user.id }, transaction });
+
+      if (!caregiver) {
+        await transaction.rollback();
+        return res.status(404).json({ error: 'Caregiver profile not found.' });
+      }
+
+      const caregiverUpdates = {};
+      if (typeof req.body.fullName === 'string') caregiverUpdates.full_name = req.body.fullName.trim();
+      if (typeof req.body.phone === 'string') caregiverUpdates.phone = req.body.phone.trim() || null;
+      if (Object.prototype.hasOwnProperty.call(req.body, 'timeZone')) {
+        caregiverUpdates.time_zone = normalizeTimeZone(req.body.timeZone);
+      }
+
+      if (Object.keys(caregiverUpdates).length > 0) {
+        await caregiver.update(caregiverUpdates, { transaction });
       }
     }
 

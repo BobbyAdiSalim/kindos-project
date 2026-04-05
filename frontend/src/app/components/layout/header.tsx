@@ -34,6 +34,7 @@ export function Header({ showAuth = true }: HeaderProps) {
     if (user.role === 'patient') return '/patient/dashboard';
     if (user.role === 'doctor') return '/doctor/dashboard';
     if (user.role === 'admin') return '/admin/dashboard';
+    if (user.role === 'caregiver') return '/caregiver/dashboard';
     return '/';
   };
 
@@ -41,6 +42,7 @@ export function Header({ showAuth = true }: HeaderProps) {
     if (!user) return '/';
     if (user.role === 'patient') return '/patient/profile';
     if (user.role === 'doctor') return '/doctor/profile';
+    if (user.role === 'caregiver') return '/caregiver/profile';
     return '/';
   };
 
