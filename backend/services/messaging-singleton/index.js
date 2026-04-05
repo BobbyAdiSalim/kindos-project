@@ -104,6 +104,7 @@ export const initMessagingIO = (httpServer, { frontendUrl, jwtSecret }) => {
     cors: {
       origin: frontendUrl,
       methods: ['GET', 'POST'],
+      credentials: true,
     },
   });
 
