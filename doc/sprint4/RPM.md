@@ -1,355 +1,269 @@
 # Release Plan
 
-**Release Name:** Release v1.1.0
+**Release Name:** Release v1.2.0 – Sprint 4 CI/CD and Canary Delivery
 
-### Release Objectives
+## Release Objectives
 
-- This release aims to strengthen platform security, improve appointment clarity across time zones, enhance doctor-patient communication through document sharing, standardize structured care selection, improve appointment rejection workflow, and increase system reliability through automated testing support.
+- This release aims to establish a complete CI/CD pipeline that automatically validates code changes, produces a deployable Docker image, deploys a canary release, evaluates canary health, and promotes only healthy releases.
 
-- Patients are able to view appointment times in their local time zone or a selected time zone.
+- Developers are able to run linting and unit tests automatically on pull requests and pushes to `main`.
 
-- Doctors are able to view appointment times in their local time zone or a selected time zone.
+- Developers are able to scan at least one service for vulnerabilities on pushes to `main` before release.
 
-- Doctors are able to send documents to patients through the messaging feature, and patients are able to receive and review them.
+- Pushes to `main` are able to build a Docker image and push it to a registry using the latest tag so that CD can deploy a consistent artifact.
 
-- Doctors are able to specify the types of care they provide during registration using a dropdown.
+- The CD pipeline is able to deploy a canary version of the application using the image produced by CI.
 
-- Patients are able to select the type of care they need, or "Don't know," from a dropdown questionnaire option.
+- Automated canary analysis checks are able to validate the canary before promotion.
 
-- Doctors are required to choose a rejection reason from a predefined dropdown when rejecting a patient appointment.
+- The CD pipeline is able to promote a successful canary and stop on failure so that deployment decisions are safe and automated.
 
-- Sensitive doctor information is no longer stored in clear text on the client side.
+- The full CI/CD flow is validated end-to-end before submission.
 
-- The system supports a unit testing framework and critical unit tests for important features such as authentication and messaging.
+- CI1.pdf and CD.pdf clearly document the implemented pipelines, failure evidence, deployment logic, and code locations so that the implementation can be verified.
 
+## Specific Goals
 
+### CI Workflow and Triggering
 
-### Specific Goals
+- Configure GitHub Actions workflows with the correct triggers for pull requests and pushes to `main`.
 
+- Ensure linting and unit tests run automatically on pull requests.
 
+- Ensure linting, unit tests, vulnerability scanning, and image building run automatically on pushes to `main`.
 
-#### Security and Data Handling
+- Prevent deployment steps from running in pull request validation workflows.
 
-- Prevent doctor information from being stored in clear text in browser local storage.
+### Code Quality and Test Automation
 
-- Store sensitive doctor-related client-side data in a safer format such as hashed values or secure cookies/session-based storage.
+- Run a linter on both pull requests and pushes to `main`.
 
-- Restrict new message thread initiation so that only doctors can initiate conversations, reducing spam.
+- Run unit tests automatically on both pull requests and pushes to `main`.
 
-- Ensure shared documents in messaging are accessible only to authorized users in the relevant conversation.
+- Catch regressions before code reaches deployment.
 
+- Provide clear CI job output so failures can be demonstrated and verified.
 
+### Security Scanning and Artifact Production
 
-#### Appointment Time Zone Support
+- Scan at least one service for vulnerabilities on pushes to `main`.
 
-- Allow patients to see appointment times in their local time zone or selected time zone.
+- Build a Docker image on pushes to `main`.
 
-- Allow doctors to see appointment times in their local time zone or selected time zone.
+- Push the image to a registry with the latest tag.
 
-- Display time zone information clearly and consistently across appointment-related pages.
+- Ensure CD consumes the same artifact built by CI rather than rebuilding separately.
 
-- Ensure the same appointment is shown accurately for both patient and doctor, with only the displayed time zone differing when applicable.
+### CI Efficiency and Industry Practice
 
+- Run independent CI jobs in parallel where possible.
 
+- Use caching appropriately to reduce unnecessary dependency installation time.
 
-#### Messaging and Document Sharing
+- Avoid inefficient practices that may lose marks, such as redundant installs or serialized independent jobs.
 
-- Allow doctors to send documents to patients through the messaging feature.
+### Canary Deployment and Validation
 
-- Allow patients to receive and access documents from doctors through the messaging feature.
+- Deploy a canary version of the application through the CD pipeline using the image built by CI.
 
-- Ensure uploaded documents are linked to the correct doctor-patient conversation.
+- Run automated canary analysis checks to determine whether the deployment is healthy.
 
-- Restrict unauthorized users from viewing or downloading shared documents.
+- Stop the pipeline automatically when the canary fails validation.
 
-- Allow only doctors to initiate new conversations to reduce spam and unwanted outreach.
+- Promote the canary automatically when validation succeeds.
 
+### Documentation and End-to-End Validation
 
+- Produce CI1.pdf documenting CI workflow steps, evidence of failures, and code locations.
 
-#### Care Type and Questionnaire Improvements
+- Produce CD.pdf documenting the deployment platform, canary analysis approach, promotion strategy, and pipeline code locations.
 
-- Allow doctors to select specific types of care they provide from a predefined dropdown during registration.
-
-- Allow patients to select the type of care they need, or "Don't know," from a predefined dropdown in the questionnaire.
-
-- Standardize care-type values to reduce invalid or inconsistent user input.
-
-- Improve matching and filtering workflows by using structured care-type data instead of free-form text.
-
-
-
-#### Appointment Rejection Workflow
-
-- Allow doctors to select a rejection reason from a predefined dropdown when rejecting a patient appointment.
-
-- Ensure rejection reasons are stored correctly and can be reviewed later if needed.
-
-- Prevent invalid or blank rejection reasons from being submitted.
-
-
-
-#### Quality Assurance and Testing
-
-- Set up a unit testing framework that can be used reliably during development.
-
-- Add unit tests for critical features such as authentication and messaging.
-
-- Ensure critical tests can be run consistently before merging changes.
-
-- Reduce regressions by validating major workflows with automated tests.
-
-
+- Validate the complete CI/CD pipeline from code change through deployment decision.
 
 ## Metrics for Measurement
 
+### CI Workflow and Triggering
 
+- 100% of pull requests to the target branch trigger linting and unit test jobs.
 
-### Security and Data Handling
+- 100% of pushes to `main` trigger linting, unit tests, vulnerability scanning, and image build jobs.
 
-- 0 sensitive doctor information fields are stored in clear text in local storage.
+- 0 deployment jobs run during pull request validation workflows.
 
-- 100% of new message thread creation requests are restricted to doctor accounts.
+### Code Quality and Test Automation
 
-- 0 unauthorized users are able to access shared documents through messaging.
+- 100% of configured lint jobs complete automatically on pull requests and pushes to `main`.
 
-- 100% of protected messaging/document routes require authenticated access.
+- 100% of configured unit test jobs complete automatically on pull requests and pushes to `main`.
 
+- CI failures are clearly visible in GitHub Actions logs and can be captured as evidence for documentation.
 
+### Security Scanning and Artifact Production
 
-### Appointment Time Zone Support
+- At least 1 service is scanned for vulnerabilities on every push to `main`.
 
-- 100% of appointment times are displayed using the user's local or explicitly selected time zone.
+- 100% of successful pushes to `main` produce a Docker image tagged with `latest` in the selected registry.
 
-- Appointment time rendering/update response time <= 2 seconds.
+- 100% of CD runs use the artifact produced by CI.
 
-- 100% of tested appointments show consistent scheduled moments across patient and doctor views.
+### CI Efficiency and Industry Practice
 
-- 0 appointment records display missing or invalid time zone information in supported workflows.
+- Independent CI jobs run in parallel wherever dependencies do not require serialization.
 
+- Dependency caching is enabled where appropriate for repeated workflow runs.
 
+- 0 marks are lost due to clearly inefficient CI practices such as unnecessary reinstallations or sequential independent tasks.
 
-### Messaging and Document Sharing
+### Canary Deployment and Validation
 
-- 100% of uploaded documents are linked to the correct doctor-patient conversation.
+- 100% of eligible release runs deploy a canary before any promotion step.
 
-- Message/document metadata load response time <= 2 seconds.
+- 100% of canary deployments are evaluated by an automated validation step.
 
-- 100% of authorized recipients can access documents successfully.
+- 0 failed canaries are promoted.
 
-- 0 unauthorized downloads or cross-conversation document exposures occur.
+- 100% of healthy canaries are promoted automatically by the pipeline.
 
+### Documentation and End-to-End Validation
 
+- CI1.pdf and CD.pdf are completed and include all required implementation details.
 
-### Care Type and Questionnaire Improvements
+- 100% of required pipeline code locations referenced in the documentation are accurate.
 
-- 100% of doctor care-type selections come from predefined dropdown values.
-
-- 100% of patient questionnaire care-type selections come from predefined dropdown values, including "Don't know" where applicable.
-
-- 0 invalid free-form care-type values are accepted by the backend for these workflows.
-
-- Care-type selection updates are reflected in the system within <= 2 seconds.
-
-
-
-### Appointment Rejection Workflow
-
-- 100% of rejected appointments require a valid dropdown-based rejection reason.
-
-- 100% of saved rejection reasons are stored successfully in the database.
-
-- Rejection status and reason updates are reflected in the system within <= 2 seconds.
-
-- 0 blank or invalid rejection reasons are accepted.
-
-
-
-### Quality Assurance and Testing
-
-- Unit test framework setup completes successfully in local development environment.
-
-- 100% of critical unit tests added in this release pass before merge/release.
-
-- Critical test suite can be run with a single documented command.
-
-- 0 release-blocking regressions are found in covered authentication and messaging test scenarios.
-
-
+- The complete CI/CD path is demonstrated successfully at least once before submission.
 
 ## Release Scope
 
-Outline what is included in and excluded from the release, detailing key features or improvements, bug fixes, non-functional requirements, etc.
-
-
-
 ### Included Features
 
+#### CI Automation
 
+- GitHub Actions CI workflow with correct triggers (SCRUM-52): The pipeline runs the correct jobs for pull requests and pushes to `main` under the right conditions.
 
-#### Security and Privacy Improvements
+- Linter on pull requests and pushes (SCRUM-53): Code quality issues are caught automatically before merge or release.
 
-- Secure doctor information storage on client side (SCRUM-51): Sensitive doctor information is no longer stored in clear text in local storage.
+- Unit tests on pull requests and pushes to `main` (SCRUM-54): Regressions are detected before deployment.
 
+- Vulnerability scan for at least one service on pushes to `main` (SCRUM-55): Insecure dependencies are checked before release.
 
+- Docker image build and push on `main` (SCRUM-56): A consistent deployable artifact is created and pushed to a registry with the latest tag.
 
-#### Appointment Time Zone Support
+- Parallel CI jobs and caching (SCRUM-57): The pipeline follows efficient industry practice and reduces unnecessary runtime.
 
-- Patient sees appointment time in local/selected time zone (SCRUM-40): Patients can clearly understand when their appointments occur in the correct time zone.
+- CI1.pdf documentation (SCRUM-58): The CI implementation, failure evidence, and code locations are documented for verification.
 
-- Doctor sees appointment time in local/selected time zone (SCRUM-41): Doctors can clearly understand when their appointments occur in the correct time zone.
+#### CD Automation
 
+- Canary deployment using CI-built image (SCRUM-59): The CD pipeline deploys a canary release using the artifact created by CI.
 
+- Automated canary analysis (SCRUM-60): The canary is validated automatically before promotion.
 
-#### Messaging and Document Sharing
+- Automatic promotion on success and stop on failure (SCRUM-61): Deployment decisions are automated and safe.
 
-- Patient receives documents through messaging (SCRUM-42): Patients can review diagnosis, results, or related files sent by doctors.
+- CD.pdf documentation (SCRUM-62): The deployment platform, canary analysis, promotion strategy, and code locations are documented for verification.
 
-- Doctor sends documents through messaging (SCRUM-43): Doctors can send important files to patients through the platform.
+#### End-to-End Validation
 
-- Only doctor can initiate message (SCRUM-49): New conversations are restricted to doctors in order to reduce spam.
-
-
-
-#### Care Type and Questionnaire Improvements
-
-- Doctor selects specific care types during registration (SCRUM-47): Doctors can choose the care types they provide from a dropdown.
-
-- Patient selects needed care type or "Don't know" in questionnaire (SCRUM-48): Patients can provide structured care information to improve matching and routing.
-
-
-
-#### Appointment Workflow Improvements
-
-- Rejection reason dropdown when rejecting appointment (SCRUM-46): Doctors must choose a standardized rejection reason from a dropdown.
-
-
-
-#### Technical / System Improvements
-
-- Unit testing framework setup (SCRUM-38): Developers can run reliable automated unit tests.
-
-- Unit tests for critical features (SCRUM-39): Authentication, messaging, and other critical flows receive automated test coverage.
-
-
+- End-to-end validated CI/CD pipeline (SCRUM-63): The entire required delivery flow works together correctly before submission.
 
 ### Excluded Features
 
-- Questionnaire persistence across repeated bookings (SCRUM-50)
+- Booking analytics dashboard (SCRUM-28)
 
-This feature requires additional database changes, retrieval logic, and end-to-end validation to ensure old questionnaire data is reused safely. It is planned for a future release rather than being completed in this release.
+  This story is unrelated to the Sprint 4 CI/CD delivery theme. It focuses on system analytics rather than pipeline automation, so it is excluded from this sprint.
 
-- Full automated test coverage across the entire platform
+- Full platform-wide automated testing beyond required unit tests
 
-This release focuses on setting up the framework and adding tests for critical features first. Broader test coverage for all modules is planned incrementally in future releases.
+  This sprint focuses on linting, unit tests, vulnerability scanning, artifact building, and deployment validation. Broader integration and full end-to-end test suites can be expanded in a future sprint.
 
-- Patient-initiated cold messaging
+- Advanced image tagging strategy beyond the required latest tag
 
-To reduce spam, this release intentionally limits new conversation initiation to doctors only.
+  This sprint prioritizes producing a consistent deployable artifact for CD. Additional versioning conventions such as semantic version tags, commit SHA tags, or multi-tag strategies are future improvements.
 
-- External calendar/time zone synchronization
+- Full production rollout strategies beyond canary validation and promotion
 
-This release supports local or selected time zone display inside the platform, but does not yet integrate with third-party calendar systems.
-
-
+  This sprint focuses on canary deployment, automated validation, and promotion logic. Broader release management features can be addressed later.
 
 ## Bug Fixes
 
-- [High Priority, SCRUM-51] Doctor info is stored in clear in local storage.
+- [High Priority, SCRUM-52] CI workflow triggers were incomplete or incorrect.
 
-  Now, sensitive doctor information is no longer stored in clear text on the client side and is handled through safer storage practices.
+  Now, pull requests and pushes to `main` run the correct GitHub Actions jobs under the appropriate conditions.
 
-- [Medium Priority, SCRUM-40, SCRUM-41] Appointment time display was unclear across time zones.
+- [High Priority, SCRUM-53, SCRUM-54] Code quality and regression checks were not enforced automatically for all required events.
 
-  Now, both patients and doctors can view appointment times in their local time zone or a selected time zone.
+  Now, linting and unit tests run automatically on pull requests and pushes to `main`.
 
-- [Medium Priority, SCRUM-46] Rejecting an appointment lacked a standardized reason input.
+- [High Priority, SCRUM-55] Vulnerability checking was missing from the release path.
 
-  Now, doctors must choose a predefined rejection reason from a dropdown when rejecting a patient appointment.
+  Now, at least one service is scanned for vulnerabilities on pushes to `main`.
 
+- [High Priority, SCRUM-56] The deployment pipeline did not consistently consume a CI-produced artifact.
 
+  Now, pushes to `main` build and push a Docker image to a registry with the latest tag for CD use.
+
+- [High Priority, SCRUM-59, SCRUM-60, SCRUM-61] Deployment validation and promotion were not automated safely.
+
+  Now, the CD pipeline deploys a canary, evaluates it automatically, promotes healthy releases, and stops on failure.
 
 ## Non-Functional Requirements
 
+### Performance and Efficiency
 
+- Independent CI jobs should run in parallel whenever possible.
 
-### Performance
+- Dependency caching should be used where appropriate to reduce repeated workflow runtime.
 
-- Appointment time conversion and display response time <= 2 seconds
-
-- Message/document metadata loading response time <= 2 seconds
-
-- Care-type dropdown submission/update response time <= 2 seconds
-
-- Rejection reason submission/update response time <= 2 seconds
-
-- Critical unit tests should run successfully in a reasonable development workflow before release
-
-
+- The pipeline should avoid wasteful practices such as unnecessary reinstalls, copying dependency folders into images, or serializing unrelated jobs.
 
 ### Security
 
-- No sensitive doctor information may be stored in clear text in local storage.
+- Registry authentication and deployment credentials must be stored securely using repository or environment secrets.
 
-- Only authenticated users can access messaging and document-sharing features.
+- Vulnerability scanning must be included in the push-to-main release path.
 
-- Only authorized participants in a conversation can access shared documents.
-
-- Only doctors can initiate new message threads.
-
-- Backend validation must enforce allowed dropdown values for care types and rejection reasons.
-
-- Backend check and control all role-based access related to appointments, messaging, and admin workflows.
-
-
-
-### Usability
-
-- Appointment times clearly display date, time, and applicable time zone information.
-
-- Dropdown-based care-type and rejection-reason fields reduce ambiguous user input.
-
-- Shared documents are clearly visible and understandable within messaging workflows.
-
-- Structured care-type selection improves clarity for both doctor registration and patient questionnaire workflows.
-
-
+- Unhealthy canary releases must never be promoted.
 
 ### Reliability
 
-- Unit testing framework must be stable and usable by developers throughout the sprint.
+- Workflow triggers must behave consistently for pull requests and pushes to `main`.
 
-- Critical authentication and messaging workflows should be covered by automated tests.
+- CI must produce a consistent deployable image artifact for CD.
 
-- New Sprint 3 features should not break the existing appointment booking and communication workflow.
+- Canary validation must act as a release gate.
 
+- The end-to-end CI/CD path must be demonstrated successfully before submission.
 
+### Maintainability and Verifiability
+
+- Workflow files should be clearly organized and easy to trace.
+
+- CI1.pdf and CD.pdf must identify the relevant code locations used in the implementation.
+
+- Failure evidence included in the documentation must be reproducible and understandable.
 
 ## Dependencies and Limitations
 
-
-
 ### Dependencies
 
-- Features for making appointments, sending messages, and verifying users that were in the last release.
+- A GitHub repository with GitHub Actions enabled.
 
-- Support for uploading and storing files so that doctors and patients can share documents.
+- A working Dockerfile and container build context for the selected service or services.
 
-- Support for database schemas/models for types of care, reasons for rejection, and changes to related workflows.
+- Access to a container registry for image publication.
 
-- Tools and libraries for unit testing, like a test runner, an assertion library, and HTTP/API testing tools, for automated testing.
+- A deployment target that supports canary-style rollout or an equivalent staged validation approach.
 
-
+- Health checks or validation logic that can be used for automated canary analysis.
 
 ### Limitations
 
-- This release doesn't fully fix the problem with questionnaire persistence across multiple bookings.
+- This sprint guarantees required CI/CD functionality, but not a full enterprise-grade release platform.
 
-- Can only share documents that are in supported file types and that are within the size limits you set.
+- Vulnerability scanning only needs to cover at least one service, not necessarily every service in the repository.
 
-- To cut down on spam, only conversations started by doctors are allowed.
+- The artifact tagging requirement is centered on `latest`; richer tagging strategies are not required in this sprint.
 
-- Unless a time zone is chosen, then a default timezone of EST/EDT is chosen and not based on their location.
+- Canary analysis is limited to the checks implemented by the team and may not cover every real-world failure mode.
 
-- This release's test coverage only looks at the most important features, not every module in the system.
-
-- The current version uses a local PostgreSQL database that is not hosted in production, so data persistence, accessibility across deployments, and reliability (backups/availability) are all limited.
+- The sprint focuses on pipeline correctness, verification, and marking requirements rather than analytics or unrelated product features.
