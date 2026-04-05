@@ -1,4 +1,12 @@
 # What's New
+## v1.2.0
+- **Automated CI Pipeline:** Pull requests and pushes now run linting, unit tests, and security checks automatically to catch issues before deployment.
+- **Parallel CI Jobs and Caching:** Independent CI jobs run in parallel with caching improvements to reduce feedback time and keep pipeline runs efficient.
+- **Container Build and Registry Publish:** Pushes to the main deployment branch automatically build backend Docker images and publish the latest tag to the registry.
+- **Manual Deployment Triggers:** CI/CD workflows now support manual triggering for controlled validation and release operations.
+- **Caregiver Multi-Patient Management:** Caregivers are able to manage multiple patient profiles under one account to support family or assisted-care workflows.
+- **Admin Booking Analytics:** Administrators are able to view booking analytics dashboards to monitor appointment volume and usage trends.
+
 ## v1.1.0
 - **Security Improvement:** Sensitive doctor information is no longer stored in clear text on the client side.
 - **Time Zone Support:** Patients and doctors are able to view appointment times in their local or selected time zone.
