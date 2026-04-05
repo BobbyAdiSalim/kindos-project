@@ -54,7 +54,7 @@ export function CaregiverDashboard() {
     <div className="container mx-auto px-4 py-8 max-w-5xl">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-2xl md:text-3xl font-semibold mb-2">Caregiver Dashboard</h1>
+          <h1 className="text-2xl md:text-3xl font-semibold mb-2">Linked patients appointments</h1>
           <p className="text-muted-foreground">Manage appointments for your linked patients</p>
         </div>
         <Link to="/caregiver/patients">
