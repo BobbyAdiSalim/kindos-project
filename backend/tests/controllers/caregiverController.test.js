@@ -39,12 +39,21 @@ vi.mock('../../models/index.js', () => ({
   Review: {},
 }));
 
+const validateBookingPayload = vi.fn();
+const ensureSlotIsBookable = vi.fn();
+const getDoctorForBooking = vi.fn();
+const ensureNoOverlappingAppointment = vi.fn();
+
 vi.mock('../../controllers/booking/bookingShared.js', async () => {
   const actual = await vi.importActual('../../controllers/booking/bookingShared.js');
   return {
     ...actual,
     appointmentInclude: [],
     serializeAppointment: (a) => a,
+    validateBookingPayload: (...args) => validateBookingPayload(...args),
+    ensureSlotIsBookable: (...args) => ensureSlotIsBookable(...args),
+    getDoctorForBooking: (...args) => getDoctorForBooking(...args),
+    ensureNoOverlappingAppointment: (...args) => ensureNoOverlappingAppointment(...args),
   };
 });
 
@@ -58,6 +67,10 @@ function resetAll() {
   userFindOne.mockReset();
   appointmentFindAll.mockReset();
   appointmentFindOne.mockReset();
+  validateBookingPayload.mockReset();
+  ensureSlotIsBookable.mockReset();
+  getDoctorForBooking.mockReset();
+  ensureNoOverlappingAppointment.mockReset();
   appointmentCreate.mockReset();
   appointmentFindByPk.mockReset();
   sequelizeTransaction.mockReset();
@@ -495,5 +508,108 @@ describe('cancelForPatient', () => {
     await cancelForPatient(req, res);
 
     expect(res.status).toHaveBeenCalledWith(403);
+  });
+});
+
+describe('bookForPatient', () => {
+  let bookForPatient;
+
+  beforeEach(async () => {
+    resetAll();
+    const mod = await import('../../controllers/caregiverController.js');
+    bookForPatient = mod.bookForPatient;
+  });
+
+  it('books an appointment on behalf of a linked patient', async () => {
+    caregiverFindOne.mockResolvedValue({ id: 10 });
+    caregiverPatientFindOne.mockResolvedValue({ status: 'approved' });
+    patientFindByPk.mockResolvedValue({ id: 20 });
+
+    const bookingData = {
+      doctorUserId: 5,
+      appointmentDate: '2026-05-01',
+      startTime: '10:00',
+      endTime: '10:30',
+      appointmentType: 'virtual',
+      duration: 30,
+      reason: 'Checkup',
+      notes: '',
+      accessibilityNeeds: '',
+      notifyOnDoctorApproval: false,
+    };
+    validateBookingPayload.mockReturnValue(bookingData);
+    getDoctorForBooking.mockResolvedValue({ id: 3 });
+    ensureSlotIsBookable.mockResolvedValue(99);
+    ensureNoOverlappingAppointment.mockResolvedValue();
+
+    const createdAppt = { id: 1, status: 'scheduled' };
+    appointmentCreate.mockResolvedValue(createdAppt);
+    appointmentFindByPk.mockResolvedValue(createdAppt);
+
+    sequelizeTransaction.mockImplementation(async (cb) => cb('tx'));
+
+    const req = createMockReq({
+      auth: { userId: 1 },
+      params: { patientId: '20' },
+      body: { doctorUserId: 5, appointmentDate: '2026-05-01', startTime: '10:00', endTime: '10:30', appointmentType: 'virtual' },
+    });
+    const res = createMockRes();
+
+    await bookForPatient(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(201);
+    expect(appointmentCreate).toHaveBeenCalled();
+  });
+
+  it('returns 404 when patient not found', async () => {
+    caregiverFindOne.mockResolvedValue({ id: 10 });
+    caregiverPatientFindOne.mockResolvedValue({ status: 'approved' });
+    patientFindByPk.mockResolvedValue(null);
+
+    const req = createMockReq({
+      auth: { userId: 1 },
+      params: { patientId: '20' },
+      body: {},
+    });
+    const res = createMockRes();
+
+    await bookForPatient(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Patient not found.' });
+  });
+
+  it('returns 403 when no approved link', async () => {
+    caregiverFindOne.mockResolvedValue({ id: 10 });
+    caregiverPatientFindOne.mockResolvedValue(null);
+
+    const req = createMockReq({
+      auth: { userId: 1 },
+      params: { patientId: '20' },
+      body: {},
+    });
+    const res = createMockRes();
+
+    await bookForPatient(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(403);
+  });
+
+  it('returns 500 on unexpected error', async () => {
+    caregiverFindOne.mockResolvedValue({ id: 10 });
+    caregiverPatientFindOne.mockResolvedValue({ status: 'approved' });
+    patientFindByPk.mockResolvedValue({ id: 20 });
+    validateBookingPayload.mockImplementation(() => { throw new Error('Unexpected failure'); });
+
+    const req = createMockReq({
+      auth: { userId: 1 },
+      params: { patientId: '20' },
+      body: {},
+    });
+    const res = createMockRes();
+
+    await bookForPatient(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(500);
   });
 });
