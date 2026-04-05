@@ -1,3 +1,16 @@
+/**
+ * Caregiver Controller
+ *
+ * Handles all caregiver-related operations including:
+ * - Link request management: caregivers can request to link with patients by email
+ * - Patient-side approval: patients can approve or reject caregiver link requests
+ * - Proxy actions: caregivers can view appointments, book, and cancel on behalf of linked patients
+ *
+ * Authorization flow:
+ *   1. Caregiver sends a link request to a patient (by email)
+ *   2. Patient approves or rejects the request
+ *   3. Once approved, the caregiver can manage appointments for that patient
+ */
 import { Op } from 'sequelize';
 import {
   sequelize,
@@ -19,6 +32,10 @@ import {
 
 // ── helpers ──
 
+/**
+ * Retrieves the Caregiver profile for a given user ID.
+ * Throws 404 if the caregiver profile does not exist.
+ */
 const getCaregiverForUser = async (userId) => {
   const caregiver = await Caregiver.findOne({ where: { user_id: userId } });
   if (!caregiver) {
@@ -27,6 +44,10 @@ const getCaregiverForUser = async (userId) => {
   return caregiver;
 };
 
+/**
+ * Verifies that an approved link exists between a caregiver and patient.
+ * Throws 403 if no approved link is found, preventing unauthorized access.
+ */
 const ensureApprovedLink = async (caregiverId, patientId) => {
   const link = await CaregiverPatient.findOne({
     where: { caregiver_id: caregiverId, patient_id: patientId, status: 'approved' },
@@ -37,8 +58,14 @@ const ensureApprovedLink = async (caregiverId, patientId) => {
   return link;
 };
 
-// ── Link request management (caregiver) ──
+// ── Link request management (caregiver side) ──
 
+/**
+ * POST /api/caregiver/link-request
+ * Sends a link request from the caregiver to a patient identified by email.
+ * If a previously rejected link exists, it resets to 'pending' (allows re-request).
+ * Returns 409 if the link is already approved or pending.
+ */
 export const sendLinkRequest = async (req, res) => {
   try {
     const { email, relationship } = req.body;
@@ -88,6 +115,10 @@ export const sendLinkRequest = async (req, res) => {
   }
 };
 
+/**
+ * GET /api/caregiver/patients
+ * Returns all patients linked to the authenticated caregiver (any status).
+ */
 export const getLinkedPatients = async (req, res) => {
   try {
     const caregiver = await getCaregiverForUser(req.auth.userId);
@@ -112,6 +143,10 @@ export const getLinkedPatients = async (req, res) => {
   }
 };
 
+/**
+ * DELETE /api/caregiver/patients/:patientId
+ * Removes the link between the caregiver and a patient (any status).
+ */
 export const removeLinkedPatient = async (req, res) => {
   try {
     const caregiver = await getCaregiverForUser(req.auth.userId);
@@ -135,6 +170,11 @@ export const removeLinkedPatient = async (req, res) => {
 
 // ── Patient-side approval ──
 
+/**
+ * GET /api/patient/caregiver-requests
+ * Returns all pending caregiver link requests for the authenticated patient.
+ * Called from the patient dashboard so they can approve/reject incoming requests.
+ */
 export const getCaregiverRequests = async (req, res) => {
   try {
     const patient = await Patient.findOne({ where: { user_id: req.auth.userId } });
@@ -161,6 +201,11 @@ export const getCaregiverRequests = async (req, res) => {
   }
 };
 
+/**
+ * PATCH /api/patient/caregiver-requests/:requestId
+ * Allows a patient to approve or reject a pending caregiver link request.
+ * Only 'approved' or 'rejected' are valid status values.
+ */
 export const respondToCaregiverRequest = async (req, res) => {
   try {
     const { requestId } = req.params;
@@ -192,6 +237,10 @@ export const respondToCaregiverRequest = async (req, res) => {
 
 // ── Caregiver actions on behalf of patients ��─
 
+/**
+ * GET /api/caregiver/patients/:patientId/appointments
+ * Returns all appointments for a linked patient. Requires an approved link.
+ */
 export const getPatientAppointments = async (req, res) => {
   try {
     const caregiver = await getCaregiverForUser(req.auth.userId);
@@ -214,6 +263,11 @@ export const getPatientAppointments = async (req, res) => {
   }
 };
 
+/**
+ * POST /api/caregiver/patients/:patientId/appointments
+ * Books an appointment on behalf of a linked patient. Requires an approved link.
+ * Uses the same booking validation and slot-checking logic as patient self-booking.
+ */
 export const bookForPatient = async (req, res) => {
   try {
     const caregiver = await getCaregiverForUser(req.auth.userId);
@@ -292,6 +346,11 @@ export const bookForPatient = async (req, res) => {
   }
 };
 
+/**
+ * PATCH /api/caregiver/patients/:patientId/appointments/:appointmentId/cancel
+ * Cancels an active appointment (scheduled or confirmed) on behalf of a linked patient.
+ * The cancellation_reason is prefixed with "Cancelled by caregiver" for audit tracking.
+ */
 export const cancelForPatient = async (req, res) => {
   try {
     const caregiver = await getCaregiverForUser(req.auth.userId);

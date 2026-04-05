@@ -1,5 +1,18 @@
 'use strict';
 
+/**
+ * Migration: Add caregiver role and tables
+ *
+ * Adds support for the caregiver user role, which allows a user to manage
+ * appointments on behalf of one or more linked patients.
+ *
+ * Changes:
+ *   1. Extends the users.role ENUM to include 'caregiver'
+ *   2. Creates the 'caregivers' table (one-to-one with users)
+ *   3. Creates the 'caregiver_patients' join table with approval workflow
+ *      (pending -> approved/rejected) and a unique constraint per pair
+ */
+
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
   async up(queryInterface, Sequelize) {

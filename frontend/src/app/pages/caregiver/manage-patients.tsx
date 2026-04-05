@@ -1,3 +1,8 @@
+/**
+ * Manage Patients page — allows caregivers to send link requests to patients
+ * by email, view the status of all links (pending/approved/rejected), and
+ * remove existing links.
+ */
 import React, { useEffect, useState } from 'react';
 import { Button } from '@/app/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card';

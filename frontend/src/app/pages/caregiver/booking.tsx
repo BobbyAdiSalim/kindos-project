@@ -1,3 +1,8 @@
+/**
+ * Caregiver Booking page — allows a caregiver to book an appointment on behalf
+ * of a linked patient. Reuses the same doctor selection, slot picking, and
+ * booking payload as the patient self-booking flow.
+ */
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { Button } from '@/app/components/ui/button';

@@ -1,3 +1,9 @@
+/**
+ * CaregiverPatient join table — links caregivers to patients with an approval workflow.
+ * Status transitions: pending -> approved/rejected.
+ * A rejected link can be re-requested (reset back to pending).
+ * The unique index on (caregiver_id, patient_id) prevents duplicate links.
+ */
 import { DataTypes } from 'sequelize';
 import sequelize from '../config/database.js';
 

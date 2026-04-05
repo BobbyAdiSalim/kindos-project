@@ -1,3 +1,8 @@
+/**
+ * Patient Detail page — shows a specific linked patient's appointments
+ * and allows the caregiver to cancel appointments on their behalf.
+ * Accessible at /caregiver/patients/:id.
+ */
 import React, { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { Button } from '@/app/components/ui/button';

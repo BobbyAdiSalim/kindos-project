@@ -1,3 +1,10 @@
+/**
+ * Caregiver API client
+ *
+ * Fetch wrappers for caregiver-related endpoints, split into two sections:
+ *   - Caregiver endpoints: link requests, patient management, proxy booking/cancel
+ *   - Patient-side endpoints: viewing and responding to incoming caregiver requests
+ */
 import type { AppointmentRecord, BookAppointmentPayload } from './appointment-api';
 
 const API_BASE = '/api';

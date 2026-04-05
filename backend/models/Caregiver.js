@@ -1,3 +1,8 @@
+/**
+ * Caregiver model — stores profile data for users with the 'caregiver' role.
+ * Each caregiver has a one-to-one relationship with a User and can be linked
+ * to multiple patients via the CaregiverPatient join table.
+ */
 import { DataTypes } from 'sequelize';
 import sequelize from '../config/database.js';
 

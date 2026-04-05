@@ -371,6 +371,8 @@ router.get("/patients/:patientId/history", requireAuth, requireRole("doctor"), (
 
 /*
  * Caregiver Routes
+ * All routes require the 'caregiver' role. Caregivers manage linked patients
+ * and can view/book/cancel appointments on their behalf.
  */
 
 router.post("/caregiver/link-request", requireAuth, requireRole("caregiver"), (req, res) => {
@@ -399,6 +401,7 @@ router.patch("/caregiver/patients/:patientId/appointments/:appointmentId/cancel"
 
 /*
  * Patient caregiver request routes
+ * These routes let patients view and respond to incoming caregiver link requests.
  */
 
 router.get("/patient/caregiver-requests", requireAuth, requireRole("patient"), (req, res) => {

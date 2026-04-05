@@ -1,3 +1,8 @@
+/**
+ * Caregiver Dashboard — landing page after login.
+ * Shows a summary of linked patients and their upcoming appointments,
+ * with quick links to manage patients or book new appointments.
+ */
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { Button } from '@/app/components/ui/button';
