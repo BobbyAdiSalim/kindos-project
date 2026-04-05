@@ -75,6 +75,12 @@ export function Login() {
                     </Label>
                   </div>
                   <div className="flex items-center space-x-3 space-y-0">
+                    <RadioGroupItem value="caregiver" id="caregiver" />
+                    <Label htmlFor="caregiver" className="font-normal cursor-pointer">
+                      Caregiver
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-3 space-y-0">
                     <RadioGroupItem value="admin" id="admin" />
                     <Label htmlFor="admin" className="font-normal cursor-pointer">
                       System Administrator
