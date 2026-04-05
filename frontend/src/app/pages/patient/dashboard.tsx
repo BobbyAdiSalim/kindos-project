@@ -4,12 +4,14 @@ import { Button } from '@/app/components/ui/button';
 import { Card, CardContent } from '@/app/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/app/components/ui/tabs';
 import { AppointmentCard } from '@/app/components/appointment-card';
-import { Bell, Plus, Calendar as CalendarIcon, MessageSquare } from 'lucide-react';
+import { Bell, Plus, Calendar as CalendarIcon, MessageSquare, UserCheck, UserX } from 'lucide-react';
 import { useAuth } from '@/app/lib/auth-context';
 import { formatTime24to12 } from '@/app/lib/availability-api';
 import { getMyAppointments, type AppointmentRecord } from '@/app/lib/appointment-api';
 import { formatZonedDateTime, getDefaultPreferredTimeZone, resolveTimeZone } from '@/app/lib/timezone';
 import { usePreferredTimeZone } from '@/app/lib/use-preferred-timezone';
+import { getCaregiverRequests, respondToCaregiverRequest, type CaregiverRequest } from '@/app/lib/caregiver-api';
+import { toast } from 'sonner';
 
 const mapAppointmentStatus = (appointment: AppointmentRecord) => {
   if (appointment.status === 'cancelled' && appointment.declined_by_doctor) {
@@ -25,6 +27,7 @@ export function PatientDashboard() {
   const [appointments, setAppointments] = useState<AppointmentRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [caregiverRequests, setCaregiverRequests] = useState<CaregiverRequest[]>([]);
   const displayTimeZone = resolveTimeZone(timeZone, systemTimeZone);
   const displayTimeZoneLabel = timeZoneOptions.find((option) => option.value === displayTimeZone)?.label || displayTimeZone;
 
@@ -50,7 +53,21 @@ export function PatientDashboard() {
     };
 
     loadAppointments();
+
+    getCaregiverRequests()
+      .then(setCaregiverRequests)
+      .catch(() => {});
   }, [token]);
+
+  const handleCaregiverResponse = async (requestId: number, status: 'approved' | 'rejected') => {
+    try {
+      await respondToCaregiverRequest(requestId, status);
+      setCaregiverRequests((prev) => prev.filter((r) => r.id !== requestId));
+      toast.success(`Caregiver request ${status}.`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to respond.');
+    }
+  };
 
   const { upcomingAppointments, pastAppointments } = useMemo(() => {
     const toAppointmentCardData = (appointment: AppointmentRecord) => {
@@ -149,6 +166,41 @@ export function PatientDashboard() {
         </Link>
         .
       </p>
+
+      {caregiverRequests.length > 0 && (
+        <div className="mb-6 space-y-3">
+          {caregiverRequests.map((req) => (
+            <div key={req.id} className="flex items-center justify-between rounded-lg border border-primary/30 bg-primary/5 px-4 py-3">
+              <div>
+                <p className="text-sm font-medium">
+                  {req.caregiver.full_name} wants to manage your appointments
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {req.caregiver.user.email}
+                  {req.relationship && <span> &middot; {req.relationship}</span>}
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  onClick={() => handleCaregiverResponse(req.id, 'approved')}
+                >
+                  <UserCheck className="h-4 w-4 mr-1" />
+                  Approve
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleCaregiverResponse(req.id, 'rejected')}
+                >
+                  <UserX className="h-4 w-4 mr-1" />
+                  Reject
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       <Tabs defaultValue="upcoming" className="w-full">
         <TabsList className="w-full md:w-auto">

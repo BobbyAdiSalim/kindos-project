@@ -1,16 +1,13 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Link, useSearchParams } from 'react-router';
+import { useSearchParams } from 'react-router';
 import { Button } from '@/app/components/ui/button';
-import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
 import { DoctorCard } from '@/app/components/doctor-card';
 import { Badge } from '@/app/components/ui/badge';
-import { careTypes } from '@/app/lib/mock-data';
 import { Calendar, MapPin, Video, User, ArrowRight, ArrowLeft, Loader2, Globe, Navigation, LocateFixed, X } from 'lucide-react';
 import { RadioGroup, RadioGroupItem } from '@/app/components/ui/radio-group';
 import { Card, CardContent } from '@/app/components/ui/card';
-import { format, addDays, parseISO, set } from 'date-fns';
+import { addDays, parseISO } from 'date-fns';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -114,8 +111,8 @@ export function ProviderDiscovery() {
   const [doctors, setDoctors] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [showCareTypesDropdown, setShowCareTypesDropdown] = useState(false);
-  const [hasSavedPreferences, setHasSavedPreferences] = useState(false);
+  const [, setShowCareTypesDropdown] = useState(false);
+  const [, setHasSavedPreferences] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   
   // Map related state
@@ -144,9 +141,10 @@ export function ProviderDiscovery() {
     
     switch (preference) {
       case 'today': return { start: today, end: today };
-      case 'tomorrow': 
+      case 'tomorrow': {
         const tomorrow = addDays(today, 1);
         return { start: tomorrow, end: tomorrow };
+      }
       case 'this-week': {
         const endOfWeek = addDays(today, 7);
         return { start: today, end: endOfWeek };
@@ -364,8 +362,6 @@ const fetchDoctorsWithAvailability = async (filters = {}) => {
       return;
     }
 
-    let markersAdded = 0;
-
     filteredDoctors.forEach(doctor => {
       if (doctor.latitude && doctor.longitude) {
         const lat = parseFloat(doctor.latitude);
@@ -426,7 +422,7 @@ const fetchDoctorsWithAvailability = async (filters = {}) => {
   // Update marker when doctor is selected
   useEffect(() => {
     if (selectedDoctor && markersRef.current[selectedDoctor.id]) {
-      Object.entries(markersRef.current).forEach(([id, marker]) => {
+      Object.entries(markersRef.current).forEach(([_id, marker]) => {
         marker.setIcon(createDoctorIcon(false));
       });
       

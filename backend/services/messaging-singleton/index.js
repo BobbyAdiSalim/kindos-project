@@ -22,6 +22,13 @@ import { User, Connection, Patient, Doctor } from '../../models/index.js';
 
 let ioInstance = null;
 
+const cleanEnv = (value, fallback = undefined) => {
+  if (value === undefined || value === null || value === '') return fallback;
+  return String(value).replace(/\r/g, '').trim();
+};
+
+const AUTH_COOKIE_NAME = cleanEnv(process.env.AUTH_COOKIE_NAME, '__session');
+
 const getCookieValue = (cookieHeader, name) => {
   if (typeof cookieHeader !== 'string' || !cookieHeader.trim()) return null;
 
@@ -97,13 +104,14 @@ export const initMessagingIO = (httpServer, { frontendUrl, jwtSecret }) => {
     cors: {
       origin: frontendUrl,
       methods: ['GET', 'POST'],
+      credentials: true,
     },
   });
 
   io.use(async (socket, next) => {
     try {
       const token =
-        getCookieValue(socket.handshake.headers.cookie, 'utlwa_auth') ||
+        getCookieValue(socket.handshake.headers.cookie, AUTH_COOKIE_NAME) ||
         socket.handshake.auth.token;
       if (!token) {
         return next(new Error('Authentication required.'));
@@ -117,7 +125,7 @@ export const initMessagingIO = (httpServer, { frontendUrl, jwtSecret }) => {
 
       socket.auth = { userId: user.id, role: user.role };
       next();
-    } catch (_error) {
+    } catch {
       next(new Error('Invalid or expired token.'));
     }
   });

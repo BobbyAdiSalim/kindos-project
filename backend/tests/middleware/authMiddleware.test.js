@@ -39,7 +39,7 @@ describe('auth middleware', () => {
 
   it('requireAuth accepts cookie token when authorization header is absent', async () => {
     const { requireAuth } = await import('../../middleware/auth.js');
-    const req = createMockReq({ headers: { cookie: 'foo=bar; utlwa_auth=cookie-token' } });
+    const req = createMockReq({ headers: { cookie: 'foo=bar; __session=cookie-token' } });
     const res = createMockRes();
     const next = vi.fn();
 

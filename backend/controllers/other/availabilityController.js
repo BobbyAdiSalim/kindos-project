@@ -38,12 +38,6 @@ function timeToMinutes(timeStr) {
   return parseInt(parts[0]) * 60 + parseInt(parts[1]);
 }
 
-function isFutureDateTime(dateStr, timeStr) {
-  const dateTime = new Date(`${dateStr}T${timeStr}`);
-  if (Number.isNaN(dateTime.getTime())) return false;
-  return dateTime.getTime() > Date.now();
-}
-
 function isValidTimeZone(timeZone) {
   if (!timeZone || typeof timeZone !== 'string') return false;
   try {
@@ -767,8 +761,8 @@ export const getDoctorsWithAvailability = async (req, res) => {
       timeOfDay,
       language,
       careType,
-      limit = 50,
-      offset = 0
+      limit: _limit = 50,
+      offset: _offset = 0
     } = req.query;
 
     console.log('Fetching doctors with availability filters:', { appointmentType, specialty, date, timeOfDay, language, careType });

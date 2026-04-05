@@ -390,7 +390,7 @@ export function DoctorProfileEdit() {
       } else {
         toast.error('Address not found');
       }
-    } catch (error) {
+    } catch {
       toast.error('Error searching for address');
     }
   };

@@ -1,6 +1,6 @@
 import { createBrowserRouter } from 'react-router';
 import { RootLayout } from '@/app/components/layout/root-layout';
-import { RequireAdminRoute, RequireDoctorRoute, RequirePatientRoute } from '@/app/components/auth/protected-route';
+import { RequireAdminRoute, RequireCaregiverRoute, RequireDoctorRoute, RequirePatientRoute } from '@/app/components/auth/protected-route';
 import { Landing } from '@/app/pages/landing';
 import { Login } from '@/app/pages/auth/login';
 import { Register } from '@/app/pages/auth/register';
@@ -32,10 +32,18 @@ import { AppointmentSummary } from '@/app/pages/doctor/appointment-summary';
 import { VerificationStatus } from '@/app/pages/doctor/verification-status';
 import { DoctorMessaging } from '@/app/pages/doctor/messaging';
 
+// Caregiver pages
+import { CaregiverDashboard } from '@/app/pages/caregiver/dashboard';
+import { ManagePatients } from '@/app/pages/caregiver/manage-patients';
+import { CaregiverPatientDetail } from '@/app/pages/caregiver/patient-detail';
+import { CaregiverProfile } from '@/app/pages/caregiver/profile';
+import { CaregiverBooking } from '@/app/pages/caregiver/booking';
+
 // Admin pages
 import { AdminDashboard } from '@/app/pages/admin/dashboard';
 import { VerificationQueue } from '@/app/pages/admin/verification-queue';
-import { Analytics } from '@/app/pages/admin/analytics';
+import { Analytics } from '@/app/pages/admin/rejection-analytics';
+import { BookingAnalytics } from '@/app/pages/admin/booking-analytics';
 
 // Design system
 import { ComponentLibrary } from '@/app/pages/components';
@@ -92,6 +100,19 @@ export const router = createBrowserRouter([
         ],
       },
 
+      // Caregiver routes
+      {
+        path: 'caregiver',
+        Component: RequireCaregiverRoute,
+        children: [
+          { path: 'dashboard', Component: CaregiverDashboard },
+          { path: 'patients', Component: ManagePatients },
+          { path: 'patient/:patientId', Component: CaregiverPatientDetail },
+          { path: 'patient/:patientId/book', Component: CaregiverBooking },
+          { path: 'profile', Component: CaregiverProfile },
+        ],
+      },
+
       // Admin routes
       {
         path: 'admin',
@@ -100,6 +121,7 @@ export const router = createBrowserRouter([
           { path: 'dashboard', Component: AdminDashboard },
           { path: 'verification', Component: VerificationQueue },
           { path: 'analytics', Component: Analytics },
+          { path: 'booking-analytics', Component: BookingAnalytics },
         ],
       },
 

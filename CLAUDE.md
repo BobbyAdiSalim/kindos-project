@@ -96,8 +96,8 @@ frontend/src/
 Path alias: `@` maps to `frontend/src/` (e.g., `import { useAuth } from '@/app/lib/auth-context'`).
 
 ### Authentication flow
-- JWT is stored in `localStorage` under key `utlwa_auth` with expiry tracking
-- All authenticated API calls send `Authorization: Bearer <token>`
+- Auth session is cookie-based via HTTP-only cookie (`__session` in deployed environments)
+- Frontend authenticated calls include `credentials: 'include'`
 - `requireAuth` + `requireRole('patient'|'doctor'|'admin')` middleware guards backend routes
 - Socket.io connections are also JWT-authenticated (token passed in handshake `auth`)
 

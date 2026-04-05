@@ -8,15 +8,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/app/components/ui/ta
 import { Star, MapPin, Video, User as UserIcon, Calendar } from 'lucide-react';
 import { mockDoctors, mockReviews } from '@/app/lib/mock-data';
 import { DoctorProfile as DoctorProfileApi, getPublicProfile } from '@/app/lib/profile-api';
-import { useAuth } from '@/app/lib/auth-context';
 import { getDoctorReviews, type DoctorReviewsResponse } from '@/app/lib/review-api';
 import { format } from 'date-fns';
-import { toast } from 'sonner';
 
 export function DoctorProfile() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { token } = useAuth();
   const [loading, setLoading] = useState(true);
   const [doctorFromApi, setDoctorFromApi] = useState<DoctorProfileApi | null>(null);
   const [doctorUsername, setDoctorUsername] = useState('');

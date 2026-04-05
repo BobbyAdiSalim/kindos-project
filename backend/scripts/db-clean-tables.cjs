@@ -2,7 +2,11 @@
 
 const path = require('path');
 const { Client } = require('pg');
-require('dotenv').config({ path: path.resolve(__dirname, '../.env'), override: true });
+
+const requiredEnvKeys = ['PG_HOST', 'PG_PORT', 'PG_USER', 'PG_PWD', 'PG_DATABASE'];
+if (requiredEnvKeys.some((key) => !process.env[key])) {
+  require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
+}
 
 const quoteIdent = (value) => `"${String(value).replace(/"/g, '""')}"`;
 const env = (key, fallback = undefined) => {

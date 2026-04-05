@@ -1,0 +1,112 @@
+name: CI
+
+on:
+  pull_request:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package-dir:
+          - frontend
+          - backend
+    defaults:
+      run:
+        working-directory: ${{ matrix.package-dir }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            backend/package-lock.json
+      - run: npm ci
+      - name: Run linter
+        run: npm run lint
+
+  unit-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package-dir:
+          - frontend
+          - backend
+    defaults:
+      run:
+        working-directory: ${{ matrix.package-dir }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            backend/package-lock.json
+      - run: npm ci
+      - run: npm test
+
+  security-scan:
+    if: |
+      (github.event_name == 'push' && github.ref == 'refs/heads/master') ||
+      github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install backend dependencies
+        run: npm ci
+      - name: Scan backend dependencies for vulnerabilities
+        run: npm audit --omit=dev --audit-level=high
+
+  container-build-push:
+    if: |
+      (github.event_name == 'push' && github.ref == 'refs/heads/master') ||
+      github.event_name == 'workflow_dispatch'
+    needs:
+      - lint
+      - unit-tests
+      - security-scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      REGISTRY_REGION: us-central1
+      REGISTRY_REPO: utlwa-backend
+    steps:
+      - uses: actions/checkout@v5
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGISTRY_REGION }}-docker.pkg.dev
+      - name: Build Docker image
+        run: |
+          docker build \
+            -t "${{ env.REGISTRY_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ env.REGISTRY_REPO }}/backend:${{ github.sha }}" \
+            -t "${{ env.REGISTRY_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ env.REGISTRY_REPO }}/backend:latest" \
+            ./backend
+      - name: Push Docker image to Artifact Registry
+        run: |
+          docker push "${{ env.REGISTRY_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ env.REGISTRY_REPO }}/backend:${{ github.sha }}"
+          docker push "${{ env.REGISTRY_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ env.REGISTRY_REPO }}/backend:latest"

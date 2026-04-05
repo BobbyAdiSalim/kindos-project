@@ -131,6 +131,9 @@ export function Analytics() {
               ))}
             </SelectContent>
           </Select>
+          <Link to="/admin/booking-analytics">
+            <Button variant="outline">Booking Analytics</Button>
+          </Link>
           <Link to="/admin/dashboard">
             <Button variant="outline">Back to Dashboard</Button>
           </Link>

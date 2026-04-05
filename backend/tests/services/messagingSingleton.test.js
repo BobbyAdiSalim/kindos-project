@@ -80,7 +80,7 @@ describe('messaging singleton service', () => {
 
     const middleware = ioMock.use.mock.calls[0][0];
     const socket = {
-      handshake: { headers: { cookie: 'foo=bar; utlwa_auth=cookie-token' }, auth: {} },
+      handshake: { headers: { cookie: 'foo=bar; __session=cookie-token' }, auth: {} },
     };
     const next = vi.fn();
 
