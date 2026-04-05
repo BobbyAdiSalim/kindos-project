@@ -1,246 +1,248 @@
 # Release Plan
 
-**Release Name:** Release v1.2.0 – Sprint 4 CI/CD and Canary Delivery
+**Release Name:** Release v1.2.0
 
-## Release Objectives
+### Release Objectives
 
-- This release aims to establish a complete CI/CD pipeline that automatically validates code changes, produces a deployable Docker image, deploys a canary release, evaluates canary health, and promotes only healthy releases.
+- This release aims to set up a complete CI/CD workflow for the project so that code is automatically checked, scanned, built, deployed as a canary, and only promoted if the canary passes.
 
 - Developers are able to run linting and unit tests automatically on pull requests and pushes to `main`.
 
-- Developers are able to scan at least one service for vulnerabilities on pushes to `main` before release.
+- Developers are able to scan at least one service for vulnerabilities on pushes to `main`.
 
-- Pushes to `main` are able to build a Docker image and push it to a registry using the latest tag so that CD can deploy a consistent artifact.
+- Pushes to `main` are able to build a Docker image and push it to a registry with the `latest` tag.
 
-- The CD pipeline is able to deploy a canary version of the application using the image produced by CI.
+- The CD pipeline is able to deploy a canary version of the application using the image built by CI.
 
-- Automated canary analysis checks are able to validate the canary before promotion.
+- The system is able to automatically check whether the canary deployment is healthy before promotion.
 
-- The CD pipeline is able to promote a successful canary and stop on failure so that deployment decisions are safe and automated.
+- The CD pipeline is able to promote a successful canary and stop when the canary fails.
 
-- The full CI/CD flow is validated end-to-end before submission.
+- The full CI/CD pipeline is validated end-to-end before submission.
 
-- CI1.pdf and CD.pdf clearly document the implemented pipelines, failure evidence, deployment logic, and code locations so that the implementation can be verified.
+- CI1.pdf and CD.pdf clearly explain the implementation, failure evidence, deployment steps, and code locations so that the instructor can verify the work.
 
-## Specific Goals
+### Specific Goals
 
-### CI Workflow and Triggering
+#### CI Workflow and Triggers
 
-- Configure GitHub Actions workflows with the correct triggers for pull requests and pushes to `main`.
+- Set up GitHub Actions workflows with the correct triggers for pull requests and pushes to `main`.
 
-- Ensure linting and unit tests run automatically on pull requests.
+- Make sure linting and unit tests run automatically on pull requests.
 
-- Ensure linting, unit tests, vulnerability scanning, and image building run automatically on pushes to `main`.
+- Make sure linting, unit tests, vulnerability scanning, and image building run automatically on pushes to `main`.
 
-- Prevent deployment steps from running in pull request validation workflows.
+- Make sure deployment steps do not run during pull request checks.
 
-### Code Quality and Test Automation
+#### Linting and Unit Testing
 
-- Run a linter on both pull requests and pushes to `main`.
+- Run a linter on pushes and pull requests.
 
-- Run unit tests automatically on both pull requests and pushes to `main`.
+- Run unit tests automatically on pull requests and pushes to `main`.
 
-- Catch regressions before code reaches deployment.
+- Catch regressions before code is deployed.
 
-- Provide clear CI job output so failures can be demonstrated and verified.
+- Make failures easy to see in GitHub Actions logs for documentation.
 
-### Security Scanning and Artifact Production
+#### Security Scanning and Image Build
 
 - Scan at least one service for vulnerabilities on pushes to `main`.
 
 - Build a Docker image on pushes to `main`.
 
-- Push the image to a registry with the latest tag.
+- Push the Docker image to a registry using the `latest` tag.
 
-- Ensure CD consumes the same artifact built by CI rather than rebuilding separately.
+- Make sure CD uses the image built by CI.
 
-### CI Efficiency and Industry Practice
+#### CI Efficiency
 
 - Run independent CI jobs in parallel where possible.
 
-- Use caching appropriately to reduce unnecessary dependency installation time.
+- Use caching where appropriate to reduce repeated install time.
 
-- Avoid inefficient practices that may lose marks, such as redundant installs or serialized independent jobs.
+- Avoid inefficient pipeline practices that could lose marks.
 
-### Canary Deployment and Validation
+#### Canary Deployment and Promotion
 
-- Deploy a canary version of the application through the CD pipeline using the image built by CI.
+- Deploy a canary version of the application through the CD pipeline.
 
-- Run automated canary analysis checks to determine whether the deployment is healthy.
+- Run automated checks on the canary deployment.
 
-- Stop the pipeline automatically when the canary fails validation.
+- Stop the pipeline automatically if the canary fails.
 
-- Promote the canary automatically when validation succeeds.
+- Promote the canary automatically if the checks pass.
 
-### Documentation and End-to-End Validation
+#### Documentation and Validation
 
-- Produce CI1.pdf documenting CI workflow steps, evidence of failures, and code locations.
+- Create CI1.pdf to explain CI pipeline steps, evidence of failures, and code locations.
 
-- Produce CD.pdf documenting the deployment platform, canary analysis approach, promotion strategy, and pipeline code locations.
+- Create CD.pdf to explain the deployment platform, canary analysis, promotion strategy, and code locations.
 
-- Validate the complete CI/CD pipeline from code change through deployment decision.
+- Validate that the full CI/CD pipeline works together correctly.
 
 ## Metrics for Measurement
 
-### CI Workflow and Triggering
+### CI Workflow and Triggers
 
-- 100% of pull requests to the target branch trigger linting and unit test jobs.
+- 100% of pull requests trigger linting and unit test jobs.
 
 - 100% of pushes to `main` trigger linting, unit tests, vulnerability scanning, and image build jobs.
 
-- 0 deployment jobs run during pull request validation workflows.
+- 0 deployment jobs run during pull request validation.
 
-### Code Quality and Test Automation
+### Linting and Unit Testing
 
-- 100% of configured lint jobs complete automatically on pull requests and pushes to `main`.
+- 100% of configured lint jobs run automatically on pull requests and pushes to `main`.
 
-- 100% of configured unit test jobs complete automatically on pull requests and pushes to `main`.
+- 100% of configured unit tests run automatically on pull requests and pushes to `main`.
 
-- CI failures are clearly visible in GitHub Actions logs and can be captured as evidence for documentation.
+- CI failures are visible in GitHub Actions logs and can be used as evidence in documentation.
 
-### Security Scanning and Artifact Production
+### Security Scanning and Image Build
 
 - At least 1 service is scanned for vulnerabilities on every push to `main`.
 
-- 100% of successful pushes to `main` produce a Docker image tagged with `latest` in the selected registry.
+- 100% of successful pushes to `main` produce a Docker image tagged with `latest`.
 
-- 100% of CD runs use the artifact produced by CI.
+- 100% of CD runs use the image built by CI.
 
-### CI Efficiency and Industry Practice
+### CI Efficiency
 
-- Independent CI jobs run in parallel wherever dependencies do not require serialization.
+- Independent CI jobs run in parallel where possible.
 
-- Dependency caching is enabled where appropriate for repeated workflow runs.
+- Dependency caching is enabled where appropriate.
 
-- 0 marks are lost due to clearly inefficient CI practices such as unnecessary reinstallations or sequential independent tasks.
+- 0 marks are lost because of clearly inefficient CI pipeline practices.
 
-### Canary Deployment and Validation
+### Canary Deployment and Promotion
 
-- 100% of eligible release runs deploy a canary before any promotion step.
+- 100% of release runs deploy a canary before promotion.
 
-- 100% of canary deployments are evaluated by an automated validation step.
+- 100% of canary deployments are checked automatically before promotion.
 
 - 0 failed canaries are promoted.
 
-- 100% of healthy canaries are promoted automatically by the pipeline.
+- 100% of successful canaries are promoted automatically.
 
-### Documentation and End-to-End Validation
+### Documentation and Validation
 
-- CI1.pdf and CD.pdf are completed and include all required implementation details.
+- CI1.pdf and CD.pdf are completed with all required implementation details.
 
-- 100% of required pipeline code locations referenced in the documentation are accurate.
+- 100% of referenced code locations in the documentation are correct.
 
-- The complete CI/CD path is demonstrated successfully at least once before submission.
+- The complete CI/CD flow is demonstrated successfully before submission.
 
 ## Release Scope
 
+Outline what is included in and excluded from the release, detailing key features or improvements, bug fixes, non-functional requirements, etc.
+
 ### Included Features
 
-#### CI Automation
+#### CI Pipeline Features
 
-- GitHub Actions CI workflow with correct triggers (SCRUM-52): The pipeline runs the correct jobs for pull requests and pushes to `main` under the right conditions.
+- Correct GitHub Actions triggers for pull requests and pushes to `main` (SCRUM-52): The CI workflow runs the right jobs under the right conditions.
 
-- Linter on pull requests and pushes (SCRUM-53): Code quality issues are caught automatically before merge or release.
+- Linter on pushes and pull requests (SCRUM-53): Code quality problems are caught automatically.
 
-- Unit tests on pull requests and pushes to `main` (SCRUM-54): Regressions are detected before deployment.
+- Unit tests on pull requests and pushes to `main` (SCRUM-54): Regressions are caught before deployment.
 
 - Vulnerability scan for at least one service on pushes to `main` (SCRUM-55): Insecure dependencies are checked before release.
 
-- Docker image build and push on `main` (SCRUM-56): A consistent deployable artifact is created and pushed to a registry with the latest tag.
+- Docker image build and push on `main` (SCRUM-56): A consistent deployable artifact is built and pushed to a registry with the `latest` tag.
 
-- Parallel CI jobs and caching (SCRUM-57): The pipeline follows efficient industry practice and reduces unnecessary runtime.
+- Parallel CI jobs and caching (SCRUM-57): The pipeline follows efficient industry practice and avoids losing marks.
 
 - CI1.pdf documentation (SCRUM-58): The CI implementation, failure evidence, and code locations are documented for verification.
 
-#### CD Automation
+#### CD Pipeline Features
 
-- Canary deployment using CI-built image (SCRUM-59): The CD pipeline deploys a canary release using the artifact created by CI.
+- Canary deployment using the image built by CI (SCRUM-59): The CD pipeline deploys a canary version of the application using the CI-built artifact.
 
-- Automated canary analysis (SCRUM-60): The canary is validated automatically before promotion.
+- Automated canary analysis (SCRUM-60): The canary deployment is checked automatically before promotion.
 
-- Automatic promotion on success and stop on failure (SCRUM-61): Deployment decisions are automated and safe.
+- Automatic promotion on success and stop on failure (SCRUM-61): The pipeline promotes healthy canaries and stops when checks fail.
 
 - CD.pdf documentation (SCRUM-62): The deployment platform, canary analysis, promotion strategy, and code locations are documented for verification.
 
 #### End-to-End Validation
 
-- End-to-end validated CI/CD pipeline (SCRUM-63): The entire required delivery flow works together correctly before submission.
+- End-to-end validated CI/CD pipeline (SCRUM-63): All required stages of the pipeline work together correctly before submission.
 
 ### Excluded Features
 
 - Booking analytics dashboard (SCRUM-28)
 
-  This story is unrelated to the Sprint 4 CI/CD delivery theme. It focuses on system analytics rather than pipeline automation, so it is excluded from this sprint.
+This feature is not related to the Sprint 4 CI/CD work. It focuses on platform analytics rather than pipeline implementation, so it is planned for a future release.
 
-- Full platform-wide automated testing beyond required unit tests
+- Full test coverage across the whole platform
 
-  This sprint focuses on linting, unit tests, vulnerability scanning, artifact building, and deployment validation. Broader integration and full end-to-end test suites can be expanded in a future sprint.
+This release focuses on linting, unit tests, security scanning, image building, canary deployment, and promotion. Broader automated testing can be added in a future release.
 
-- Advanced image tagging strategy beyond the required latest tag
+- Advanced image versioning beyond the `latest` tag
 
-  This sprint prioritizes producing a consistent deployable artifact for CD. Additional versioning conventions such as semantic version tags, commit SHA tags, or multi-tag strategies are future improvements.
+This release focuses on meeting the required artifact build and deploy flow. Additional tagging strategies can be added later.
 
-- Full production rollout strategies beyond canary validation and promotion
+- Full production rollout strategies beyond canary deployment and promotion
 
-  This sprint focuses on canary deployment, automated validation, and promotion logic. Broader release management features can be addressed later.
+This release focuses on canary deployment, automated checks, and promotion logic only.
 
 ## Bug Fixes
 
-- [High Priority, SCRUM-52] CI workflow triggers were incomplete or incorrect.
+- [High Priority, SCRUM-52] CI workflow triggers were missing or not set up correctly.
 
-  Now, pull requests and pushes to `main` run the correct GitHub Actions jobs under the appropriate conditions.
+  Now, pull requests and pushes to `main` trigger the correct jobs under the correct conditions.
 
-- [High Priority, SCRUM-53, SCRUM-54] Code quality and regression checks were not enforced automatically for all required events.
+- [High Priority, SCRUM-53, SCRUM-54] Linting and unit tests were not automatically enforced for all required events.
 
   Now, linting and unit tests run automatically on pull requests and pushes to `main`.
 
-- [High Priority, SCRUM-55] Vulnerability checking was missing from the release path.
+- [High Priority, SCRUM-55] Vulnerability scanning was missing from the release path.
 
   Now, at least one service is scanned for vulnerabilities on pushes to `main`.
 
-- [High Priority, SCRUM-56] The deployment pipeline did not consistently consume a CI-produced artifact.
+- [High Priority, SCRUM-56] The deployment pipeline did not have a consistent artifact from CI.
 
-  Now, pushes to `main` build and push a Docker image to a registry with the latest tag for CD use.
+  Now, pushes to `main` build and push a Docker image with the `latest` tag for CD to use.
 
-- [High Priority, SCRUM-59, SCRUM-60, SCRUM-61] Deployment validation and promotion were not automated safely.
+- [High Priority, SCRUM-59, SCRUM-60, SCRUM-61] Canary deployment, validation, and promotion were not automated safely.
 
-  Now, the CD pipeline deploys a canary, evaluates it automatically, promotes healthy releases, and stops on failure.
+  Now, the CD pipeline deploys a canary, checks it automatically, promotes it on success, and stops on failure.
 
 ## Non-Functional Requirements
 
-### Performance and Efficiency
+### Performance
 
-- Independent CI jobs should run in parallel whenever possible.
+- Independent CI jobs should run in parallel where possible.
 
-- Dependency caching should be used where appropriate to reduce repeated workflow runtime.
+- Dependency caching should be used where appropriate to reduce repeated install time.
 
-- The pipeline should avoid wasteful practices such as unnecessary reinstalls, copying dependency folders into images, or serializing unrelated jobs.
+- The pipeline should avoid inefficient practices such as unnecessary reinstalls, copying dependency folders into Docker images, or running independent tasks one after another.
 
 ### Security
 
-- Registry authentication and deployment credentials must be stored securely using repository or environment secrets.
+- Registry credentials and deployment secrets must be stored securely.
 
-- Vulnerability scanning must be included in the push-to-main release path.
+- Vulnerability scanning must be included on pushes to `main`.
 
-- Unhealthy canary releases must never be promoted.
+- Failed canary deployments must never be promoted.
 
 ### Reliability
 
-- Workflow triggers must behave consistently for pull requests and pushes to `main`.
+- Workflow triggers must behave correctly for both pull requests and pushes to `main`.
 
-- CI must produce a consistent deployable image artifact for CD.
+- CI must build a consistent deployable image for CD.
 
-- Canary validation must act as a release gate.
+- Canary analysis must act as a release gate before promotion.
 
-- The end-to-end CI/CD path must be demonstrated successfully before submission.
+- The full CI/CD flow must be shown working before submission.
 
-### Maintainability and Verifiability
+### Usability and Maintainability
 
-- Workflow files should be clearly organized and easy to trace.
+- Workflow files should be clear and organized.
 
-- CI1.pdf and CD.pdf must identify the relevant code locations used in the implementation.
+- CI1.pdf and CD.pdf should clearly show the code locations used in the implementation.
 
-- Failure evidence included in the documentation must be reproducible and understandable.
+- Failure evidence in the documentation should be easy to understand and verify.
 
 ## Dependencies and Limitations
 
@@ -248,22 +250,22 @@
 
 - A GitHub repository with GitHub Actions enabled.
 
-- A working Dockerfile and container build context for the selected service or services.
+- A working Dockerfile and build context for the selected service.
 
-- Access to a container registry for image publication.
+- Access to a container registry for pushing the built image.
 
-- A deployment target that supports canary-style rollout or an equivalent staged validation approach.
+- A deployment environment that supports canary deployment or an equivalent staged deployment method.
 
-- Health checks or validation logic that can be used for automated canary analysis.
+- Health checks or validation logic for automated canary analysis.
 
 ### Limitations
 
-- This sprint guarantees required CI/CD functionality, but not a full enterprise-grade release platform.
+- This release focuses on the required CI/CD implementation and not a fully production-ready deployment platform.
 
-- Vulnerability scanning only needs to cover at least one service, not necessarily every service in the repository.
+- Vulnerability scanning only needs to cover at least one service, not every service in the repository.
 
-- The artifact tagging requirement is centered on `latest`; richer tagging strategies are not required in this sprint.
+- The image tagging requirement is limited to the `latest` tag.
 
-- Canary analysis is limited to the checks implemented by the team and may not cover every real-world failure mode.
+- Canary analysis only checks the conditions implemented by the team and may not catch every possible failure case.
 
-- The sprint focuses on pipeline correctness, verification, and marking requirements rather than analytics or unrelated product features.
+- This release focuses on pipeline correctness, validation, and documentation rather than unrelated platform features.
