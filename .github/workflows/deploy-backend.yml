@@ -138,7 +138,7 @@ jobs:
           REGION="${{ env.REGISTRY_REGION }}"
 
           # Wait for Cloud Run to settle the revision state before deciding pass/fail.
-          MAX_ATTEMPTS=24
+          MAX_ATTEMPTS=5
           SLEEP_SECONDS=5
           ATTEMPT=1
           READY_STATUS=""
