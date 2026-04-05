@@ -18,14 +18,22 @@ interface UnverifiedDoctor {
   email: string | null;
 }
 
+interface DashboardStats {
+  total_patients: number;
+  verified_doctors: number;
+  pending_doctors: number;
+  total_bookings: number;
+}
+
 export function AdminDashboard() {
   const { token } = useAuth();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [unverifiedDoctors, setUnverifiedDoctors] = useState<UnverifiedDoctor[]>([]);
+  const [stats, setStats] = useState<DashboardStats | null>(null);
 
   useEffect(() => {
-    const loadUnverifiedDoctors = async () => {
+    const loadDashboardData = async () => {
       if (!token) {
         setError('Authentication required.');
         setLoading(false);
@@ -33,24 +41,31 @@ export function AdminDashboard() {
       }
 
       try {
-        const response = await fetch('/api/admin/doctors/unverified', {
-          credentials: 'include',
-        });
-        const data = await response.json();
+        const [doctorsRes, statsRes] = await Promise.all([
+          fetch('/api/admin/doctors/unverified', { credentials: 'include' }),
+          fetch('/api/admin/dashboard-stats', { credentials: 'include' }),
+        ]);
 
-        if (!response.ok) {
-          throw new Error(data?.error || 'Failed to load unverified doctors.');
+        const doctorsData = await doctorsRes.json();
+        if (!doctorsRes.ok) {
+          throw new Error(doctorsData?.error || 'Failed to load unverified doctors.');
         }
 
-        setUnverifiedDoctors(data.doctors || []);
+        const statsData = await statsRes.json();
+        if (!statsRes.ok) {
+          throw new Error(statsData?.error || 'Failed to load dashboard stats.');
+        }
+
+        setUnverifiedDoctors(doctorsData.doctors || []);
+        setStats(statsData);
       } catch (loadError) {
-        setError(loadError instanceof Error ? loadError.message : 'Failed to load unverified doctors.');
+        setError(loadError instanceof Error ? loadError.message : 'Failed to load dashboard data.');
       } finally {
         setLoading(false);
       }
     };
 
-    loadUnverifiedDoctors();
+    loadDashboardData();
   }, [token]);
 
   const pendingCount = useMemo(
@@ -68,7 +83,7 @@ export function AdminDashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Pending Verifications</p>
-                <p className="text-3xl font-semibold mt-2">{pendingCount}</p>
+                <p className="text-3xl font-semibold mt-2">{stats?.pending_doctors ?? pendingCount}</p>
               </div>
               <AlertCircle className="h-10 w-10 text-yellow-500" />
             </div>
@@ -80,7 +95,7 @@ export function AdminDashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Verified Doctors</p>
-                <p className="text-3xl font-semibold mt-2">4</p>
+                <p className="text-3xl font-semibold mt-2">{stats?.verified_doctors ?? '-'}</p>
               </div>
               <CheckCircle className="h-10 w-10 text-green-500" />
             </div>
@@ -92,7 +107,7 @@ export function AdminDashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Total Patients</p>
-                <p className="text-3xl font-semibold mt-2">1,247</p>
+                <p className="text-3xl font-semibold mt-2">{stats?.total_patients?.toLocaleString() ?? '-'}</p>
               </div>
               <Users className="h-10 w-10 text-blue-500" />
             </div>
@@ -104,7 +119,7 @@ export function AdminDashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Total Bookings</p>
-                <p className="text-3xl font-semibold mt-2">1,247</p>
+                <p className="text-3xl font-semibold mt-2">{stats?.total_bookings?.toLocaleString() ?? '-'}</p>
               </div>
               <BarChart3 className="h-10 w-10 text-primary" />
             </div>

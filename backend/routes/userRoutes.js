@@ -20,6 +20,7 @@ import {
   getDoctorVerificationHistory,
   getAppointmentRejectionAnalytics,
   getBookingAnalytics,
+  getDashboardStats,
 } from "../controllers/roles/adminController.js";
 import {
   getAvailabilityPatterns,
@@ -177,6 +178,10 @@ router.put("/profile/me", requireAuth, (req, res) => {
 
 router.get("/profile/:userId", (req, res) => {
   getPublicProfile(req, res);
+});
+
+router.get("/admin/dashboard-stats", requireAuth, requireRole("admin"), (req, res) => {
+  getDashboardStats(req, res);
 });
 
 router.get("/admin/doctors/unverified", requireAuth, requireRole("admin"), (req, res) => {

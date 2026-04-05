@@ -1,5 +1,5 @@
 import { Op } from 'sequelize';
-import { AdminLog, Appointment, Doctor, User } from '../../models/index.js';
+import { AdminLog, Appointment, Doctor, Patient, User } from '../../models/index.js';
 import {
   DOCTOR_REJECTION_REASON_OPTIONS,
   DECLINED_BY_DOCTOR_REASON_PREFIX,
@@ -437,6 +437,26 @@ export const getBookingAnalytics = async (req, res) => {
       peak_hours: peakHours,
       peak_days: peakDays,
       cancellation_insights: cancellationInsights,
+    });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+export const getDashboardStats = async (_req, res) => {
+  try {
+    const [totalPatients, verifiedDoctors, pendingDoctors, totalBookings] = await Promise.all([
+      Patient.count(),
+      Doctor.count({ where: { verification_status: 'approved' } }),
+      Doctor.count({ where: { verification_status: 'pending' } }),
+      Appointment.count(),
+    ]);
+
+    return res.status(200).json({
+      total_patients: totalPatients,
+      verified_doctors: verifiedDoctors,
+      pending_doctors: pendingDoctors,
+      total_bookings: totalBookings,
     });
   } catch (error) {
     return res.status(500).json({ error: error.message });
