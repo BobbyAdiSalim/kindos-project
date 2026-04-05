@@ -134,7 +134,7 @@
 
 ## Release Scope
 
-Outline what is included in and excluded from the release, detailing key features or improvements, bug fixes, non-functional requirements, etc.
+Outline what is included in and excluded from the release, detailing key features or improvements, non-functional requirements, etc.
 
 ### Included Features
 
@@ -185,28 +185,6 @@ This release focuses on meeting the required artifact build and deploy flow. Add
 - Full production rollout strategies beyond canary deployment and promotion
 
 This release focuses on canary deployment, automated checks, and promotion logic only.
-
-## Bug Fixes
-
-- [High Priority, SCRUM-52] CI workflow triggers were missing or not set up correctly.
-
-  Now, pull requests and pushes to `main` trigger the correct jobs under the correct conditions.
-
-- [High Priority, SCRUM-53, SCRUM-54] Linting and unit tests were not automatically enforced for all required events.
-
-  Now, linting and unit tests run automatically on pull requests and pushes to `main`.
-
-- [High Priority, SCRUM-55] Vulnerability scanning was missing from the release path.
-
-  Now, at least one service is scanned for vulnerabilities on pushes to `main`.
-
-- [High Priority, SCRUM-56] The deployment pipeline did not have a consistent artifact from CI.
-
-  Now, pushes to `main` build and push a Docker image with the `latest` tag for CD to use.
-
-- [High Priority, SCRUM-59, SCRUM-60, SCRUM-61] Canary deployment, validation, and promotion were not automated safely.
-
-  Now, the CD pipeline deploys a canary, checks it automatically, promotes it on success, and stops on failure.
 
 ## Non-Functional Requirements
 
