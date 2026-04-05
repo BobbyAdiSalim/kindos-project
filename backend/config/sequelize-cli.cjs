@@ -1,5 +1,9 @@
 const path = require("path");
-require("dotenv").config({ path: path.resolve(__dirname, "../.env"), override: true });
+
+const requiredEnvKeys = ["PG_USER", "PG_PWD", "PG_DATABASE", "PG_HOST", "PG_PORT"];
+if (requiredEnvKeys.some((key) => !process.env[key])) {
+  require("dotenv").config({ path: path.resolve(__dirname, "../.env") });
+}
 
 const base = {
   username: process.env.PG_USER,

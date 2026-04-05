@@ -91,8 +91,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const { user, token } = authState;
 
   useEffect(() => {
-    localStorage.removeItem('utlwa_auth');
-
     let isCancelled = false;
 
     const restoreSession = async () => {
@@ -197,7 +195,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
 
     disconnectSocket();
-    localStorage.removeItem('utlwa_auth');
     setAuthState({ user: null, token: null });
   };
 
