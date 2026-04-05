@@ -15,12 +15,26 @@ import Questionnaire from './Questionnaire.js';
 import AdminLog from './AdminLog.js';
 import WaitlistEntry from './WaitlistEntry.js';
 import Connection from './Connection.js';
+import Caregiver from './Caregiver.js';
+import CaregiverPatient from './CaregiverPatient.js';
 
 // Define associations between models
 
 // User <-> Patient (One-to-One)
 User.hasOne(Patient, { foreignKey: 'user_id', as: 'patientProfile' });
 Patient.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+
+// User <-> Caregiver (One-to-One)
+User.hasOne(Caregiver, { foreignKey: 'user_id', as: 'caregiverProfile' });
+Caregiver.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+
+// Caregiver <-> Patient (Many-to-Many through CaregiverPatient)
+Caregiver.belongsToMany(Patient, { through: CaregiverPatient, foreignKey: 'caregiver_id', otherKey: 'patient_id', as: 'patients' });
+Patient.belongsToMany(Caregiver, { through: CaregiverPatient, foreignKey: 'patient_id', otherKey: 'caregiver_id', as: 'caregivers' });
+CaregiverPatient.belongsTo(Caregiver, { foreignKey: 'caregiver_id', as: 'caregiver' });
+CaregiverPatient.belongsTo(Patient, { foreignKey: 'patient_id', as: 'patient' });
+Caregiver.hasMany(CaregiverPatient, { foreignKey: 'caregiver_id', as: 'caregiverPatients' });
+Patient.hasMany(CaregiverPatient, { foreignKey: 'patient_id', as: 'caregiverPatients' });
 
 // User <-> Doctor (One-to-One)
 User.hasOne(Doctor, { foreignKey: 'user_id', as: 'doctorProfile' });
@@ -197,4 +211,6 @@ export {
   AdminLog,
   WaitlistEntry,
   Connection,
+  Caregiver,
+  CaregiverPatient,
 };

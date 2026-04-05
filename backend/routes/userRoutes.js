@@ -66,6 +66,16 @@ import {
   getMyWaitlistEntries,
   removeMyWaitlistEntry,
 } from "../controllers/booking/waitlistController.js";
+import {
+  sendLinkRequest,
+  getLinkedPatients,
+  removeLinkedPatient,
+  getCaregiverRequests,
+  respondToCaregiverRequest,
+  getPatientAppointments,
+  bookForPatient,
+  cancelForPatient,
+} from "../controllers/caregiverController.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 
 /**
@@ -357,6 +367,49 @@ router.delete("/waitlist/:waitlistEntryId", requireAuth, requireRole("patient"),
  */
 router.get("/patients/:patientId/history", requireAuth, requireRole("doctor"), (req, res) => {
   getPatientHistory(req, res);
+});
+
+/*
+ * Caregiver Routes
+ * All routes require the 'caregiver' role. Caregivers manage linked patients
+ * and can view/book/cancel appointments on their behalf.
+ */
+
+router.post("/caregiver/link-request", requireAuth, requireRole("caregiver"), (req, res) => {
+  sendLinkRequest(req, res);
+});
+
+router.get("/caregiver/patients", requireAuth, requireRole("caregiver"), (req, res) => {
+  getLinkedPatients(req, res);
+});
+
+router.delete("/caregiver/patients/:patientId", requireAuth, requireRole("caregiver"), (req, res) => {
+  removeLinkedPatient(req, res);
+});
+
+router.get("/caregiver/patients/:patientId/appointments", requireAuth, requireRole("caregiver"), (req, res) => {
+  getPatientAppointments(req, res);
+});
+
+router.post("/caregiver/patients/:patientId/appointments", requireAuth, requireRole("caregiver"), (req, res) => {
+  bookForPatient(req, res);
+});
+
+router.patch("/caregiver/patients/:patientId/appointments/:appointmentId/cancel", requireAuth, requireRole("caregiver"), (req, res) => {
+  cancelForPatient(req, res);
+});
+
+/*
+ * Patient caregiver request routes
+ * These routes let patients view and respond to incoming caregiver link requests.
+ */
+
+router.get("/patient/caregiver-requests", requireAuth, requireRole("patient"), (req, res) => {
+  getCaregiverRequests(req, res);
+});
+
+router.patch("/patient/caregiver-requests/:requestId", requireAuth, requireRole("patient"), (req, res) => {
+  respondToCaregiverRequest(req, res);
 });
 
 /**

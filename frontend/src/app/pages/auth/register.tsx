@@ -117,6 +117,9 @@ export function Register() {
       if (role === 'doctor') {
         toast.success('Registration submitted! Awaiting verification.');
         navigate('/doctor/dashboard');
+      } else if (role === 'caregiver') {
+        toast.success('Account created successfully!');
+        navigate('/caregiver/dashboard');
       } else {
         toast.success('Account created successfully!');
         navigate('/patient/questionnaire');
@@ -195,6 +198,12 @@ export function Register() {
                     <RadioGroupItem value="doctor" id="register-doctor" />
                     <Label htmlFor="register-doctor" className="font-normal cursor-pointer">
                       Healthcare Provider
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-3 space-y-0">
+                    <RadioGroupItem value="caregiver" id="register-caregiver" />
+                    <Label htmlFor="register-caregiver" className="font-normal cursor-pointer">
+                      Caregiver
                     </Label>
                   </div>
                 </RadioGroup>

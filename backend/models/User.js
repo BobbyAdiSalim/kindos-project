@@ -32,7 +32,7 @@ const User = sequelize.define(
       allowNull: false,
     },
     role: {
-      type: DataTypes.ENUM('patient', 'doctor', 'admin'),
+      type: DataTypes.ENUM('patient', 'doctor', 'admin', 'caregiver'),
       allowNull: false,
     },
     reset_password_token_hash: {

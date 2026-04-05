@@ -192,6 +192,11 @@ export function RequireAdminRoute() {
   return <ProtectedRoute allowedRoles={ADMIN_ROLES} />;
 }
 
+export function RequireCaregiverRoute() {
+  return <ProtectedRoute allowedRoles={CAREGIVER_ROLES} />;
+}
+
 const PATIENT_ROLES: UserRole[] = ['patient'];
 const DOCTOR_ROLES: UserRole[] = ['doctor'];
 const ADMIN_ROLES: UserRole[] = ['admin'];
+const CAREGIVER_ROLES: UserRole[] = ['caregiver'];

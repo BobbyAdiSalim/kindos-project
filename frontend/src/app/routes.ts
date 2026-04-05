@@ -1,6 +1,6 @@
 import { createBrowserRouter } from 'react-router';
 import { RootLayout } from '@/app/components/layout/root-layout';
-import { RequireAdminRoute, RequireDoctorRoute, RequirePatientRoute } from '@/app/components/auth/protected-route';
+import { RequireAdminRoute, RequireCaregiverRoute, RequireDoctorRoute, RequirePatientRoute } from '@/app/components/auth/protected-route';
 import { Landing } from '@/app/pages/landing';
 import { Login } from '@/app/pages/auth/login';
 import { Register } from '@/app/pages/auth/register';
@@ -31,6 +31,13 @@ import { PatientHistory } from '@/app/pages/doctor/patient-history';
 import { AppointmentSummary } from '@/app/pages/doctor/appointment-summary';
 import { VerificationStatus } from '@/app/pages/doctor/verification-status';
 import { DoctorMessaging } from '@/app/pages/doctor/messaging';
+
+// Caregiver pages
+import { CaregiverDashboard } from '@/app/pages/caregiver/dashboard';
+import { ManagePatients } from '@/app/pages/caregiver/manage-patients';
+import { CaregiverPatientDetail } from '@/app/pages/caregiver/patient-detail';
+import { CaregiverProfile } from '@/app/pages/caregiver/profile';
+import { CaregiverBooking } from '@/app/pages/caregiver/booking';
 
 // Admin pages
 import { AdminDashboard } from '@/app/pages/admin/dashboard';
@@ -90,6 +97,19 @@ export const router = createBrowserRouter([
           { path: 'appointment/:id/summary', Component: AppointmentSummary },
           { path: 'verification', Component: VerificationStatus },
           { path: 'messages', Component: DoctorMessaging },
+        ],
+      },
+
+      // Caregiver routes
+      {
+        path: 'caregiver',
+        Component: RequireCaregiverRoute,
+        children: [
+          { path: 'dashboard', Component: CaregiverDashboard },
+          { path: 'patients', Component: ManagePatients },
+          { path: 'patient/:patientId', Component: CaregiverPatientDetail },
+          { path: 'patient/:patientId/book', Component: CaregiverBooking },
+          { path: 'profile', Component: CaregiverProfile },
         ],
       },
 
