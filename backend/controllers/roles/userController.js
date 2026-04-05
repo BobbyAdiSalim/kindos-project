@@ -34,7 +34,10 @@ const __dirname = path.dirname(__filename);
 const UPLOADS_DIR = path.join(__dirname, '..', 'uploads', 'verification-docs');
 const LEGACY_UPLOADS_PREFIX = '/api/uploads/verification-docs/';
 const R2_DOCUMENT_PREFIX = 'r2:';
-const AUTH_COOKIE_NAME = 'utlwa_auth';
+const AUTH_COOKIE_NAME = cleanEnv(
+  process.env.AUTH_COOKIE_NAME,
+  '__session'
+);
 
 const isR2Configured = Boolean(
   R2_BUCKET_NAME && R2_ENDPOINT && R2_ACCESS_KEY_ID && R2_SECRET_ACCESS_KEY
