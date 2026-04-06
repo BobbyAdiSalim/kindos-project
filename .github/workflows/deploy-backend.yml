@@ -103,16 +103,30 @@ jobs:
         id: image-tag
         run: |
           if [ "${{ github.event_name }}" = "workflow_run" ]; then
-            echo "tag=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
+            echo "tag=latest" >> "$GITHUB_OUTPUT"
           else
             echo "tag=${{ inputs.image_tag }}" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Resolve image digest
+        id: image-digest
+        run: |
+          IMAGE_REF="${{ env.REGISTRY_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ env.REGISTRY_REPO }}/backend:${{ steps.image-tag.outputs.tag }}"
+          DIGEST=$(gcloud artifacts docker images describe "$IMAGE_REF" --format='value(image_summary.digest)')
+
+          if [ -z "$DIGEST" ]; then
+            echo "Failed to resolve digest for $IMAGE_REF"
+            exit 1
+          fi
+
+          echo "image_ref=$IMAGE_REF" >> "$GITHUB_OUTPUT"
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+
       - name: Set release metadata
         id: release-meta
         run: |
-          IMAGE_URI="${{ env.REGISTRY_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ env.REGISTRY_REPO }}/backend:${{ steps.image-tag.outputs.tag }}"
-          REV_SUFFIX="canary-$(echo "${{ steps.image-tag.outputs.tag }}" | cut -c1-12 | tr '[:upper:]' '[:lower:]')"
+          IMAGE_URI="${{ env.REGISTRY_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ env.REGISTRY_REPO }}/backend@${{ steps.image-digest.outputs.digest }}"
+          REV_SUFFIX="canary-$(echo "${{ steps.image-digest.outputs.digest }}" | sed 's/^sha256://' | cut -c1-12 | tr '[:upper:]' '[:lower:]')"
           echo "image_uri=$IMAGE_URI" >> "$GITHUB_OUTPUT"
           echo "revision_suffix=$REV_SUFFIX" >> "$GITHUB_OUTPUT"
 
