@@ -1,0 +1,1 @@
+const lintFailure = 1;
