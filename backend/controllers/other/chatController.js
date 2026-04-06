@@ -4,6 +4,7 @@ import { Op } from 'sequelize';
 import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { User, Patient, Doctor, Connection, Message } from '../../models/index.js';
 import { getRoleStrategy } from '../../services/role-strategy/index.js';
+import { getMessagingIO } from '../../services/messaging-singleton/index.js';
 
 const cleanEnv = (value, fallback = '') => {
   if (value === undefined || value === null || value === '') return fallback;
@@ -303,6 +304,17 @@ export const sendMessage = async (req, res) => {
         { model: User, as: 'sender', attributes: ['id', 'username', 'role'] },
       ],
     });
+
+    // Broadcast to the conversation room so the receiver gets it in real time,
+    // excluding the sender (they already have it from the REST response).
+    try {
+      const io = getMessagingIO();
+      io.to(`connection_${connectionId}`)
+        .except(`user_${userId}`)
+        .emit('new_message', fullMessage.toJSON());
+    } catch {
+      // Socket.IO not available — message is still persisted, just not pushed in real time.
+    }
 
     return res.status(201).json({ message: fullMessage });
   } catch (error) {
