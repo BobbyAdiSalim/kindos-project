@@ -9,7 +9,7 @@ describe('status-badges', () => {
 
   it('renders label for completed status', () => {
     render(<StatusBadge status="completed" />);
-    expect(screen.getByText('Completed')).toBeInTheDocument();
+    expect(screen.getByText('Done')).toBeInTheDocument();
   });
 
   it('renders appointment type badge text', () => {
