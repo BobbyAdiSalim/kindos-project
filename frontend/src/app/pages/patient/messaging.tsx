@@ -15,7 +15,6 @@ import {
   getSocket,
   joinConversation,
   leaveConversation,
-  emitMessage,
   onNewMessage,
 } from '@/app/lib/socket';
 import { ConversationList } from '@/app/components/chat/conversation-list';
@@ -155,7 +154,6 @@ export function Messaging() {
       const data = await sendMessageApi(token, activeConnection.id, messageInput.trim());
       setMessages((prev) => [...prev, data.message]);
       updateConnectionPreview(activeConnection.id, data.message, true);
-      emitMessage(activeConnection.id, data.message);
       setMessageInput('');
     } catch (err: any) {
       toast.error(err.message);

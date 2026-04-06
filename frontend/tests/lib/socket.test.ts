@@ -28,7 +28,7 @@ describe('socket lib', () => {
     expect(socket).toBe(socketMock);
     expect(ioMock).toHaveBeenCalledWith(window.location.origin, {
       withCredentials: true,
-      transports: ['websocket', 'polling'],
+      transports: ['polling', 'websocket'],
     });
   });
 

@@ -17,7 +17,7 @@ on:
         type: string
 
 jobs:
-  deploy-frontend:
+  detect-frontend-changes:
     if: |
       (
         github.event_name == 'workflow_run' &&
@@ -25,6 +25,47 @@ jobs:
         github.event.workflow_run.head_branch == 'master' &&
         github.event.workflow_run.conclusion == 'success'
       ) || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    outputs:
+      frontend_changed: ${{ steps.diff.outputs.frontend_changed }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || inputs.branch }}
+          fetch-depth: 2
+
+      - name: Detect frontend changes
+        id: diff
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "frontend_changed=true" >> "$GITHUB_OUTPUT"
+            echo "Manual dispatch: frontend deploy is enabled regardless of file changes."
+            exit 0
+          fi
+
+          if ! git rev-parse HEAD^ >/dev/null 2>&1; then
+            echo "No parent commit available for diff; defaulting frontend_changed=true."
+            echo "frontend_changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if git diff --name-only HEAD^ HEAD | grep -Eq '^(frontend/|firebase\.json$)'; then
+            echo "frontend_changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "frontend_changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  deploy-frontend:
+    needs: detect-frontend-changes
+    if: |
+      ((
+        github.event_name == 'workflow_run' &&
+        github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.head_branch == 'master' &&
+        github.event.workflow_run.conclusion == 'success'
+      ) || github.event_name == 'workflow_dispatch') &&
+      (github.event_name == 'workflow_dispatch' || needs.detect-frontend-changes.outputs.frontend_changed == 'true')
     runs-on: ubuntu-latest
     environment: deployment
     permissions:

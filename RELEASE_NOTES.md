@@ -1,4 +1,11 @@
 # What's New
+
+## v1.3.0
+
+- **Socket.IO Renew:** Fixed Socket.IO configuration; real-time messaging now works in deployed environments.
+- **Bugfixes:** More bug fixes and stability improvements.
+
+
 ## v1.2.1
 - **Canary CD Pipeline:** Backend deployments now use a canary release flow with readiness, health, smoke, and log-based analysis before promotion to full traffic.
 
