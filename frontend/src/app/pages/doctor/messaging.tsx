@@ -15,7 +15,6 @@ import {
   getSocket,
   joinConversation,
   leaveConversation,
-  emitMessage,
   onNewMessage,
 } from '@/app/lib/socket';
 import { ConversationList } from '@/app/components/chat/conversation-list';
@@ -156,7 +155,6 @@ export function DoctorMessaging() {
       const data = await sendMessageApi(token, activeConnection.id, messageInput.trim(), pendingFile);
       setMessages((prev) => [...prev, data.message]);
       updateConnectionPreview(activeConnection.id, data.message, true);
-      emitMessage(activeConnection.id, data.message);
       setMessageInput('');
       setPendingFile(null);
     } catch (err: any) {

@@ -156,6 +156,7 @@ jobs:
             --no-traffic \
             --tag ${{ env.CANARY_TAG }} \
             --max-instances=10 \
+            --session-affinity \
             --set-cloudsql-instances "${{ vars.GCP_PROJECT_ID }}:${{ env.SQL_REGION }}:${{ env.SQL_INSTANCE }}" \
             --set-env-vars "\
               NODE_ENV=production,\
